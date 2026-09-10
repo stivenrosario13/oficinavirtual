@@ -1,7 +1,8 @@
 {
-  "release": "V315",
-  "builtAt": "2026-09-08",
+  "release": "V316",
+  "builtAt": "2026-09-10",
   "changes": [
+    "technology-warehouse-request-view-for-department-and-primary-administrators-v316",
     "template-pdf-archive-and-complete-document-history-v313",
     "warehouse-technology-only-inventory-and-department-communications-v312",
     "field-technician-direct-assignment-visibility-and-legacy-team-fallback",

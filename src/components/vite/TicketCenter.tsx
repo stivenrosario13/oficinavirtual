@@ -817,10 +817,21 @@ export default function TicketCenter({
   const isWarehouseOperator=session.supportTeam==="WAREHOUSE";
   const isWorkshopOperator=session.supportTeam==="WORKSHOP";
   const isMaintenanceOperator=isWarehouseOperator||isWorkshopOperator;
-  const isTechnologyDepartmentManager=session.role==="Technology"&&!session.supportTeam;
+  const isTechnologyDepartmentManager=Boolean(
+    session.supportDepartment==="TECHNOLOGY"&&
+    !session.supportTeam&&
+    session.permissions.canAssignTickets
+  );
   // Tecnología solicita equipos a Almacén; no necesita entrar al portal de
   // Taller ni a las operaciones de inventario que administra el almacenero.
-  const isTechnologyWarehouseRequester=isTechnologyDepartmentManager;
+  // El administrador principal también usa esta vista al abrir Tecnología;
+  // antes V315 lo enviaba por error al selector general Taller / Almacén.
+  const isTechnologyWarehouseRequester=Boolean(
+    !maintenanceEntry&&
+    !isMaintenanceOperator&&
+    (isTechnologyDepartmentManager||
+      (session.role==="Administrator"&&workspaceDepartment==="TECHNOLOGY"))
+  );
   const isDedicatedWarehousePortal=isWarehouseOperator||(session.role==="Administrator"&&maintenanceEntry==="WAREHOUSE");
   const isDedicatedWorkshopPortal=isWorkshopOperator||(session.role==="Administrator"&&maintenanceEntry==="WORKSHOP");
   const isDedicatedMaintenancePortal=isDedicatedWarehousePortal||isDedicatedWorkshopPortal;
@@ -4044,7 +4055,7 @@ export default function TicketCenter({
         <header>
           <div><span>{maintenanceArea==="WORKSHOP"?"TALLER TÉCNICO · REPARACIÓN Y REEMPLAZO":"ALMACÉN · INVENTARIO, DESPACHO Y DESCARGO"}</span><h2>{departments[maintenanceDepartment]|| (maintenanceArea==="WORKSHOP"?"Taller técnico":"Almacén central")}</h2><p>{maintenanceArea==="WORKSHOP"?"Entradas, salidas, diagnósticos, reparaciones y reemplazos con trazabilidad completa.":"Equipos nuevos, existencias, entregas a departamentos y descargos sin operaciones de reparación."}</p></div>
           <div className="maintenance-header-actions">
-            {maintenanceArea==="WAREHOUSE"&&!isWarehouseOperator&&session.role!=="Administrator"&&<button onClick={()=>setWarehousePanel("requests")}><Send/> {isTechnologyWarehouseRequester?"Solicitar a Almacén":"Solicitud a Almacén"}</button>}
+            {maintenanceArea==="WAREHOUSE"&&!isWarehouseOperator&&!isDedicatedWarehousePortal&&<button onClick={()=>setWarehousePanel("requests")}><Send/> {isTechnologyWarehouseRequester?"Solicitar a Almacén":"Solicitud a Almacén"}</button>}
             {!isTechnologyWarehouseRequester&&<><button className="scanner" onClick={()=>openMaintenanceForm(true,maintenanceArea)}><QrCode/> Escanear QR o código</button><button onClick={()=>openMaintenanceForm(false,maintenanceArea)}><Plus/> Nuevo formulario</button></>}
           </div>
         </header>
