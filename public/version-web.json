@@ -1,7 +1,8 @@
 {
-  "release": "V317",
+  "release": "V318",
   "builtAt": "2026-09-10",
   "changes": [
+    "multi-item-equipment-component-return-pdf-requirements-flow-v318",
     "technology-warehouse-request-forms-agency-installer-flow-v317",
     "technology-warehouse-request-view-for-department-and-primary-administrators-v316",
     "template-pdf-archive-and-complete-document-history-v313",
