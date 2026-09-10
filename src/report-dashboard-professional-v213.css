@@ -1,0 +1,228 @@
+/* V213 · Dashboard operativo, controles alineados y alcance visible por rol. */
+.report-access-scope {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  margin: 16px 18px 0;
+  padding: 14px 16px;
+  border: 1px solid #327394;
+  border-radius: 15px;
+  background: linear-gradient(135deg, #0b3352, #09243c);
+  box-shadow: inset 0 1px rgb(255 255 255 / 7%);
+}
+
+.report-access-scope > span {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid #3d91b8;
+  border-radius: 13px;
+  background: #10486c;
+  color: #75defc;
+}
+
+.report-access-scope > span svg { width: 22px; }
+.report-access-scope > div { display: grid; min-width: 0; gap: 3px; }
+.report-access-scope small { color: #63d7fb; font-size: 8px; font-weight: 900; letter-spacing: .1em; }
+.report-access-scope strong { color: #fff; font-size: 15px; }
+.report-access-scope p { margin: 0; color: #9fc4d8; font-size: 10px; line-height: 1.45; }
+
+.report-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  align-items: stretch;
+  gap: 10px;
+  padding: 12px 18px 4px;
+}
+
+.report-kpi-grid > article {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-width: 0;
+  min-height: 92px;
+  padding: 12px;
+  border: 1px solid #2d6584;
+  border-radius: 15px;
+  background: linear-gradient(150deg, #0b2c48, #081f35);
+  box-shadow: 0 9px 22px rgb(0 10 24 / 22%), inset 0 1px rgb(255 255 255 / 5%);
+}
+
+.report-kpi-grid > article > span {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 11px;
+  background: #123f5e;
+  color: #69d9ff;
+}
+
+.report-kpi-grid > article > span svg { width: 18px; }
+.report-kpi-grid > article > div { display: grid; min-width: 0; gap: 2px; }
+.report-kpi-grid small { color: #80b8d1; font-size: 7px; font-weight: 900; letter-spacing: .055em; }
+.report-kpi-grid strong { color: #fff; font-size: 22px; line-height: 1.1; }
+.report-kpi-grid em { overflow: hidden; color: #85aabd; font-size: 8px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.report-kpi-grid .success { border-color: #287f68; }
+.report-kpi-grid .success > span { background: #124f43; color: #75e7c2; }
+.report-kpi-grid .in-progress { border-color: #74652d; }
+.report-kpi-grid .in-progress > span { background: #4e421c; color: #ffd776; }
+.report-kpi-grid .critical { border-color: #8b4058; }
+.report-kpi-grid .critical > span { background: #552337; color: #ff9ab3; }
+.report-kpi-grid .time { border-color: #39739a; }
+.report-kpi-grid .evidence { border-color: #65509f; }
+.report-kpi-grid .evidence > span { background: #382a66; color: #c5b5ff; }
+
+@media (min-width: 761px) {
+  .automatic-findings[aria-labelledby="ticket-reports-title"] > header .ticket-report-controls {
+    width: 100% !important;
+  }
+
+  .automatic-findings[aria-labelledby="ticket-reports-title"] .ticket-report-filters {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)) !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .automatic-findings[aria-labelledby="ticket-reports-title"] .ticket-report-actions {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  .report-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  .automatic-findings[aria-labelledby="ticket-reports-title"] > header {
+    gap: 14px !important;
+  }
+
+  .automatic-findings[aria-labelledby="ticket-reports-title"] .ticket-report-controls,
+  .automatic-findings[aria-labelledby="ticket-reports-title"] .ticket-report-filters,
+  .automatic-findings[aria-labelledby="ticket-reports-title"] .ticket-report-actions {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    gap: 9px !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .automatic-findings[aria-labelledby="ticket-reports-title"] .ticket-report-filters {
+    padding: 10px !important;
+    border: 1px solid #316c8d !important;
+    border-radius: 15px !important;
+    background: #071b30 !important;
+  }
+
+  .automatic-findings[aria-labelledby="ticket-reports-title"] .ticket-report-filters > label {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto 48px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    min-height: 72px !important;
+    gap: 6px !important;
+    padding: 8px 10px 10px !important;
+    overflow: visible !important;
+    border: 1px solid #397697 !important;
+    border-radius: 12px !important;
+  }
+
+  .automatic-findings[aria-labelledby="ticket-reports-title"] .ticket-report-filters > label > span {
+    display: block !important;
+    overflow: visible !important;
+    color: #9de2fb !important;
+    font-size: 11px !important;
+    font-weight: 900 !important;
+    line-height: 1.35 !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+  }
+
+  .automatic-findings[aria-labelledby="ticket-reports-title"] .ticket-report-filters select {
+    grid-column: 1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: 48px !important;
+    padding: 0 42px 0 13px !important;
+    overflow: visible !important;
+    font-size: 14px !important;
+    text-overflow: clip !important;
+  }
+
+  .automatic-findings[aria-labelledby="ticket-reports-title"] .ticket-report-actions > .report-action-button {
+    display: grid !important;
+    grid-template-columns: 42px minmax(0, 1fr) !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 64px !important;
+    justify-content: stretch !important;
+    align-items: center !important;
+    gap: 11px !important;
+    padding: 10px 14px !important;
+    text-align: left !important;
+  }
+
+  .automatic-findings[aria-labelledby="ticket-reports-title"] .ticket-report-actions > .report-action-button > svg {
+    width: 21px !important;
+    height: 21px !important;
+    justify-self: center;
+  }
+
+  .automatic-findings[aria-labelledby="ticket-reports-title"] .ticket-report-actions > .report-action-button > span {
+    display: grid !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    gap: 3px !important;
+    text-align: left !important;
+  }
+
+  .automatic-findings[aria-labelledby="ticket-reports-title"] .ticket-report-actions > .report-action-button strong,
+  .automatic-findings[aria-labelledby="ticket-reports-title"] .ticket-report-actions > .report-action-button small {
+    display: block !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+  }
+
+  .automatic-findings[aria-labelledby="ticket-reports-title"] .ticket-report-actions > .report-action-button strong { font-size: 11px !important; }
+  .automatic-findings[aria-labelledby="ticket-reports-title"] .ticket-report-actions > .report-action-button small { color: #b9dbeb !important; font-size: 9px !important; }
+
+  .report-access-scope {
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 10px;
+    margin: 12px 10px 0;
+    padding: 12px;
+  }
+
+  .report-access-scope > span { width: 38px; height: 38px; }
+  .report-access-scope strong { font-size: 13px; }
+  .report-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 10px 10px 2px; }
+  .report-kpi-grid > article { grid-template-columns: 34px minmax(0, 1fr); min-height: 84px; gap: 7px; padding: 10px; }
+  .report-kpi-grid > article > span { width: 32px; height: 32px; }
+  .report-kpi-grid strong { font-size: 19px; }
+}
+
+@media (max-width: 390px) {
+  .report-kpi-grid { grid-template-columns: minmax(0, 1fr); }
+  .report-kpi-grid > article { min-height: 72px; }
+}

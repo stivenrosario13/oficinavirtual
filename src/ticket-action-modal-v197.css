@@ -1,0 +1,261 @@
+/* V197 · Modal completo de acciones del ticket. */
+.ticket-card.expanded[data-action-mode] {
+  top: 16px !important;
+  right: 16px !important;
+  bottom: 16px !important;
+  left: 16px !important;
+  display: grid !important;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-content: start;
+  gap: 10px 12px !important;
+  width: auto !important;
+  max-width: 1180px;
+  height: auto !important;
+  max-height: calc(100dvh - 32px) !important;
+  margin: auto;
+  padding: 16px !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  border: 1px solid rgba(101, 211, 248, .66) !important;
+  border-radius: 22px !important;
+  background:
+    radial-gradient(circle at 92% 0, rgba(61, 198, 248, .16), transparent 31%),
+    linear-gradient(155deg, #0b2944, #07192d 58%, #09233a) !important;
+  box-shadow: 0 0 0 100vmax rgba(0, 8, 18, .82), 0 35px 110px rgba(0, 5, 14, .8) !important;
+}
+
+.ticket-card.expanded[data-action-mode] > * { grid-column: 1 / -1; }
+
+.ticket-card.expanded[data-action-mode] .ticket-action-modal-heading {
+  position: sticky !important;
+  z-index: 8 !important;
+  top: -16px !important;
+  min-height: 68px;
+  margin: -16px -16px 0 !important;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid rgba(103, 203, 241, .34) !important;
+  background:
+    radial-gradient(circle at 88% 0, rgba(77, 215, 255, .19), transparent 42%),
+    linear-gradient(135deg, rgba(15, 66, 101, .98), rgba(10, 42, 69, .99)) !important;
+  box-shadow: 0 12px 28px rgba(0, 10, 23, .38) !important;
+}
+.ticket-card.expanded[data-action-mode] .ticket-action-modal-heading small {
+  color: #75dcff !important;
+  font-size: 8px !important;
+}
+.ticket-card.expanded[data-action-mode] .ticket-action-modal-heading strong {
+  font-size: clamp(17px, 2.4vw, 21px) !important;
+  letter-spacing: -.025em;
+}
+.ticket-card.expanded[data-action-mode] .ticket-action-modal-heading button {
+  width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  border-radius: 11px !important;
+  transition: transform .18s ease, border-color .18s ease, background .18s ease;
+}
+
+.ticket-modal-action-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid rgba(78, 153, 190, .27);
+  border-radius: 15px;
+  background: rgba(5, 21, 36, .72);
+  box-shadow: inset 0 1px rgba(255,255,255,.035);
+}
+.ticket-modal-action-tabs > button {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 54px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid rgba(78, 148, 183, .3);
+  border-radius: 11px;
+  background: linear-gradient(145deg, #0d304d, #09243c);
+  color: #c7e6f3;
+  text-align: left;
+  box-shadow: inset 0 1px rgba(255,255,255,.045);
+  cursor: pointer;
+  transition: transform .17s ease, border-color .17s ease, background .17s ease, box-shadow .17s ease;
+}
+.ticket-modal-action-tabs > button:hover {
+  transform: translateY(-2px);
+  border-color: rgba(105, 210, 248, .64);
+  background: linear-gradient(145deg, #12415f, #0b2f4c);
+}
+.ticket-modal-action-tabs > button > svg {
+  width: 18px;
+  height: 18px;
+  padding: 8px;
+  box-sizing: content-box;
+  border-radius: 10px;
+  background: rgba(76, 184, 226, .12);
+  color: #78dcfa;
+}
+.ticket-modal-action-tabs > button > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.ticket-modal-action-tabs strong {
+  overflow: hidden;
+  color: #eefaff;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ticket-modal-action-tabs small {
+  overflow: hidden;
+  color: #779fb7;
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ticket-modal-action-tabs > button.active {
+  border-color: #67d8ff;
+  background: linear-gradient(145deg, #175c82, #10405f);
+  box-shadow: 0 9px 20px rgba(0, 20, 34, .3), inset 0 1px rgba(255,255,255,.11);
+}
+.ticket-modal-action-tabs > button.transfer.active { border-color: #60cff5; }
+.ticket-modal-action-tabs > button.assign.active { border-color: #aa95ff; background: linear-gradient(145deg,#51477f,#292e59); }
+.ticket-modal-action-tabs > button.assign.active > svg { color:#c9baff; background:rgba(167,145,255,.14); }
+.ticket-modal-action-tabs > button.resolve.active { border-color: #51dbad; background: linear-gradient(145deg,#176650,#103f3b); }
+.ticket-modal-action-tabs > button.resolve.active > svg { color:#7ce8c5; background:rgba(67,211,166,.14); }
+.ticket-modal-action-tabs > button.evidence.active { border-color: #f0be6f; background: linear-gradient(145deg,#5b4828,#343222); }
+.ticket-modal-action-tabs > button.evidence.active > svg { color:#ffd18a; background:rgba(242,189,99,.14); }
+
+/* Resumen completo y ordenado dentro del modal. */
+.ticket-card.expanded[data-action-mode] > .ticket-card-head { grid-column: 1 / -1; margin: 0 !important; padding: 2px 2px 0; }
+.ticket-card.expanded[data-action-mode] > .ticket-route-summary { grid-column: 1 / 7; margin: 0 !important; }
+.ticket-card.expanded[data-action-mode] > .ticket-location { grid-column: 7 / -1; margin: 0 !important; }
+.ticket-card.expanded[data-action-mode] > h3 { grid-column: 1 / 7; align-self: center; margin: 0 !important; padding: 5px 2px; }
+.ticket-card.expanded[data-action-mode] > .ticket-agency:not(.ticket-location) { grid-column: 7 / -1; margin: 0 !important; }
+.ticket-card.expanded[data-action-mode] > .ticket-description {
+  grid-column: 1 / -1;
+  margin: 0 !important;
+  padding: 10px 12px;
+  border: 1px solid rgba(73, 143, 178, .24);
+  border-radius: 11px;
+  background: rgba(5, 20, 34, .5);
+  color: #c7dce7;
+  font-size: 11px !important;
+  line-height: 1.5 !important;
+}
+.ticket-card.expanded[data-action-mode] > footer {
+  grid-column: 1 / 7;
+  align-self: stretch;
+  margin: 0 !important;
+  padding: 9px 11px !important;
+  border: 1px solid rgba(72, 142, 178, .22);
+  border-radius: 11px;
+  background: rgba(6, 24, 40, .55);
+}
+.ticket-card.expanded[data-action-mode] > .ticket-duration-detail {
+  grid-column: 7 / -1;
+  align-self: stretch;
+  margin: 0 !important;
+}
+.ticket-card.expanded[data-action-mode] > .ticket-resolution { margin: 0 !important; }
+
+/* Área de trabajo de cada acción. */
+.ticket-card.expanded[data-action-mode] > .ticket-management,
+.ticket-card.expanded[data-action-mode] > .ticket-history-summary,
+.ticket-card.expanded[data-action-mode] > .ticket-evidence-empty,
+.ticket-card.expanded[data-action-mode] > div[style] {
+  grid-column: 1 / -1 !important;
+  margin-top: 4px !important;
+}
+.ticket-card.expanded[data-action-mode] .ticket-management {
+  padding: 16px !important;
+  border-color: rgba(85, 170, 211, .32) !important;
+  border-radius: 15px !important;
+  background: linear-gradient(145deg, rgba(9, 38, 62, .92), rgba(5, 22, 38, .94)) !important;
+}
+.ticket-card.expanded[data-action-mode] .ticket-management label {
+  padding: 0 !important;
+  background: transparent !important;
+}
+.ticket-card.expanded[data-action-mode] .ticket-management :is(input, select, textarea) {
+  width: 100% !important;
+}
+.ticket-card.expanded[data-action-mode] .ticket-action-command-bar {
+  gap: 8px !important;
+  padding-top: 12px !important;
+}
+.ticket-card.expanded[data-action-mode] .ticket-action-command-bar button,
+.ticket-card.expanded[data-action-mode] .ticket-management > button {
+  min-height: 44px !important;
+  border-radius: 11px !important;
+  padding: 9px 13px !important;
+  font-size: 10px !important;
+}
+.ticket-card.expanded[data-action-mode="resolve"] .ticket-action-command-bar button {
+  border-color: #55dcb2 !important;
+  background: linear-gradient(135deg,#16715a,#20a47d) !important;
+}
+.ticket-card.expanded[data-action-mode="evidence"] .ticket-history-summary {
+  min-height: 62px;
+  border-color: rgba(238, 187, 100, .35) !important;
+  background: linear-gradient(145deg, rgba(74, 57, 30, .7), rgba(38, 37, 30, .72)) !important;
+}
+.ticket-card.expanded[data-action-mode="evidence"] .ticket-history-summary button {
+  min-height: 38px !important;
+  border: 1px solid rgba(242, 192, 107, .5) !important;
+  border-radius: 10px !important;
+  background: #584425 !important;
+  color: #ffe0a9 !important;
+}
+
+@media (max-width: 760px) {
+  .ticket-card.expanded[data-action-mode] {
+    top: max(6px, env(safe-area-inset-top)) !important;
+    right: 6px !important;
+    bottom: max(6px, env(safe-area-inset-bottom)) !important;
+    left: 6px !important;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px !important;
+    max-height: calc(100dvh - 12px) !important;
+    padding: 11px !important;
+    border-radius: 17px !important;
+  }
+  .ticket-card.expanded[data-action-mode] .ticket-action-modal-heading {
+    top: -11px !important;
+    min-height: 60px;
+    margin: -11px -11px 0 !important;
+    padding: 9px 11px !important;
+  }
+  .ticket-modal-action-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    padding: 6px;
+  }
+  .ticket-modal-action-tabs > button {
+    grid-template-columns: 31px minmax(0, 1fr);
+    min-height: 48px;
+    padding: 6px 7px;
+  }
+  .ticket-modal-action-tabs > button > svg {
+    width: 15px;
+    height: 15px;
+    padding: 7px;
+  }
+  .ticket-card.expanded[data-action-mode] > :is(.ticket-card-head, .ticket-route-summary,
+    .ticket-location, h3, .ticket-agency:not(.ticket-location), .ticket-description,
+    footer, .ticket-duration-detail, .ticket-resolution) {
+    grid-column: 1 / -1 !important;
+  }
+  .ticket-card.expanded[data-action-mode] .ticket-management {
+    grid-template-columns: minmax(0, 1fr) !important;
+    padding: 11px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .ticket-modal-action-tabs small { display: none; }
+  .ticket-modal-action-tabs > button { min-height: 44px; }
+  .ticket-card.expanded[data-action-mode] > .ticket-description { font-size: 10px !important; }
+}

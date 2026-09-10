@@ -1,0 +1,15 @@
+# Nunca subir secretos ni datos locales al despliegue de Vercel.
+# Las variables de entorno se configuran en el panel de Vercel.
+.env
+.env.*
+!.env.example
+Agencias.xlsx
+~$*.xlsx
+n8n-automations-*.json
+*.iam.gserviceaccount.com.json
+
+# Artefactos locales
+node_modules
+.next
+.git
+coverage

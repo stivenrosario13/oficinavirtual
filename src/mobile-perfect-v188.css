@@ -1,0 +1,585 @@
+/* V188 · Auditoría móvil integral de formularios, botones, filtros y usuarios */
+@media (max-width: 900px) {
+  html, body, #root {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  :where(button,input,select,textarea,label,fieldset,form,nav,section,article,header,footer) {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  :where(
+    .ticket-hero-actions,
+    .ticket-report-actions,
+    .table-export-actions,
+    .automatic-finding-actions,
+    .user-manager-actions,
+    .audit-header-actions,
+    .transition-detail-actions,
+    .transition-progress-actions,
+    .ticket-card-actions,
+    .finding-card-actions,
+    .user-card-actions,
+    .new-user-footer
+  ) > button {
+    overflow: hidden;
+    white-space: normal !important;
+    overflow-wrap: break-word !important;
+    text-wrap: balance;
+  }
+
+  :where(
+    .ticket-hero-actions,
+    .ticket-report-actions,
+    .table-export-actions,
+    .automatic-finding-actions,
+    .user-manager-actions,
+    .audit-header-actions,
+    .transition-detail-actions,
+    .transition-progress-actions,
+    .ticket-card-actions,
+    .finding-card-actions,
+    .user-card-actions,
+    .new-user-footer
+  ) > button :where(strong,small,span) {
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal !important;
+    overflow-wrap: break-word !important;
+  }
+
+  /* Crear ticket interno: modal ancho, desplazamiento vertical y fallas legibles. */
+  .ticket-modal.support-catalog-modal {
+    display: flex !important;
+    width: 100% !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+  .support-catalog-modal > header {
+    position: relative !important;
+    z-index: 5;
+    display: grid !important;
+    grid-template-columns: minmax(0,1fr) 42px !important;
+    align-items: start !important;
+    gap: 10px !important;
+    padding: max(14px,env(safe-area-inset-top)) 12px 12px !important;
+  }
+  .support-catalog-modal > header > div { min-width: 0; }
+  .support-catalog-modal > header h2 {
+    margin: 4px 0 !important;
+    font-size: clamp(20px,6vw,26px) !important;
+    line-height: 1.12 !important;
+  }
+  .support-catalog-modal > header p {
+    font-size: 11px !important;
+    line-height: 1.4 !important;
+  }
+  .support-catalog-modal > header > button {
+    width: 42px !important;
+    min-width: 42px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    padding: 0 !important;
+  }
+  .support-catalog-modal > form {
+    display: block !important;
+    width: 100% !important;
+    min-height: 0 !important;
+    flex: 1 1 auto !important;
+    padding: 12px 11px max(20px,env(safe-area-inset-bottom)) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .selected-support-department {
+    display: grid !important;
+    grid-template-columns: minmax(0,1fr) !important;
+    gap: 9px !important;
+    width: 100% !important;
+    padding: 12px !important;
+  }
+  .selected-support-department > button {
+    order: 2;
+    width: 100% !important;
+    min-height: 42px !important;
+    border: 1px solid #377b9f !important;
+    border-radius: 10px !important;
+    background: #0d3552 !important;
+    text-align: center;
+  }
+  .selected-support-department > span {
+    order: 1;
+    width: 100%;
+    min-width: 0;
+  }
+  .selected-support-department :is(strong,small,em) {
+    max-width: 100%;
+    white-space: normal !important;
+    overflow-wrap: break-word;
+  }
+  .modal-step-heading { margin: 17px 2px 10px !important; }
+  .modal-step-heading h3 {
+    font-size: clamp(18px,5vw,22px) !important;
+    line-height: 1.2 !important;
+  }
+  .support-category-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0,1fr) !important;
+    gap: 9px !important;
+    width: 100% !important;
+    padding: 9px !important;
+    overflow: visible !important;
+  }
+  .support-category-grid > button {
+    display: grid !important;
+    grid-template-columns: 22px minmax(0,1fr) auto !important;
+    grid-template-rows: auto !important;
+    width: 100% !important;
+    min-height: 82px !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 12px 10px !important;
+    overflow: hidden !important;
+  }
+  .support-category-grid > button > input {
+    width: 19px !important;
+    min-width: 19px !important;
+    height: 19px !important;
+    min-height: 19px !important;
+    margin: 0 !important;
+  }
+  .support-category-grid > button > span {
+    display: grid !important;
+    min-width: 0 !important;
+    gap: 4px !important;
+  }
+  .support-category-grid > button :is(strong,small) {
+    display: block !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    white-space: normal !important;
+    text-overflow: clip !important;
+    overflow-wrap: break-word !important;
+  }
+  .support-category-grid > button strong {
+    color: #fff !important;
+    font-size: 13px !important;
+    line-height: 1.25 !important;
+  }
+  .support-category-grid > button small {
+    color: #9fc4d7 !important;
+    font-size: 10px !important;
+    line-height: 1.35 !important;
+  }
+  .support-category-grid > button > em {
+    align-self: center;
+    min-width: 58px !important;
+    max-width: 74px !important;
+    padding: 6px 7px !important;
+    overflow: hidden;
+    font-size: 8px !important;
+    line-height: 1.15 !important;
+    text-align: center;
+    white-space: normal !important;
+  }
+  .support-category-continue {
+    width: 100% !important;
+    min-height: 50px !important;
+    margin: 11px 0 0 !important;
+    padding: 9px 12px !important;
+    white-space: normal !important;
+  }
+  .ticket-detail-step { width: 100%; min-width: 0; }
+  .ticket-detail-step > label,
+  .selected-case-detail,
+  .selected-case-detail-list { width: 100% !important; min-width: 0 !important; }
+  .selected-case-detail { padding: 12px !important; }
+  .selected-case-detail > header {
+    display: grid !important;
+    grid-template-columns: 36px minmax(0,1fr) !important;
+    align-items: center !important;
+  }
+  .selected-case-detail > header > div { min-width: 0; }
+  .selected-case-detail > header :is(strong,small) {
+    white-space: normal !important;
+    overflow-wrap: break-word !important;
+  }
+  .ticket-detail-step :is(input,select,textarea) {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    font-size: 16px !important;
+  }
+  .ticket-detail-step > footer {
+    position: sticky;
+    z-index: 4;
+    bottom: calc(-1 * max(20px,env(safe-area-inset-bottom)));
+    display: grid !important;
+    grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+    gap: 8px !important;
+    width: calc(100% + 22px) !important;
+    margin: 10px -11px 0 !important;
+    padding: 10px 11px max(10px,env(safe-area-inset-bottom)) !important;
+    border-top: 1px solid #2c617f;
+    background: #071b30f2;
+    backdrop-filter: blur(10px);
+  }
+  .ticket-detail-step > footer > button {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 50px !important;
+    padding: 7px !important;
+    white-space: normal !important;
+  }
+
+  /* Usuarios: sin carrusel estrecho ni tarjetas recortadas. */
+  .user-department-cards {
+    display: grid !important;
+    grid-template-columns: minmax(0,1fr) !important;
+    gap: 10px !important;
+    width: 100% !important;
+    padding: 10px !important;
+    overflow: visible !important;
+    scroll-snap-type: none !important;
+  }
+  .user-department-cards > button {
+    display: grid !important;
+    flex: none !important;
+    grid-template-columns: 48px minmax(0,1fr) auto !important;
+    grid-template-rows: auto auto auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    min-height: 108px !important;
+    gap: 3px 11px !important;
+    padding: 14px !important;
+  }
+  .user-department-cards > button > span { grid-row: 1 / 4 !important; }
+  .user-department-cards > button > em,
+  .user-department-cards > button > strong,
+  .user-department-cards > button > small {
+    grid-column: 2 !important;
+    min-width: 0;
+    white-space: normal !important;
+    overflow-wrap: break-word !important;
+  }
+  .user-department-cards > button > b {
+    grid-column: 3 !important;
+    grid-row: 1 / 4 !important;
+    align-self: center;
+    min-width: 68px;
+    text-align: right;
+    white-space: normal !important;
+  }
+  .user-department-cards.department-open > button:not(.active) { display: none !important; }
+  .user-department-cards.department-open > button.active {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .user-directory-context {
+    display: grid !important;
+    grid-template-columns: minmax(0,1fr) auto !important;
+    width: auto !important;
+    margin: 10px !important;
+    padding: 11px !important;
+  }
+  .user-directory-context > div,
+  .user-directory-context > div > span { min-width: 0; }
+  .user-directory-context small {
+    white-space: normal !important;
+    overflow-wrap: break-word !important;
+  }
+  .department-user-list {
+    width: 100% !important;
+    padding: 8px !important;
+    overflow: visible !important;
+  }
+  .department-user-list > article { width: 100% !important; min-width: 0 !important; }
+  .department-user-list .user-card-identity {
+    display: grid !important;
+    grid-template-columns: 44px minmax(0,1fr) !important;
+    grid-template-rows: auto auto auto !important;
+    width: 100% !important;
+    min-height: 116px !important;
+    gap: 5px 10px !important;
+    padding: 13px !important;
+  }
+  .department-user-list .user-card-identity > .user-avatar {
+    grid-column: 1 !important;
+    grid-row: 1 / 4 !important;
+    align-self: start;
+  }
+  .department-user-list .user-card-identity > div:nth-child(2) {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    min-width: 0 !important;
+  }
+  .department-user-list .user-card-identity > div:nth-child(2) :is(strong,span,small) {
+    display: block !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+  .department-user-list .user-card-identity > em,
+  .department-user-list .user-card-identity > b {
+    grid-column: 2 !important;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 !important;
+    white-space: normal !important;
+  }
+  .department-user-list .user-card-identity > em { grid-row: 2 !important; }
+  .department-user-list .user-card-identity > b { grid-row: 3 !important; }
+  .user-detail-cards {
+    display: grid !important;
+    grid-template-columns: repeat(3,minmax(0,1fr)) !important;
+    gap: 6px !important;
+    width: 100% !important;
+    padding: 10px !important;
+    overflow: visible !important;
+  }
+  .user-detail-cards > button {
+    display: grid !important;
+    flex: none !important;
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 78px !important;
+    justify-items: center;
+    gap: 5px !important;
+    padding: 8px 4px !important;
+    text-align: center !important;
+  }
+  .user-detail-cards > button > svg { width: 18px !important; }
+  .user-detail-cards > button > span { min-width: 0; }
+  .user-detail-cards > button strong {
+    display: block;
+    font-size: 9px !important;
+    line-height: 1.15 !important;
+    white-space: normal !important;
+    overflow-wrap: break-word !important;
+  }
+  .user-detail-cards > button small { display: none !important; }
+  .department-user-list :is(.user-edit-grid,.user-permissions-editor,.user-group-selector) {
+    width: auto !important;
+    min-width: 0 !important;
+    margin-right: 9px !important;
+    margin-left: 9px !important;
+  }
+  .department-user-list .user-card-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+    gap: 7px !important;
+    padding: 0 9px 12px !important;
+  }
+  .department-user-list .user-card-actions > button {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 50px !important;
+  }
+
+  /* Barra superior y formulario de creación de usuarios. */
+  .admin-search-topbar { width: 100% !important; padding: 12px 10px !important; }
+  .user-manager-actions {
+    display: grid !important;
+    grid-template-columns: repeat(3,minmax(0,1fr)) !important;
+    gap: 6px !important;
+    width: 100% !important;
+  }
+  .user-manager-actions > button {
+    display: grid !important;
+    grid-template-columns: 18px minmax(0,1fr) !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 68px !important;
+    align-content: center;
+    padding: 6px 5px !important;
+    gap: 5px !important;
+  }
+  .user-manager-actions > button > svg { width: 17px !important; }
+  .user-manager-actions > button > span { min-width: 0; }
+  .user-manager-actions > button strong {
+    font-size: 8px !important;
+    line-height: 1.15 !important;
+  }
+  .user-manager-actions > button small { display: none !important; }
+  .new-user-dialog > form {
+    width: 100% !important;
+    min-height: 0 !important;
+    padding: 12px 10px max(20px,env(safe-area-inset-bottom)) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+  .new-user-intro,
+  .new-user-block,
+  .new-user-footer { width: 100% !important; min-width: 0 !important; }
+  .new-user-intro { padding: 12px !important; }
+  .new-user-block { padding: 11px !important; }
+  .new-user-field-grid,
+  .new-user-field-grid.two-columns,
+  .new-role-options,
+  .new-user-granular-permissions,
+  .group-checklist {
+    grid-template-columns: minmax(0,1fr) !important;
+  }
+  .new-role-options > button {
+    display: grid !important;
+    grid-template-columns: 22px minmax(0,1fr) 20px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 76px !important;
+    gap: 9px !important;
+  }
+  .new-role-options > button > i { position: static !important; grid-column: 3 !important; grid-row: 1 !important; }
+  .new-role-options > button > svg { grid-column: 1 !important; grid-row: 1 !important; }
+  .new-role-options > button > span { grid-column: 2 !important; grid-row: 1 !important; min-width: 0; }
+  .new-role-options > button :is(strong,small) {
+    white-space: normal !important;
+    overflow-wrap: break-word !important;
+  }
+  .technology-quick-permissions > div {
+    display: grid !important;
+    grid-template-columns: repeat(3,minmax(0,1fr)) !important;
+    gap: 5px !important;
+  }
+  .technology-quick-permissions > div > button {
+    min-width: 0 !important;
+    min-height: 54px !important;
+    padding: 5px 3px !important;
+    font-size: 8px !important;
+    white-space: normal !important;
+  }
+  .new-user-footer {
+    position: sticky !important;
+    z-index: 5 !important;
+    bottom: calc(-1 * max(20px,env(safe-area-inset-bottom)));
+    display: grid !important;
+    grid-template-columns: minmax(0,1fr) minmax(120px,.8fr) !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 10px !important;
+  }
+  .new-user-footer > div { min-width: 0; }
+  .new-user-footer > button {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 52px !important;
+    padding: 7px !important;
+    font-size: 9px !important;
+  }
+
+  /* Filtros: cada control conserva etiqueta y valor sin cortar texto. */
+  :where(.ticket-report-filters,.report-filter-grid) {
+    display: grid !important;
+    grid-template-columns: repeat(3,minmax(0,1fr)) !important;
+    gap: 6px !important;
+    width: 100% !important;
+  }
+  :where(.ticket-report-filters,.report-filter-grid) > label {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 7px 5px !important;
+    overflow: hidden;
+    font-size: 8px !important;
+  }
+  :where(.ticket-report-filters,.report-filter-grid) select {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 40px !important;
+    padding: 0 23px 0 6px !important;
+    font-size: 10px !important;
+    text-overflow: ellipsis;
+  }
+  .automatic-finding-actions {
+    display: grid !important;
+    grid-template-columns: repeat(3,minmax(0,1fr)) !important;
+    gap: 6px !important;
+    width: 100% !important;
+    padding: 7px !important;
+    overflow: visible !important;
+  }
+  .automatic-finding-actions > * {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+  .automatic-finding-actions > label {
+    padding: 6px 5px !important;
+    overflow: hidden;
+    font-size: 8px !important;
+  }
+  .automatic-finding-actions select {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 39px !important;
+    padding: 0 22px 0 5px !important;
+    font-size: 9px !important;
+    text-overflow: ellipsis;
+  }
+
+  /* Tablas y listados nunca ensanchan la página completa. */
+  :where(
+    .admin-table,
+    .audit-table,
+    .finding-table,
+    .resolved-ticket-table,
+    .service-report-table,
+    .personnel-performance-table,
+    .administrator-progress-table,
+    .agency-progress-table,
+    .table-wrap,
+    .table-scroll
+  ) {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: visible;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 430px) {
+  .support-category-grid > button {
+    grid-template-columns: 20px minmax(0,1fr) 58px !important;
+    gap: 8px !important;
+    padding: 11px 8px !important;
+  }
+  .support-category-grid > button strong { font-size: 12px !important; }
+  .support-category-grid > button small { font-size: 9px !important; }
+  .user-department-cards > button {
+    grid-template-columns: 44px minmax(0,1fr) 66px !important;
+    padding: 12px 10px !important;
+  }
+  .user-directory-context > b { font-size: 8px !important; }
+  .new-user-footer {
+    grid-template-columns: minmax(0,1fr) minmax(112px,.75fr) !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .support-category-grid > button {
+    grid-template-columns: 19px minmax(0,1fr) !important;
+  }
+  .support-category-grid > button > em {
+    grid-column: 2 !important;
+    justify-self: start;
+  }
+  .user-manager-actions > button { grid-template-columns: 1fr !important; justify-items: center; }
+  .user-manager-actions > button > span { text-align: center; }
+  .new-user-footer { grid-template-columns: minmax(0,1fr) !important; }
+}

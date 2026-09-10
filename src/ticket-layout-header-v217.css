@@ -1,0 +1,63 @@
+/* V217 · Cantidad exacta de estados y cuatro acciones visibles en la cabecera móvil. */
+@media (min-width: 761px) {
+  .ticket-center .ticket-status-filter.status-layout-active {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .ticket-center .ticket-status-filter.status-layout-process {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .ticket-center .ticket-status-filter.status-layout-history {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .topbar .header-account {
+    display: grid !important;
+    grid-template-columns: repeat(4, 40px) !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    gap: 5px !important;
+    overflow: visible !important;
+  }
+
+  .topbar .header-account > :is(.notification-bell, .header-profile, .header-logout) {
+    display: flex !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 4px !important;
+  }
+
+  .topbar .header-account > .header-profile > :is(span, svg:last-child) {
+    display: none !important;
+  }
+
+  .topbar .header-account > .header-profile > :is(img, svg:first-child) {
+    display: block !important;
+    width: 27px !important;
+    height: 27px !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .topbar .header-account {
+    grid-template-columns: repeat(4, 36px) !important;
+    gap: 3px !important;
+  }
+
+  .topbar .header-account > :is(.notification-bell, .header-profile, .header-logout) {
+    width: 36px !important;
+    min-width: 36px !important;
+    max-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+  }
+}

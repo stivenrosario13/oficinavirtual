@@ -1,0 +1,292 @@
+/* V187 · Tarjetas institucionales, flujo móvil amplio y pintura diferida */
+:root {
+  --v187-card-surface: linear-gradient(145deg, #0d3150, #071b2f 72%);
+  --v187-card-line: #347391;
+  --v187-card-line-soft: #285873;
+  --v187-card-text: #f4fbff;
+  --v187-card-muted: #a4c2d3;
+  --v187-card-accent: #63d7ff;
+  --v187-card-radius: 22px;
+  --v187-card-shadow: 0 20px 48px rgba(0, 8, 20, .38), inset 0 1px rgba(255,255,255,.045);
+}
+
+/* Misma superficie visual de las tarjetas principales de departamentos. */
+:where(
+  .support-section-card,
+  .ticket-navigation-card-grid > button,
+  .ticket-card,
+  .finding-category-cards > button,
+  .finding-table-card,
+  .report-module-selector > button,
+  .report-panel,
+  .personnel-card,
+  .user-department-cards > button,
+  .department-user-list > article,
+  .user-detail-cards > button,
+  .admin-stats > article,
+  .admin-section,
+  .agency-transition-card,
+  .transition-stage-detail,
+  .transition-department-card,
+  .transition-history-panel,
+  .transition-update-panel,
+  .transition-assignment-editor,
+  .maintenance-list > article,
+  .notification-table-section
+) {
+  border-color: var(--v187-card-line) !important;
+  border-radius: var(--v187-card-radius) !important;
+  background: var(--v187-card-surface) !important;
+  color: var(--v187-card-text);
+  box-shadow: var(--v187-card-shadow) !important;
+}
+
+:where(.admin-stats > article,.admin-section,.department-user-list > article,.user-detail-cards > button) :is(h2,h3,h4,strong) {
+  color: var(--v187-card-text) !important;
+}
+:where(.admin-stats > article,.admin-section,.department-user-list > article,.user-detail-cards > button) :is(p,small,span) {
+  color: var(--v187-card-muted);
+}
+.transition-department-card.completed {
+  border-color: #33846b !important;
+  background: linear-gradient(145deg,#124538,#092a28 72%) !important;
+}
+.transition-department-card.selected:not(.completed) {
+  border-color: var(--v187-card-accent) !important;
+  background: linear-gradient(145deg,#124364,#09243c 72%) !important;
+}
+
+:where(
+  .ticket-card,
+  .finding-table-card,
+  .report-panel,
+  .personnel-card,
+  .department-user-list > article,
+  .admin-stats > article,
+  .agency-transition-card,
+  .maintenance-list > article
+) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 220px;
+}
+
+.agency-transition-card.selected,
+.transition-stage-detail,
+.report-panel.active {
+  content-visibility: visible;
+}
+
+:where(
+  .support-section-card,
+  .ticket-navigation-card-grid > button,
+  .finding-category-cards > button,
+  .report-module-selector > button,
+  .user-department-cards > button,
+  .user-detail-cards > button,
+  .transition-department-card
+) {
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease !important;
+}
+
+@media (hover:hover) and (pointer:fine) {
+  :where(
+    .support-section-card,
+    .ticket-navigation-card-grid > button,
+    .finding-category-cards > button,
+    .report-module-selector > button,
+    .user-department-cards > button,
+    .user-detail-cards > button,
+    .transition-department-card
+  ):hover {
+    transform: translateY(-3px);
+    border-color: var(--v187-card-accent) !important;
+    box-shadow: 0 25px 58px rgba(0,8,20,.5), 0 0 0 3px rgba(99,215,255,.08) !important;
+  }
+}
+
+/* El texto del panel administrativo nunca puede quedar en una columna estrecha. */
+.atlas-admin-hero > div:first-child {
+  flex: 1 1 420px;
+  width: auto;
+  min-width: 0;
+}
+.atlas-admin-hero > div:first-child > :is(h1,p,span) {
+  width: auto;
+  min-width: 0;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+
+/* Agencias: acciones superiores siempre en una sola línea. */
+.transition-detail-actions {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  width: auto !important;
+  align-items: stretch !important;
+}
+.transition-detail-actions > button,
+.transition-detail-actions .process-delete {
+  grid-column: auto !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  margin-left: 0 !important;
+}
+
+/* Las tablas conservan sus columnas y desplazan solamente dentro de la tarjeta. */
+:where(
+  .agency-transition-board,
+  .transition-stage-detail,
+  .transition-history-panel,
+  .admin-section,
+  .report-panel,
+  .finding-table-card
+) :where(.table-wrap,.table-scroll,table) {
+  max-width: 100%;
+}
+:where(
+  .agency-transition-board,
+  .transition-stage-detail,
+  .admin-section,
+  .report-panel,
+  .finding-table-card
+) :where(.table-wrap,.table-scroll) {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 900px) {
+  :root { --v187-card-radius: 18px; }
+
+  .atlas-admin-hero {
+    display: grid !important;
+    grid-template-columns: minmax(0,1fr) !important;
+    width: 100% !important;
+  }
+  .atlas-admin-hero > div:first-child {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  .atlas-admin-hero > div:first-child > :is(h1,p,span) {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    white-space: normal !important;
+  }
+  .atlas-admin-hero > div:first-child > span {
+    width: max-content !important;
+    max-width: 100% !important;
+  }
+  .admin-hero-actions,
+  .admin-hero-actions .role-chip { width: 100% !important; }
+
+  .agency-transition-board {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+  .agency-transition-board > header { padding: 16px 14px !important; }
+  .agency-transition-workspace,
+  .agency-transition-workspace.has-selection {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+  .agency-transition-workspace.has-selection > .agency-transition-list { display: none !important; }
+  .transition-stage-detail {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    border-right: 0 !important;
+    border-left: 0 !important;
+    border-radius: 0 !important;
+  }
+  .transition-stage-detail > header { padding: 17px 14px !important; }
+  .transition-detail-stage-tabs {
+    grid-template-columns: repeat(3,minmax(0,1fr)) !important;
+    gap: 6px !important;
+    padding: 10px 10px 0 !important;
+  }
+  .transition-current-callout,
+  .transition-stage-editor,
+  .transition-update-panel,
+  .transition-history-panel,
+  .transition-completed-banner,
+  .transition-assignment-editor,
+  .transition-record-decision {
+    width: auto !important;
+    max-width: none !important;
+    margin-right: 10px !important;
+    margin-left: 10px !important;
+  }
+  .transition-detail-actions {
+    grid-template-columns: repeat(3,minmax(0,1fr)) !important;
+    gap: 6px !important;
+    width: 100% !important;
+    padding: 11px 10px 0 !important;
+  }
+  .transition-detail-actions > button {
+    min-height: 56px !important;
+    padding: 6px 4px !important;
+    gap: 4px !important;
+    font-size: clamp(8px,2.4vw,10px) !important;
+    line-height: 1.12 !important;
+    overflow-wrap: normal !important;
+  }
+  .transition-detail-actions > button svg {
+    width: 13px !important;
+    height: 13px !important;
+    flex: 0 0 auto;
+  }
+  .transition-history-panel { overflow: hidden !important; }
+  .transition-history-list { width: 100% !important; max-height: none !important; }
+  .transition-history-list > article {
+    display: grid !important;
+    grid-template-columns: 30px minmax(0,1fr) !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 13px 11px !important;
+  }
+  .transition-history-list > article > div { min-width: 0 !important; }
+  .transition-progress-actions {
+    display: grid !important;
+    grid-column: 1 / -1 !important;
+    grid-row: auto !important;
+    grid-template-columns: repeat(4,minmax(0,1fr)) !important;
+    width: 100% !important;
+    margin-top: 10px !important;
+    padding: 10px 0 0 !important;
+    border-top: 1px solid var(--v187-card-line-soft) !important;
+    border-left: 0 !important;
+  }
+  .transition-progress-actions > button {
+    min-height: 54px !important;
+    padding: 5px 3px !important;
+    font-size: clamp(7px,2.1vw,9px) !important;
+    line-height: 1.12 !important;
+  }
+  .transition-progress-actions > button svg { width: 12px !important; height: 12px !important; }
+}
+
+@media (max-width: 430px) {
+  .ticket-center { padding-inline: 0 !important; }
+  .agency-transition-board > header h2 { font-size: 19px !important; }
+  .agency-transition-board > header p { font-size: 10px !important; }
+  .transition-stage-detail > header h3 { font-size: 19px !important; }
+  .transition-stage-detail > header p { font-size: 10px !important; }
+  .transition-detail-stage-tabs button { min-height: 62px !important; padding: 6px 3px !important; }
+  .transition-detail-stage-tabs strong { font-size: 9px !important; }
+  .transition-detail-stage-tabs em { font-size: 7px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.support-section-card,.ticket-navigation-card-grid > button,.transition-department-card) {
+    transition: none !important;
+  }
+}

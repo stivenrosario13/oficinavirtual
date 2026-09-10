@@ -1,0 +1,187 @@
+/* V220 · Un solo desplazamiento por modal en móvil. */
+@media (max-width: 900px) {
+  :is(.audit-modal-backdrop, .new-user-modal-backdrop) {
+    overflow: hidden !important;
+  }
+
+  :is(.audit-detail-modal, .user-manager-modal) {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain !important;
+    scrollbar-width: none !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  :is(.audit-detail-modal, .user-manager-modal)::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  :is(.audit-detail-modal, .user-manager-modal) > header {
+    position: sticky !important;
+    z-index: 30 !important;
+    top: 0 !important;
+    width: 100% !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    flex: none !important;
+    overflow: visible !important;
+  }
+
+  /* El visor completo se desplaza; sus tarjetas internas crecen naturalmente. */
+  .audit-detail-modal > :not(header):not(.evidence-lightbox) {
+    min-height: 0 !important;
+    max-height: none !important;
+    flex: none !important;
+    overflow: visible !important;
+    overscroll-behavior: auto !important;
+  }
+
+  .audit-detail-modal :is(
+    .audit-detail-summary,
+    .audit-detail-block,
+    .audit-detail-photos,
+    .audit-answer-list,
+    .audit-observation,
+    .audit-detail-title
+  ) {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    scrollbar-width: none !important;
+  }
+
+  .audit-detail-modal .audit-detail-block,
+  .audit-detail-modal .audit-detail-photos > article {
+    overflow: hidden !important;
+  }
+
+  .audit-detail-modal .audit-detail-photos {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+  }
+
+  .audit-detail-modal .audit-photo-preview,
+  .audit-detail-modal .audit-photo-preview img {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .audit-detail-modal .audit-answer-list article {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Directorio: cabecera, buscador y botones apilados sin carrusel. */
+  .user-manager-modal > :not(header):not(.new-user-modal-backdrop) {
+    min-height: 0 !important;
+    max-height: none !important;
+    flex: none !important;
+    overflow: visible !important;
+    overscroll-behavior: auto !important;
+  }
+
+  .user-manager-modal .admin-search-topbar {
+    position: static !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    gap: 10px !important;
+    padding: 13px 12px !important;
+    overflow: visible !important;
+  }
+
+  .user-manager-modal .admin-search-copy,
+  .user-manager-modal .user-manager-search,
+  .user-manager-modal .user-manager-actions {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .user-manager-modal .user-manager-search {
+    min-height: 52px !important;
+  }
+
+  .user-manager-modal .user-manager-actions {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 7px !important;
+  }
+
+  .user-manager-modal .user-manager-actions > button {
+    display: flex !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    min-height: 58px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 7px 6px !important;
+    overflow: hidden !important;
+  }
+
+  .user-manager-modal .user-manager-actions > button > span {
+    min-width: 0 !important;
+  }
+
+  .user-manager-modal .user-manager-actions > button strong {
+    display: block !important;
+    overflow-wrap: normal !important;
+    word-break: normal !important;
+    white-space: normal !important;
+  }
+
+  .user-manager-modal :is(
+    .user-department-cards,
+    .user-directory-context,
+    .user-list,
+    .scoped-user-list,
+    .department-user-list,
+    .user-detail-cards
+  ) {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    scrollbar-width: none !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .user-manager-modal .user-manager-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .user-manager-modal .user-manager-actions > .open-new-user-button {
+    grid-column: 1 / -1 !important;
+  }
+
+  .audit-detail-modal .audit-detail-summary,
+  .audit-detail-modal .audit-detail-photos,
+  .audit-detail-modal .audit-answer-list,
+  .audit-detail-modal .audit-observation {
+    margin-right: 10px !important;
+    margin-left: 10px !important;
+  }
+
+  .audit-detail-modal .audit-detail-summary,
+  .audit-detail-modal .audit-detail-photos,
+  .audit-detail-modal .audit-answer-list {
+    width: auto !important;
+  }
+}

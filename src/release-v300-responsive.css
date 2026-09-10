@@ -1,0 +1,22 @@
+/* V300: métricas por área, recuperación visual y endurecimiento móvil global. */
+html,body,#root{max-width:100%;overflow-x:hidden}.portal-main-column,.workspace,.operations-center,.ops-overview,.ops-main-column,.ops-side-column{min-width:0;max-width:100%}
+.queue-area-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 15px}
+.queue-area-metrics>article{min-width:0;padding:15px;border:1px solid #285b7d;border-radius:17px;background:linear-gradient(145deg,#0c2944,#081b30);box-shadow:0 12px 30px #020b1466}
+.queue-area-metrics>article>header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px;color:#8edfff;text-transform:uppercase;font-size:10px;font-weight:900;letter-spacing:.06em}
+.queue-area-metrics>article>header span{display:flex;align-items:center;gap:7px}.queue-area-metrics>article>header span i{width:8px;height:8px;border-radius:50%;background:#52d2ff;box-shadow:0 0 12px #52d2ff}
+.queue-area-metrics>article>header strong{display:flex;align-items:baseline;gap:4px;color:#fff;font:900 24px Manrope}.queue-area-metrics>article>header small{color:#769bb4;font:800 8px Manrope}
+.queue-area-stat{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 10px;align-items:center;margin-top:10px}.queue-area-stat span{display:flex;justify-content:space-between;gap:8px;min-width:0}.queue-area-stat b{color:#d9edf9;font-size:10px}.queue-area-stat small{color:#789bb2;font-size:9px}.queue-area-stat>strong{color:#fff;font:900 15px Manrope}.queue-area-stat>i{grid-column:1/-1;height:6px;overflow:hidden;border-radius:99px;background:#163650}.queue-area-stat>i>em{display:block;height:100%;border-radius:inherit;background:#ffba49}.queue-area-stat.progress>i>em{background:#48bfff}.queue-area-stat.completed>i>em{background:#37d6a0}
+@media(max-width:1050px){.queue-area-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.queue-area-metrics>article:last-child{grid-column:1/-1}}
+@media(max-width:700px){
+  body{min-width:0}.portal-main-column,.workspace,.ticket-center,.operations-center,.ops-overview{width:100%;min-width:0;padding-left:10px!important;padding-right:10px!important}
+  .queue-area-metrics{grid-template-columns:1fr}.queue-area-metrics>article:last-child{grid-column:auto}.queue-area-metrics>article{padding:13px;border-radius:14px}
+  .queue-summary,.operations-toolbar,.ops-workspace-grid,.ops-department-list,.ops-metrics,.ticket-form-grid{grid-template-columns:1fr!important}
+  .ticket-modal-backdrop{padding:0!important;align-items:stretch!important}.ticket-modal,.maintenance-procurement-modal,.maintenance-document-modal{width:100%!important;max-width:none!important;max-height:100dvh!important;border-radius:0!important;overflow:auto!important}
+  input,select,textarea{max-width:100%;font-size:16px!important}button,a,[role="button"]{min-height:44px}
+  .ops-heading,.ops-section-heading{align-items:flex-start;flex-direction:column}.ops-heading h1{font-size:clamp(26px,9vw,40px)}.ops-secondary{width:100%;justify-content:center}
+  .ops-activity-table,.maintenance-table-wrap,.ticket-table-wrap{max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain}
+  .support-chat-shell,.support-chat-panel{max-width:100%;min-width:0}.support-chat-panel{height:min(76dvh,720px)}
+  .header-account{gap:5px}.header-account .notification-bell{width:44px;min-width:44px}.header-profile span{display:none}
+  .app-error-screen{padding:14px}.app-error-screen section{width:100%;padding:28px 20px}
+}
+@media(max-width:420px){.portal-main-column,.workspace,.ticket-center,.operations-center,.ops-overview{padding-left:7px!important;padding-right:7px!important}.queue-area-stat span{flex-direction:column;gap:1px}.queue-area-metrics>article>header strong{font-size:20px}}

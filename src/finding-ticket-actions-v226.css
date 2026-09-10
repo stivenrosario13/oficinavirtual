@@ -1,0 +1,55 @@
+/* V226 · Hallazgos compactos y administración departamental de tickets */
+.finding-ticket-card{cursor:pointer;transition:border-color .18s ease,background .18s ease,transform .18s ease}
+.finding-ticket-card:hover,.finding-ticket-card:focus-visible{border-color:#58c9f2!important;background:#0e3150!important;outline:none;transform:translateY(-1px)}
+.finding-open-ticket{display:flex!important;width:100%;align-items:center;justify-content:space-between!important;gap:10px}
+.finding-open-ticket svg{flex:none}
+.finding-ticket-complete{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
+.finding-ticket-badges{grid-column:1/-1;display:flex;gap:8px;align-items:center}
+.finding-ticket-badges em{font-style:normal}
+.finding-ticket-complete>section{display:flex;align-items:flex-start;gap:11px;min-width:0;border:1px solid #285a79;border-radius:12px;padding:13px;background:#081e35;color:#dff5ff}
+.finding-ticket-complete>section>svg{flex:none;width:20px;color:#66d8ff}
+.finding-ticket-complete>section>span{display:grid;gap:4px;min-width:0}
+.finding-ticket-complete>section small{color:#69d8ff;font-size:8px;font-weight:900;letter-spacing:.1em}
+.finding-ticket-complete>section strong{overflow-wrap:anywhere;color:#fff;font-size:13px;line-height:1.4}
+.finding-ticket-complete>section em{color:#9fc5d9;font-size:10px;font-style:normal}
+.finding-ticket-complete-actions{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.finding-ticket-complete-actions button{display:flex;min-height:46px;align-items:center;justify-content:center;gap:8px;border:1px solid #36789c;background:#123c5a;color:#effaff;font-weight:900}
+.finding-ticket-complete-actions button.resolve{border-color:#278b6b;background:#12523f}
+.ticket-card-actions button.cancel{border-color:#9b4058!important;background:#5a1c30!important;color:#ffeaf0!important}
+.ticket-assignment-department,.ticket-direct-resolution{grid-column:1/-1;display:flex;align-items:center;gap:11px;border:1px solid #2d6a8e;border-radius:12px;padding:12px;background:#0a2943;color:#e8f8ff}
+.ticket-assignment-department>svg,.ticket-direct-resolution>svg{flex:none;color:#67dafd}
+.ticket-assignment-department>span,.ticket-direct-resolution>span{display:grid;gap:3px}
+.ticket-assignment-department small{color:#69d8ff;font-size:8px;font-weight:900;letter-spacing:.09em}
+.ticket-assignment-department em,.ticket-direct-resolution small{color:#a6cada;font-size:10px;font-style:normal}
+.ticket-direct-resolution{border-color:#287a62;background:#0c352c}
+.ticket-direct-resolution>svg{color:#6be8ba}
+.ticket-cancel-panel{display:grid;grid-template-columns:42px 1fr;gap:11px;margin:14px 0;border:1px solid #9c4059;border-radius:15px;padding:15px;background:linear-gradient(145deg,#3b1523,#25131d);color:#fff}
+.ticket-cancel-panel>svg{display:grid;width:22px;height:22px;padding:9px;box-sizing:content-box;border-radius:11px;background:#7e243e;color:#ffd8e4}
+.ticket-cancel-panel>span{display:grid;gap:4px}.ticket-cancel-panel>span small{color:#e7adbd;font-size:10px;line-height:1.45}
+.ticket-cancel-panel label{grid-column:1/-1;display:grid;gap:7px;color:#ffdbe5;font-size:10px;font-weight:900}
+.ticket-cancel-panel textarea{min-height:100px;width:100%;border:1px solid #a34b64;background:#130c12;color:#fff;padding:12px;resize:vertical}
+.ticket-cancel-panel>button{grid-column:1/-1;display:flex;min-height:46px;align-items:center;justify-content:center;gap:8px;border:1px solid #d1617f;background:#8b2945;color:#fff;font-weight:900}
+.ticket-cancel-panel>button:disabled{opacity:.45}
+
+@media(max-width:760px){
+  .finding-table-stack{padding:8px!important}
+  .finding-table-card>header{padding:10px 12px!important}
+  .finding-table-card .finding-table{display:grid!important;gap:7px!important;padding:8px!important;overflow:visible!important}
+  .finding-ticket-card{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;grid-template-areas:"code priority" "agency agency" "group actions"!important;gap:5px 9px!important;min-width:0!important;min-height:116px!important;padding:11px 12px!important;border:1px solid #2b6384!important;border-radius:12px!important;background:linear-gradient(145deg,#0b2944,#071d33)!important}
+  .finding-ticket-card>span{display:grid!important;min-width:0!important;padding:0!important;border:0!important;background:transparent!important}
+  .finding-ticket-card>span:nth-child(1){grid-area:code!important}
+  .finding-ticket-card>span:nth-child(2){grid-area:agency!important;font-size:13px!important;font-weight:900!important;color:#fff!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .finding-ticket-card>span:nth-child(3){grid-area:group!important;align-self:center;color:#9dc8dc!important}
+  .finding-ticket-card>span:nth-child(4),.finding-ticket-card>span:nth-child(6),.finding-ticket-card>span:nth-child(7){display:none!important}
+  .finding-ticket-card>span:nth-child(5){grid-area:priority!important;justify-self:end}
+  .finding-ticket-card>span:nth-child(8){grid-area:actions!important;display:flex!important;justify-self:end!important;margin:0!important;padding:0!important;border:0!important}
+  .finding-ticket-card>span:nth-child(2):before,.finding-ticket-card>span:nth-child(3):before,.finding-ticket-card>span:nth-child(5):before,.finding-ticket-card>span:nth-child(8):before{display:none!important}
+  .finding-open-ticket{width:42px!important;min-width:42px!important;min-height:38px!important;padding:8px 10px!important;border-color:#3f7da1!important;background:#173f5c!important}
+  .finding-open-ticket span{display:none!important}
+  .finding-open-ticket svg{width:18px!important;margin:auto}
+  .finding-ticket-complete{grid-template-columns:1fr}
+  .finding-ticket-badges,.finding-ticket-complete-actions{grid-column:auto}
+  .finding-ticket-complete-actions{grid-template-columns:1fr}
+  .ticket-cancel-panel{grid-template-columns:36px 1fr;padding:12px}
+  .ticket-cancel-panel>svg{width:18px;height:18px;padding:8px}
+}

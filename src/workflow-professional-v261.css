@@ -1,0 +1,208 @@
+/* V261 · Flujo profesional de tareas, Almacén y Taller + tema móvil unificado. */
+.pending-task-checklist,
+.warehouse-department-hub {
+  margin: 0 0 18px;
+  overflow: hidden;
+  border: 1px solid rgba(91, 181, 222, .24);
+  border-radius: 20px;
+  background: linear-gradient(145deg, #0b263b, #061725 72%);
+  box-shadow: 0 18px 44px rgba(0, 8, 20, .26);
+  color: #f4fbff;
+}
+
+.pending-task-checklist > header,
+.warehouse-department-hub > header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 22px;
+  border-bottom: 1px solid rgba(91, 181, 222, .18);
+  background: radial-gradient(circle at 88% 0, rgba(73, 205, 244, .14), transparent 38%);
+}
+
+.pending-task-checklist > header > span {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  place-items: center;
+  border: 1px solid rgba(91, 214, 246, .35);
+  border-radius: 14px;
+  background: #0d3c58;
+  color: #63dbfa;
+}
+
+.pending-task-checklist header div,
+.warehouse-department-hub header { min-width: 0; }
+.pending-task-checklist header em,
+.warehouse-department-hub header > span {
+  color: #5ed8f8;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+.pending-task-checklist header h2,
+.warehouse-department-hub header h2 { margin: 3px 0; color: #fff; font-size: clamp(20px, 2vw, 28px); }
+.pending-task-checklist header p,
+.warehouse-department-hub header p { margin: 0; color: #93b1c4; font-size: 12px; }
+.pending-task-checklist > header > b {
+  margin-left: auto;
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 190, 91, .35);
+  border-radius: 999px;
+  background: rgba(156, 91, 12, .18);
+  color: #ffd18a;
+  white-space: nowrap;
+}
+
+.pending-task-grid,
+.warehouse-department-hub > div {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 11px;
+  padding: 14px;
+}
+.pending-task-grid > button,
+.warehouse-department-hub > div > button {
+  display: grid;
+  min-width: 0;
+  min-height: 104px;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 14px;
+  border: 1px solid rgba(104, 166, 199, .24);
+  border-radius: 15px;
+  background: linear-gradient(145deg, rgba(15, 48, 71, .96), rgba(7, 27, 44, .99));
+  color: #f5fbff;
+  text-align: left;
+  cursor: pointer;
+}
+.pending-task-grid > button:hover,
+.warehouse-department-hub > div > button:hover { border-color: #50d3f5; transform: translateY(-1px); }
+.pending-task-grid button > i,
+.warehouse-department-hub button > span {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(17, 117, 158, .28);
+  color: #62dafa;
+}
+.pending-task-grid button.pending > i { background: rgba(185, 111, 19, .22); color: #ffc86d; }
+.pending-task-grid button.complete > i { background: rgba(18, 137, 104, .22); color: #61e0b6; }
+.pending-task-grid button span { display: grid; min-width: 0; gap: 4px; }
+.pending-task-grid button strong,
+.warehouse-department-hub button strong { color: #fff; font-size: 14px; }
+.pending-task-grid button small,
+.warehouse-department-hub button small { color: #94b2c5; line-height: 1.45; }
+.pending-task-grid button > b { min-width: 34px; color: #fff; font-size: 20px; text-align: center; }
+
+.warehouse-department-hub > header { display: block; }
+.warehouse-department-hub > div > button {
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-content: center;
+  min-height: 190px;
+}
+.warehouse-department-hub button > span { grid-row: 1 / span 4; width: 48px; height: 48px; }
+.warehouse-department-hub button em { color: #62dafa; font-size: 9px; font-style: normal; font-weight: 900; letter-spacing: .1em; }
+.warehouse-department-hub button strong { font-size: 19px; }
+.warehouse-department-hub button b { display: flex; align-items: center; gap: 5px; color: #74dcf6; font-size: 11px; }
+.warehouse-department-hub button b svg { width: 14px; }
+
+.maintenance-quick-actions { grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)) !important; }
+
+@media (max-width: 900px) {
+  .office-shell {
+    --unified-canvas: #04101c;
+    --unified-surface: #081b2d;
+    --unified-surface-raised: #0b253a;
+    --unified-border: rgba(103, 165, 201, .24);
+    --unified-text: #f5fbff;
+    --unified-muted: #91afc2;
+    background: #04101c !important;
+    color: var(--unified-text) !important;
+  }
+  .portal-main-column,
+  .portal-main-column > .workspace { background: #04101c !important; color: var(--unified-text) !important; }
+  .portal-main-column,
+  .portal-main-column > .site-header,
+  .portal-main-column .site-header-inner {
+    transform: none !important;
+    filter: none !important;
+    contain: none !important;
+    perspective: none !important;
+  }
+  .portal-main-column > .site-header { border-color: var(--unified-border) !important; background: linear-gradient(120deg, #061726, #0a2b42) !important; backdrop-filter: none !important; }
+  .portal-main-column .site-header-inner { backdrop-filter: none !important; }
+
+  :where(.atlas-admin, .ticket-center, .operations-center, .atlas-form, .agency-audit-workspace) { color: var(--unified-text) !important; }
+  :where(.ticket-hero, .operations-hero, .incident-landing-title, .atlas-form-head,
+    .support-department-portal, .ticket-board, .ticket-list-panel, .ticket-detail,
+    .automatic-findings, .findings-board, .agency-directory-board,
+    .agency-transition-board, .transition-stage-detail, .transition-history,
+    .maintenance-board, .maintenance-area-hub, .maintenance-form,
+    .operations-toolbar, .audit-ledger, .atlas-pane, .admin-readiness,
+    .notification-table-section, .profile-settings) {
+    border-color: var(--unified-border) !important;
+    background: linear-gradient(145deg, rgba(12, 39, 61, .98), rgba(5, 20, 35, .99)) !important;
+    color: var(--unified-text) !important;
+    box-shadow: 0 14px 34px rgba(0, 7, 19, .24) !important;
+  }
+  :where(.department-card-grid > button, .support-section-tabs > button,
+    .ticket-navigation-card-grid > button, .ticket-card, .finding-table-card,
+    .agency-transition-card, .transition-history-record, .maintenance-movement-card,
+    .maintenance-stat-card, .maintenance-area-cards > article,
+    .atlas-photo-card, .atlas-questions > article, .equipment-question,
+    .user-department-cards > button, .personnel-kind-cards > button) {
+    border-color: var(--unified-border) !important;
+    background: linear-gradient(145deg, rgba(15, 47, 70, .96), rgba(7, 26, 43, .99)) !important;
+    color: var(--unified-text) !important;
+  }
+  :where(.office-shell h1, .office-shell h2, .office-shell h3, .office-shell h4, .office-shell strong) { color: var(--unified-text); }
+  :where(.office-shell p, .office-shell small, .office-shell label) { color: var(--unified-muted); }
+  :where(.office-shell input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), .office-shell select, .office-shell textarea) {
+    border: 1px solid rgba(105, 172, 207, .32) !important;
+    background: rgba(3, 18, 31, .9) !important;
+    color: var(--unified-text) !important;
+  }
+  :where(.audit-detail-modal, .user-manager-modal, .ticket-modal,
+    .transition-evidence-viewer, .chat-profile-modal, .notification-center,
+    .profile-settings) {
+    border-color: var(--unified-border) !important;
+    background: linear-gradient(145deg, #0b263b, #061725 70%) !important;
+    color: var(--unified-text) !important;
+  }
+  .pending-task-checklist > header { align-items: flex-start; flex-wrap: wrap; padding: 16px; }
+  .pending-task-checklist > header > b { margin-left: 60px; }
+  .pending-task-grid,
+  .warehouse-department-hub > div { grid-template-columns: 1fr; padding: 10px; }
+  .warehouse-department-hub > header { padding: 18px 16px; }
+  .warehouse-department-hub > div > button { min-height: 150px; }
+  .notification-toast-stack { z-index: 12000 !important; top: calc(66px + env(safe-area-inset-top)) !important; right: 8px !important; width: calc(100vw - 16px) !important; }
+}
+
+@media (max-width: 760px) {
+  .portal-sidebar { display: none !important; }
+  .site-header .mobile-main-nav {
+    position: fixed !important;
+    z-index: 11000 !important;
+    top: auto !important;
+    right: 8px !important;
+    bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+    left: 8px !important;
+    display: flex !important;
+    width: auto !important;
+    margin: 0 !important;
+    transform: none !important;
+    border: 1px solid rgba(92, 186, 226, .38) !important;
+    background: rgba(5, 24, 41, .96) !important;
+    box-shadow: 0 16px 44px rgba(0, 0, 0, .62) !important;
+    backdrop-filter: blur(18px) !important;
+  }
+  .portal-main-column > .workspace { padding-bottom: calc(96px + env(safe-area-inset-bottom)) !important; }
+  .pending-task-checklist > header > span { width: 40px; height: 40px; flex-basis: 40px; }
+  .pending-task-checklist > header > b { margin-left: 54px; }
+}

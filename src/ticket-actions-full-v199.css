@@ -1,0 +1,60 @@
+/* V199 · Las acciones se abren completas dentro de la bandeja, sin modal interno. */
+.ticket-list:has(> .ticket-card.expanded[data-action-mode]) {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.ticket-card.expanded[data-action-mode] {
+  position: relative !important;
+  z-index: 2 !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  grid-column: 1 / -1 !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: auto !important;
+  max-height: none !important;
+  margin: 0 !important;
+  overflow: visible !important;
+  border-radius: 20px !important;
+  box-shadow:
+    0 24px 58px rgba(0, 9, 22, .5),
+    inset 0 1px rgba(255,255,255,.055) !important;
+}
+
+.ticket-card.expanded[data-action-mode] .ticket-action-modal-heading {
+  position: relative !important;
+  top: auto !important;
+  margin: -16px -16px 0 !important;
+  border-radius: 20px 20px 0 0 !important;
+}
+
+.ticket-card.expanded[data-action-mode] .ticket-modal-action-tabs {
+  position: relative !important;
+  top: auto !important;
+}
+
+.ticket-card.expanded[data-action-mode] .ticket-management,
+.ticket-card.expanded[data-action-mode] .ticket-history-summary,
+.ticket-card.expanded[data-action-mode] .ticket-evidence-empty,
+.ticket-card.expanded[data-action-mode] > div[style] {
+  width: 100% !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+@media (max-width: 760px) {
+  .ticket-card.expanded[data-action-mode] {
+    inset: auto !important;
+    width: 100% !important;
+    max-height: none !important;
+    padding: 11px !important;
+    border-radius: 16px !important;
+  }
+  .ticket-card.expanded[data-action-mode] .ticket-action-modal-heading {
+    top: auto !important;
+    margin: -11px -11px 0 !important;
+    border-radius: 16px 16px 0 0 !important;
+  }
+}

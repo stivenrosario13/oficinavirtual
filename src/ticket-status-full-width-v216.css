@@ -1,0 +1,47 @@
+/* V216 · El estado ocupa una fila completa debajo de su título en escritorio. */
+@media (min-width: 761px) {
+  .ticket-center .ticket-filter-stack > .ticket-status-filter {
+    display: grid !important;
+    flex: 1 1 390px !important;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)) !important;
+    grid-template-rows: auto minmax(48px, 1fr) !important;
+    grid-auto-flow: row !important;
+    grid-auto-columns: auto !important;
+    width: 100% !important;
+    min-width: 310px !important;
+    max-width: 520px !important;
+    align-content: stretch !important;
+    gap: 6px !important;
+  }
+
+  .ticket-center .ticket-status-filter > .ticket-filter-label {
+    display: block !important;
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
+    width: 100% !important;
+    color: #e8f7ff !important;
+    font-size: 12px !important;
+    font-weight: 850 !important;
+    line-height: 1.25 !important;
+    text-align: center !important;
+  }
+
+  .ticket-center .ticket-status-filter > button {
+    grid-row: 2 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    min-height: 48px !important;
+    justify-self: stretch !important;
+    padding: 9px 14px !important;
+    font-size: 11px !important;
+    line-height: 1.25 !important;
+    text-align: center !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+  }
+
+  .ticket-center .ticket-status-filter > button:only-of-type {
+    grid-column: 1 / -1 !important;
+  }
+}

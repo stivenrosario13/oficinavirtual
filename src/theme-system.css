@@ -1,0 +1,243 @@
+:root{color-scheme:dark;--theme-bg:#020f1f;--theme-surface:#08213a;--theme-surface-2:#0b2c48;--theme-border:#285f80;--theme-text:#eefaff;--theme-muted:#8eb6cc;--theme-accent:#55d8ff;--theme-primary:#168ec5}
+.profile-settings{width:min(920px,100%)!important;max-height:calc(100vh - 40px);overflow:auto!important;scrollbar-color:var(--theme-accent) transparent}
+
+/* Inicio de sesión corporativo: campos azul oscuro, nunca gris. */
+.portal-login-card input{border:1.5px solid #27658f!important;background:#082947!important;color:#fff!important;box-shadow:inset 0 1px 3px #0004!important}
+.portal-login-card input::placeholder{color:#8fb8d0!important;opacity:1}
+.portal-login-card input:focus{border-color:#55d8ff!important;background:#0b365a!important;box-shadow:0 0 0 4px #27aee126,inset 0 1px 3px #0003!important}
+.portal-login-card input:-webkit-autofill,
+.portal-login-card input:-webkit-autofill:hover,
+.portal-login-card input:-webkit-autofill:focus,
+.portal-login-card input:-webkit-autofill:active{
+  -webkit-text-fill-color:#fff!important;
+  caret-color:#fff!important;
+  border-color:#27658f!important;
+  -webkit-box-shadow:0 0 0 1000px #082947 inset!important;
+  box-shadow:0 0 0 1000px #082947 inset!important;
+  background-clip:content-box!important;
+  transition:background-color 99999s ease-out 0s!important;
+}
+.portal-login-card input:-moz-autofill{background:#082947!important;color:#fff!important;box-shadow:0 0 0 1000px #082947 inset!important}
+.portal-login-card input::selection{background:#168ec5;color:#fff}
+.portal-login-card form label svg{color:#55d8ff!important}
+.portal-login-card .login-password-field>button{border:1px solid #2c668d!important;background:#0c3b61!important;color:#69dcff!important}
+.portal-login-card .login-password-field>button:hover{background:#10517f!important;color:#fff!important}
+.mobile-section-back{display:none}
+.report-module-open .report-module-selector{display:none!important}
+.report-module-open .report-mobile-back{position:sticky;z-index:10;top:92px;display:flex!important;align-items:center;justify-content:center;gap:8px;width:calc(100% - 36px);min-height:48px;margin:14px 18px;border:1px solid #3d83aa;border-radius:13px;background:linear-gradient(135deg,#0c3b62,#126e9e);color:#fff;font-size:11px;font-weight:900;box-shadow:0 10px 25px #0007;cursor:pointer}
+.report-module-open .report-mobile-back svg{width:18px;height:18px}
+.user-department-cards.department-open{display:none!important}
+.mobile-department-open .user-mobile-back{position:sticky;z-index:10;top:92px;display:flex!important;align-items:center;justify-content:center;gap:8px;width:calc(100% - 36px);min-height:48px;margin:14px 18px;border:1px solid #3d83aa;border-radius:13px;background:linear-gradient(135deg,#0c3b62,#126e9e);color:#fff;font-size:11px;font-weight:900;box-shadow:0 10px 25px #0007;cursor:pointer}
+.mobile-department-open .user-mobile-back svg{width:18px;height:18px}
+
+/* Experiencia móvil integral */
+@media(max-width:760px){
+  html{scroll-padding-bottom:92px}
+  body{overflow-x:hidden;padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+  .portal-login-shell{margin-bottom:calc(-76px - env(safe-area-inset-bottom))}
+  .site-header{position:sticky!important;top:0!important;z-index:180!important}
+  .site-header-inner{min-height:64px!important;padding:7px 10px!important;flex-wrap:nowrap!important;gap:7px!important}
+  .site-brand{min-width:0!important;flex:1!important}
+  .site-brand>img{width:70px!important;height:46px!important;object-fit:contain}
+  .site-brand>span{display:none!important}
+  .header-account{flex:none!important;gap:5px!important;margin-left:auto!important}
+  .notification-bell,.header-logout{width:40px!important;height:40px!important;min-width:40px!important;border-radius:12px!important}
+  .header-profile{width:40px!important;min-width:40px!important;height:40px!important;min-height:40px!important;padding:4px!important;justify-content:center!important}
+  .header-profile>img,.header-profile>svg:first-child{width:30px!important;height:30px!important}
+  .header-profile>span,.header-profile>svg:last-child{display:none!important}
+  .site-header .main-nav{position:fixed!important;z-index:220!important;left:8px!important;right:8px!important;bottom:calc(8px + env(safe-area-inset-bottom))!important;order:initial!important;width:auto!important;min-height:64px!important;margin:0!important;padding:6px!important;display:flex!important;align-items:stretch!important;gap:5px!important;border:1px solid #2a6085!important;border-radius:19px!important;background:#061a31f2!important;box-shadow:0 16px 42px #000b!important;backdrop-filter:blur(18px)!important}
+  .site-header .main-nav button{position:relative!important;min-width:0!important;min-height:52px!important;flex:1 1 0!important;padding:5px 4px!important;display:flex!important;flex-direction:column!important;justify-content:center!important;gap:3px!important;border:0!important;border-radius:13px!important;background:transparent!important;color:#91b6cf!important;font-size:8px!important;line-height:1.1!important;text-align:center!important;white-space:normal!important}
+  .site-header .main-nav button svg{width:19px!important;height:19px!important;flex:none!important}
+  .site-header .main-nav button:after{display:none!important}
+  .site-header .main-nav button.active{background:linear-gradient(145deg,#126a9f,#189fd0)!important;color:#fff!important;box-shadow:0 7px 17px #0006!important}
+  .site-header .main-nav .ticket-alert-badge{position:absolute!important;top:3px!important;right:6px!important;min-width:17px!important;height:17px!important;padding:0 4px!important;font-size:7px!important}
+  .site-header .main-nav .ticket-alert-badge svg{display:none!important}
+  .office-shell .workspace,.workspace{width:100%!important;max-width:100%!important;padding:18px 11px 22px!important;overflow-x:hidden!important}
+  :is(.page-heading,.dashboard-title,.support-home-hero,.support-department-hero,.ticket-hero,.report-panel>header,.automatic-findings>header,.maintenance-board>header){align-items:flex-start!important;flex-direction:column!important;gap:11px!important}
+  :is(.stat-grid,.technical-audit-metrics,.ticket-metrics,.dashboard-grid,.support-section-grid,.ticket-navigation-card-grid,.department-card-grid,.department-primary-grid,.report-module-selector,.personnel-kind-cards,.finding-statistics-cards,.ticket-report-summary,.service-report-grid,.user-department-cards){grid-template-columns:1fr!important}
+  :is(.panel,.dashboard-card,.support-home-hero,.support-department-portal,.report-panel,.automatic-findings,.maintenance-board){border-radius:17px!important}
+  :is(.panel,.support-home-hero,.support-department-portal){padding:16px!important}
+  :is(button,.primary,.secondary,[role="button"]){min-height:44px}
+  :is(input,select,textarea){max-width:100%!important;font-size:16px!important}
+  :is(.two-col,.fields-grid,.ticket-form-grid,.user-edit-grid,.profile-password-form,.support-config-content,.config-editor-grid,.maintenance-form-grid,.report-filter-grid){grid-template-columns:1fr!important}
+  :is(.admin-table,.audit-table,.agency-progress-table,.service-report-table,.resolved-report-table,.personnel-performance-table,[class*="table-wrap"]){width:100%!important;max-width:100%!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch}
+  :is(.ticket-modal-backdrop,.audit-modal-backdrop,.new-user-modal-backdrop,.profile-settings-backdrop){padding:0!important}
+  :is(.ticket-modal,.support-config-modal,.maintenance-modal,.new-user-dialog,.user-manager-modal,.profile-settings,.audit-detail-modal){width:100%!important;max-width:none!important;height:100dvh!important;min-height:100dvh!important;max-height:100dvh!important;border:0!important;border-radius:0!important}
+  :is(.ticket-modal,.support-config-modal,.maintenance-modal,.new-user-dialog,.user-manager-modal,.profile-settings,.audit-detail-modal)>header{position:sticky!important;z-index:12!important;top:0!important;padding:14px!important}
+  .profile-overview{margin:14px!important;padding:14px!important}
+  .profile-password-form{padding:14px!important}
+  .support-chat-launcher{right:10px!important;bottom:calc(86px + env(safe-area-inset-bottom))!important}
+  .mobile-section-back{position:sticky;z-index:10;top:72px;display:flex!important;align-items:center;justify-content:center;gap:8px;width:calc(100% - 20px);min-height:48px;margin:10px;border:1px solid #3d83aa;border-radius:13px;background:linear-gradient(135deg,#0c3b62,#126e9e);color:#fff;font-size:11px;font-weight:900;box-shadow:0 10px 25px #0007;cursor:pointer}
+  .mobile-section-back svg{width:18px;height:18px}
+  .report-module-open .report-mobile-back{margin-top:12px}
+  .report-module-open>.report-panel,.report-module-open>.report-dashboard-grid,.report-module-open>.ticket-report-summary,.report-module-open>.general-services-auto-report{width:100%!important;max-width:100%!important;margin-right:0!important;margin-left:0!important}
+  .mobile-user-open .admin-search-topbar,.mobile-user-open .user-directory-context{display:none!important}
+  .department-user-list.has-selected-user>article:not(.selected-user-card){display:none!important}
+  .department-user-list.has-selected-user{padding:4px 8px 18px!important}
+  .department-user-list.has-selected-user>.selected-user-card{width:100%!important;margin:0!important}
+  .mobile-user-open .user-mobile-back{top:70px;margin-bottom:8px}
+  .mobile-user-open .user-card-identity{min-height:auto!important;padding:12px!important}
+  .mobile-user-open .user-detail-cards{padding:10px!important}
+}
+
+/* Optimización visual y legibilidad global 2026 */
+:root{--ui-card-radius:9px;--ui-control-radius:7px}
+:is(.panel,.dashboard-card,.support-section-card,.ticket-navigation-card-grid>button,.department-primary-grid>button,.report-module-selector>button,.report-panel,.service-report-block,.automatic-findings,.maintenance-board,.technician-picker,.admin-ticket-control,.notification-center,.profile-settings,.support-department-portal,.user-department-cards>button,.personnel-kind-cards>button,.ticket-card,.finding-table-card,.agency-transition-card){border-radius:var(--ui-card-radius)!important}
+:is(.panel,.dashboard-card,.report-panel,.automatic-findings,.maintenance-board,.technician-picker,.admin-ticket-control,.notification-center,.support-department-portal) h2{font-size:clamp(20px,1.55vw,27px)!important;line-height:1.16!important;letter-spacing:-.02em}
+:is(.support-section-card,.ticket-navigation-card-grid>button,.department-primary-grid>button,.report-module-selector>button,.user-department-cards>button,.personnel-kind-cards>button) strong{font-size:14px!important;line-height:1.3!important}
+:is(.support-section-card,.ticket-navigation-card-grid>button,.department-primary-grid>button,.report-module-selector>button,.user-department-cards>button,.personnel-kind-cards>button) small{font-size:10px!important;line-height:1.5!important}
+:is(button,input,select,textarea,.primary,.report-action-button){border-radius:var(--ui-control-radius)!important}
+:is(.ticket-list>article,.maintenance-list>article,.scoped-user-list>article,.finding-table-card){content-visibility:auto;contain-intrinsic-size:auto 180px}
+.support-chat-crm{border-radius:10px!important}
+.support-chat-crm>header,.chat-thread-header,.chat-sidebar-heading{border-radius:0!important}
+.chat-conversation-list>button,.chat-option-grid>button,.chat-bot-message,.chat-profile-panel{border-radius:8px!important}
+.chat-list-icon,.chat-thread-avatar,.chat-option-grid>button>span{border-radius:7px!important}
+.chat-conversation-list strong{font-size:12px!important;line-height:1.35!important}
+.chat-conversation-list small{font-size:9px!important;line-height:1.4!important}
+.chat-conversation-list em{font-size:8px!important}
+.chat-thread-header strong{font-size:13px!important}.chat-thread-header small{font-size:9px!important}
+.chat-message-list article p{font-size:11px!important;line-height:1.55!important}
+.chat-message-list article strong{font-size:9px!important}.chat-message-list article time{font-size:8px!important}
+.chat-composer textarea{font-size:13px!important;line-height:1.45!important}
+.chat-option-grid strong{font-size:12px!important}.chat-option-grid small{font-size:9px!important}
+@media(max-width:760px){
+  :is(.panel,.dashboard-card,.support-section-card,.ticket-navigation-card-grid>button,.department-primary-grid>button,.report-module-selector>button,.report-panel,.service-report-block,.automatic-findings,.maintenance-board,.technician-picker,.admin-ticket-control,.notification-center,.support-department-portal,.user-department-cards>button,.personnel-kind-cards>button,.ticket-card,.finding-table-card){border-radius:8px!important}
+  :is(.support-section-card,.ticket-navigation-card-grid>button,.department-primary-grid>button,.report-module-selector>button,.user-department-cards>button,.personnel-kind-cards>button) strong{font-size:14px!important}
+  :is(.support-section-card,.ticket-navigation-card-grid>button,.department-primary-grid>button,.report-module-selector>button,.user-department-cards>button,.personnel-kind-cards>button) small{font-size:11px!important}
+  .support-chat-crm{border-radius:0!important}
+  .chat-conversation-list>button{min-height:76px!important;padding:11px 12px!important}
+  .chat-conversation-list strong{font-size:13px!important}.chat-conversation-list small{font-size:10px!important}.chat-conversation-list em{font-size:9px!important}
+  .chat-thread-header{min-height:72px!important;padding:11px 10px!important}
+  .chat-thread-header strong{font-size:14px!important}.chat-thread-header small{font-size:10px!important}
+  .chat-message-list article{max-width:92%!important}.chat-message-list article p{font-size:13px!important}.chat-message-list article strong{font-size:10px!important}.chat-message-list article time{font-size:9px!important}
+  .chat-composer textarea{font-size:16px!important}
+  .chat-option-grid strong{font-size:14px!important}.chat-option-grid small{font-size:11px!important}
+}
+@media(max-width:390px){
+  .site-header-inner{padding-left:7px!important;padding-right:7px!important}
+  .site-brand>img{width:58px!important}
+  .header-account{gap:3px!important}
+  .notification-bell,.header-logout,.header-profile{width:36px!important;min-width:36px!important;height:36px!important;min-height:36px!important}
+  .site-header .main-nav{left:5px!important;right:5px!important;bottom:calc(5px + env(safe-area-inset-bottom))!important}
+  .site-header .main-nav button{font-size:7px!important}
+}
+
+/* Pulido corporativo 2026 */
+:root{--ui-deep:#031426;--ui-surface:#071f38;--ui-raised:#0a2a47;--ui-elevated:#0d3557;--ui-line:#285f82;--ui-line-soft:#1d4968;--ui-text:#f3fbff;--ui-muted:#9abdd1;--ui-cyan:#62d9ff;--ui-blue:#168ec5;--ui-green:#35d3a0;--ui-shadow:0 18px 48px #0005}
+html{scroll-behavior:smooth;scrollbar-color:#247ba7 #031426;scrollbar-width:thin}
+body{background:radial-gradient(circle at 86% -10%,#12618b26,transparent 28%),linear-gradient(155deg,#020d1a,#04182a 52%,#031222);color:var(--ui-text)}
+button,a,input,select,textarea{transition:border-color .2s ease,background-color .2s ease,color .2s ease,box-shadow .2s ease,transform .2s ease}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #62d9ff66!important;outline-offset:3px!important}
+button:not(:disabled){cursor:pointer}button:disabled{cursor:not-allowed;filter:saturate(.6)}
+.office-shell .workspace{position:relative}
+.office-shell .workspace:before{content:"";position:fixed;z-index:-1;inset:78px 0 0;pointer-events:none;background:radial-gradient(circle at 15% 18%,#167fb017,transparent 25%),radial-gradient(circle at 88% 78%,#29a9d511,transparent 26%)}
+.site-header{border-bottom:1px solid #2b6487!important;background:linear-gradient(110deg,#041425e8,#082844f2 56%,#0b3b61eb)!important;box-shadow:0 12px 38px #0007!important;backdrop-filter:blur(20px) saturate(1.25)}
+.site-header-inner{max-width:1480px!important}
+.site-header .main-nav button{font-weight:850!important;letter-spacing:.01em}
+.site-header .main-nav button:hover{transform:translateY(-1px)}
+:is(.panel,.dashboard-card,.support-home-hero,.support-section-card,.ticket-navigation-card-grid>button,.automatic-findings,.report-panel,.technician-picker,.maintenance-board,.admin-ticket-control,.notification-center,.profile-settings,.support-department-portal){border-color:var(--ui-line)!important;box-shadow:inset 0 1px #ffffff08,var(--ui-shadow)!important}
+:is(.dashboard-card,.support-section-card,.ticket-navigation-card-grid>button,.report-panel,.service-report-block,.user-department-cards>button,.personnel-kind-cards>button){overflow:hidden;isolation:isolate}
+:is(.support-section-grid>button,.ticket-navigation-card-grid>button,.department-primary-grid>button,.report-module-selector>button,.user-department-cards>button,.personnel-kind-cards>button):hover{transform:translateY(-4px)!important;border-color:#5bd8ff!important;box-shadow:0 22px 48px #0008,0 0 0 1px #50d8ff20!important}
+:is(.support-section-grid>button,.ticket-navigation-card-grid>button,.department-primary-grid>button,.report-module-selector>button,.user-department-cards>button,.personnel-kind-cards>button):active{transform:translateY(-1px) scale(.995)!important}
+:is(.panel,.dashboard-card,.automatic-findings,.report-panel,.maintenance-board,.technician-picker,.support-department-portal)>header{position:relative}
+:is(.panel,.dashboard-card,.automatic-findings,.report-panel,.maintenance-board,.technician-picker,.support-department-portal)>header:after{content:"";position:absolute;right:0;bottom:0;left:0;height:1px;background:linear-gradient(90deg,transparent,#55d8ff66,transparent)}
+:is(input,select,textarea){border:1px solid #286287!important;border-radius:12px!important;background:#061a31!important;color:#fff!important;box-shadow:inset 0 1px 3px #0004!important}
+:is(input,textarea)::placeholder{color:#789db5!important;opacity:1}
+:is(input,select,textarea):hover:not(:disabled){border-color:#3c84aa!important}
+:is(input,select,textarea):focus{border-color:#62d9ff!important;background:#082742!important;box-shadow:0 0 0 4px #42cfff18,inset 0 1px 3px #0003!important}
+select option{background:#071f38;color:#fff}
+:is(.primary,.report-action-button,.table-export-actions button,.row-export-actions button){border-radius:12px!important;box-shadow:0 10px 26px #0005!important}
+:is(.primary,.report-action-button,.table-export-actions button,.row-export-actions button):hover:not(:disabled){transform:translateY(-2px);filter:brightness(1.08);box-shadow:0 15px 32px #0007!important}
+.ticket-report-controls{width:min(1050px,100%);display:grid!important;grid-template-columns:1fr!important;gap:12px!important;align-items:stretch!important}
+.ticket-report-filters{display:grid;grid-template-columns:minmax(160px,.75fr) minmax(250px,1.25fr) minmax(170px,.8fr);gap:10px;align-items:end}
+.ticket-report-filters label{min-width:0}
+.ticket-report-filters select{width:100%;min-width:0!important;height:43px}
+.ticket-report-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;width:100%}
+.ticket-report-actions .report-action-button{width:100%;min-width:0;min-height:58px!important;justify-content:flex-start;margin:0!important}
+.ticket-report-actions .report-action-button>span{min-width:0}
+.ticket-report-actions .report-action-button strong,.ticket-report-actions .report-action-button small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+:is(.ticket-card,.ticket-list>article,.finding-card,.finding-layout-grid>article,.maintenance-list>article,.scoped-user-list>article){border-color:var(--ui-line-soft)!important;box-shadow:0 9px 27px #0003!important}
+:is(.ticket-card,.ticket-list>article,.finding-card,.finding-layout-grid>article,.maintenance-list>article,.scoped-user-list>article):hover{border-color:#347ca3!important;box-shadow:0 14px 34px #0005!important}
+:is(.admin-table,.audit-table,.service-report-table,.resolved-report-table,.personnel-performance-table){border-radius:14px;scrollbar-color:#318ab2 #061a31;scrollbar-width:thin}
+:is(.admin-head,.audit-head,.resolved-report-head,.personnel-performance-head,.service-report-table>div:first-child){position:sticky;z-index:2;top:0;backdrop-filter:blur(12px)}
+.status-dot,.online:before,.portal-login-security i{animation:statusPulse 2.2s ease-in-out infinite}
+@keyframes statusPulse{0%,100%{box-shadow:0 0 0 3px #42d7ae18}50%{box-shadow:0 0 0 7px #42d7ae08}}
+.ticket-modal-backdrop,.audit-modal-backdrop,.new-user-modal-backdrop,.profile-settings-backdrop{backdrop-filter:blur(16px) saturate(.8)!important}
+:is(.ticket-modal,.support-config-modal,.maintenance-modal,.new-user-dialog,.user-manager-modal,.profile-settings,.audit-detail-modal){box-shadow:0 32px 100px #000c!important}
+.empty,.ticket-empty,.personnel-empty,.report-module-empty{border-style:dashed!important;background:linear-gradient(145deg,#06182b,#08243c)!important}
+@media(max-width:760px){
+  .office-shell .workspace:before{inset:64px 0 0}
+  :is(.dashboard-card,.report-panel,.automatic-findings,.maintenance-board,.technician-picker){box-shadow:0 12px 30px #0004!important}
+  :is(.support-section-grid>button,.ticket-navigation-card-grid>button,.department-primary-grid>button,.report-module-selector>button,.user-department-cards>button,.personnel-kind-cards>button):hover{transform:none!important}
+  :is(.page-heading h1,.incident-landing-title h1){font-size:clamp(25px,8vw,34px)!important;line-height:1.08!important}
+  :is(.dashboard-title,.report-panel>header,.automatic-findings>header){padding:15px!important}
+  .ticket-report-controls{width:100%!important;grid-template-columns:1fr!important}
+  .ticket-report-filters{grid-template-columns:1fr!important;width:100%!important}
+  .ticket-report-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-flow:initial;width:100%;gap:6px;padding:2px 0;overflow:visible}
+  .ticket-report-actions .report-action-button{min-width:0!important;min-height:70px!important;padding:7px 4px!important;display:flex!important;flex-direction:column;justify-content:center!important;gap:5px!important;text-align:center!important;scroll-snap-align:none}
+  .ticket-report-actions .report-action-button svg{width:17px!important;height:17px!important;flex:none}
+  .ticket-report-actions .report-action-button>span{display:block!important;width:100%;text-align:center!important}
+  .ticket-report-actions .report-action-button strong{display:block;font-size:8px!important;line-height:1.2;white-space:normal!important;text-overflow:clip!important}
+  .ticket-report-actions .report-action-button small{display:none!important}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+/* Categorías de hallazgos y refinamiento móvil final */
+.finding-category-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;padding:16px 18px}
+.finding-category-cards>button{display:grid;grid-template-columns:46px minmax(0,1fr) 20px;align-items:center;gap:12px;min-height:112px;padding:15px;border:1px solid #2b6485;border-radius:16px;background:linear-gradient(145deg,#0a2944,#071c31);color:#fff;text-align:left;box-shadow:0 11px 28px #0004}
+.finding-category-cards>button:hover{transform:translateY(-3px);border-color:#5ad8ff;box-shadow:0 17px 38px #0007}
+.finding-category-cards>button>span{display:grid;place-items:center;width:46px;height:46px;border:1px solid #35799b;border-radius:14px;background:#0d3d5c;color:#69dcff}
+.finding-category-cards>button>span svg{width:22px}.finding-category-cards>button>div{display:grid;gap:4px;min-width:0}.finding-category-cards em{color:#65d9ff;font-size:8px;font-style:normal;font-weight:900;letter-spacing:.11em}.finding-category-cards strong{overflow:hidden;color:#fff;font-size:13px;text-overflow:ellipsis}.finding-category-cards small{color:#9bc2d7;font-size:10px;font-weight:750}.finding-category-cards>button>svg{width:18px;color:#65d9ff}
+.finding-category-back{position:sticky;z-index:10;top:92px;display:flex;align-items:center;justify-content:center;gap:8px;width:calc(100% - 36px);min-height:48px;margin:14px 18px;border:1px solid #3d83aa;border-radius:13px;background:linear-gradient(135deg,#0c3b62,#126e9e);color:#fff;font-size:11px;font-weight:900;box-shadow:0 10px 25px #0007}
+.finding-category-back svg{width:18px}.finding-category-empty{margin:16px 18px}
+.finding-table-card{overflow:hidden;border:1px solid #2d688b!important;border-radius:18px!important;background:linear-gradient(155deg,#071b30,#092641)!important;box-shadow:0 16px 38px #0005!important}
+.finding-table-card>header{position:relative;padding:15px 17px!important;border-bottom:1px solid #2d688b!important;background:linear-gradient(120deg,#0b3151,#0e4b70)!important}
+.finding-table-card>header:after{content:"";position:absolute;right:0;bottom:0;left:0;height:2px;background:linear-gradient(90deg,#55d8ff,transparent 75%)}
+.finding-table-card>header>div{display:flex;align-items:center;gap:11px}.finding-table-card>header>div>svg{width:20px;height:20px;padding:8px;box-sizing:content-box;border:1px solid #5cd8ff55;border-radius:11px;background:#082a46;color:#70e0ff}.finding-table-card>header span{display:grid;gap:3px}.finding-table-card>header strong{color:#fff;font-size:14px}.finding-table-card>header small{color:#a6cee1;font-size:10px}.finding-table-card>header>em{display:grid;place-items:center;min-width:34px;height:34px;border:1px solid #62ddff66;border-radius:11px;background:#061d33;color:#75e2ff;font-size:12px;font-style:normal;font-weight:900}
+.finding-table-card .finding-table{gap:11px!important;padding:13px!important;background:transparent!important}
+.finding-layout-grid .finding-row:not(.finding-head){position:relative;overflow:hidden;border-color:#2b6181!important;border-radius:15px!important;background:linear-gradient(145deg,#0b2944,#071d33)!important;box-shadow:inset 0 1px #ffffff08,0 9px 25px #0003!important}
+.finding-layout-grid .finding-row:not(.finding-head):before{content:"";position:absolute;top:0;bottom:0;left:0;width:3px;background:linear-gradient(#65ddff,#188cbc)}
+.finding-layout-grid .finding-row:not(.finding-head)>span{display:grid;align-content:start;gap:4px;min-width:0;color:#dff4ff;font-size:11px;line-height:1.45}
+.finding-layout-grid .finding-row:not(.finding-head)>span:before{content:attr(data-label);color:#69d9ff;font-size:7px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}
+.finding-layout-grid .finding-row:not(.finding-head)>span>strong{font-size:13px;color:#fff}.finding-layout-grid .finding-row:not(.finding-head)>span:nth-child(4){padding:10px!important;border:1px solid #285674;border-radius:10px;background:#061a2d;color:#c8e2ef}
+.finding-layout-grid .finding-card-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding-top:10px!important;border-top:1px solid #285674}.finding-layout-grid .finding-card-actions:before{grid-column:1/-1}.finding-layout-grid .finding-card-actions button{width:100%;min-width:0}
+@media(max-width:760px){
+  body{font-size:16px;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  .site-header{backdrop-filter:none!important;transform:none!important;contain:none!important}
+  .site-header .main-nav{position:fixed!important;z-index:9999!important;top:auto!important;left:8px!important;right:8px!important;bottom:calc(8px + env(safe-area-inset-bottom))!important;width:auto!important;margin:0!important;transform:none!important}
+  .ticket-hero-actions{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:6px!important;width:100%!important}
+  .ticket-hero-actions button{min-width:0!important;min-height:60px!important;padding:7px 4px!important;display:flex!important;flex-direction:column!important;gap:4px!important;border-radius:11px!important;font-size:9px!important;line-height:1.2!important;text-align:center!important;white-space:normal!important}
+  .ticket-hero-actions button svg{width:16px!important;height:16px!important;flex:none}
+  .finding-category-cards{grid-template-columns:1fr;padding:11px 10px;gap:9px}
+  .finding-category-cards>button{min-height:94px;padding:12px;grid-template-columns:42px minmax(0,1fr) 18px}
+  .finding-category-cards>button>span{width:42px;height:42px}.finding-category-cards em{font-size:8px}.finding-category-cards strong{font-size:13px;white-space:normal}.finding-category-cards small{font-size:10px}
+  .finding-category-back{top:70px;width:calc(100% - 20px);margin:10px;min-height:48px;font-size:12px}
+  .automatic-findings>header p,.ticket-hero p{font-size:12px!important;line-height:1.55!important}
+  :is(.ticket-navigation-card-grid,.support-section-grid,.department-primary-grid,.report-module-selector,.user-department-cards) strong{font-size:max(13px,1em)!important;line-height:1.3!important}
+  :is(.ticket-navigation-card-grid,.support-section-grid,.department-primary-grid,.report-module-selector,.user-department-cards) small{font-size:10px!important;line-height:1.45!important}
+  .finding-row:not(.finding-head)>span{font-size:11px!important;line-height:1.45!important}
+  .finding-card-actions button{min-height:44px!important;font-size:10px!important}
+  .finding-table-card{border-radius:15px!important;box-shadow:0 11px 28px #0004!important}
+  .finding-table-card>header{padding:12px!important}.finding-table-card>header strong{font-size:13px}.finding-table-card>header small{font-size:10px!important}
+  .finding-table-card .finding-table{padding:9px!important;gap:9px!important}
+  .finding-layout-grid .finding-row:not(.finding-head),.finding-layout-list .finding-row:not(.finding-head){display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:11px 9px!important;min-width:0!important;padding:14px 12px 12px 15px!important;border:1px solid #2c6383!important;border-radius:14px!important;background:linear-gradient(145deg,#0b2944,#071d33)!important;box-shadow:0 8px 22px #0003!important}
+  .finding-layout-grid .finding-row:not(.finding-head)>span,.finding-layout-list .finding-row:not(.finding-head)>span{display:grid!important;grid-column:auto!important;gap:4px;min-width:0;padding:0!important;overflow-wrap:anywhere;color:#def3ff;font-size:11px!important}
+  .finding-layout-grid .finding-row:not(.finding-head)>span:before,.finding-layout-list .finding-row:not(.finding-head)>span:before{content:attr(data-label);color:#69d9ff;font-size:8px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+  .finding-layout-grid .finding-row:not(.finding-head)>span:nth-child(4),.finding-layout-list .finding-row:not(.finding-head)>span:nth-child(4){grid-column:1/-1!important;padding:10px!important;border:1px solid #285674!important;border-radius:10px;background:#061a2d}
+  .finding-layout-grid .finding-row:not(.finding-head)>span:nth-child(7),.finding-layout-list .finding-row:not(.finding-head)>span:nth-child(7){grid-column:1/-1!important}
+  .finding-layout-grid .finding-card-actions,.finding-layout-list .finding-card-actions{grid-column:1/-1!important;grid-template-columns:1fr!important;margin-top:1px;padding-top:10px!important}
+  .finding-layout-grid .finding-card-actions button,.finding-layout-list .finding-card-actions button{width:100%;font-size:10px!important}
+}
+
+/* Reglas finales: geometría compacta, tipografía clara y chat móvil */
+:root{--ui-card-radius:9px;--ui-control-radius:7px}
+:is(.panel,.dashboard-card,.support-section-card,.ticket-navigation-card-grid>button,.department-primary-grid>button,.report-module-selector>button,.report-panel,.service-report-block,.automatic-findings,.maintenance-board,.technician-picker,.admin-ticket-control,.notification-center,.profile-settings,.support-department-portal,.user-department-cards>button,.personnel-kind-cards>button,.ticket-card,.finding-table-card,.agency-transition-card){border-radius:var(--ui-card-radius)!important}
+:is(button,input,select,textarea,.primary,.report-action-button,.table-export-actions button,.row-export-actions button){border-radius:var(--ui-control-radius)!important}
+.support-chat-crm{border-radius:10px!important}.chat-conversation-list>button,.chat-option-grid>button,.chat-bot-message,.chat-profile-panel{border-radius:8px!important}
+.chat-thread-close{display:grid;width:42px;height:42px;min-width:42px;place-items:center;padding:0!important;border:1px solid #315f78!important;border-radius:7px!important;background:#102f40!important;color:#e9f9ff!important}
+.chat-thread-close:hover{border-color:#63d8ff!important;background:#16465d!important}.chat-thread-close svg{width:18px;height:18px}
+@media(max-width:760px){
+  :is(.panel,.dashboard-card,.support-section-card,.ticket-navigation-card-grid>button,.department-primary-grid>button,.report-module-selector>button,.report-panel,.service-report-block,.automatic-findings,.maintenance-board,.technician-picker,.admin-ticket-control,.notification-center,.support-department-portal,.user-department-cards>button,.personnel-kind-cards>button,.ticket-card,.finding-table-card){border-radius:8px!important}
+  .support-chat-crm{border-radius:0!important}
+  .chat-thread-close{width:42px!important;height:42px!important;min-width:42px!important;border:0!important;background:transparent!important}
+}

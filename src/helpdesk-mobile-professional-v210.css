@@ -1,0 +1,131 @@
+/* V210 · Filtros móviles profesionales y resumen del ticket sin formularios intrusivos. */
+.ticket-filter-label,
+.ticket-priority-filter > span {
+  display: block;
+}
+
+.ticket-clear-filters {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid #367292;
+  border-radius: 9px;
+  background: #0a2943;
+  color: #bce8fa;
+  font-size: 10px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.ticket-clear-filters svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ticket-clear-filters:hover,
+.ticket-clear-filters:focus-visible {
+  border-color: #67d9ff;
+  background: #104365;
+  color: #fff;
+}
+
+@media (max-width: 760px) {
+  .ticket-center .ticket-filter-stack {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    align-items: end !important;
+    gap: 10px !important;
+  }
+
+  .ticket-center .ticket-filter-stack > .ticket-status-filter {
+    grid-column: 1 / -1 !important;
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)) !important;
+    gap: 7px !important;
+  }
+
+  .ticket-center .ticket-status-filter > .ticket-filter-label {
+    grid-column: 1 / -1;
+    color: #8fd8f5;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .035em;
+  }
+
+  .ticket-center .ticket-status-filter > button {
+    min-height: 48px !important;
+    padding-inline: 16px !important;
+    font-size: 13px !important;
+    white-space: normal !important;
+  }
+
+  .ticket-center .ticket-filter-stack > .ticket-priority-filter {
+    grid-column: auto !important;
+    align-self: stretch !important;
+  }
+
+  .ticket-center .ticket-priority-filter > span {
+    min-height: 16px;
+    color: #8fd8f5;
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1.35;
+    letter-spacing: .035em;
+  }
+
+  .ticket-center .ticket-priority-filter select {
+    overflow: hidden;
+    font-size: 13px !important;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ticket-center .ticket-filter-stack > .primary {
+    grid-column: 1 / -1 !important;
+  }
+
+  .ticket-board-results {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 4px 10px !important;
+  }
+
+  .ticket-board-results > span,
+  .ticket-board-results > small {
+    min-width: 0;
+  }
+
+  .ticket-board-results > small {
+    grid-column: 1;
+  }
+
+  .ticket-board-results > .ticket-clear-filters {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    min-height: 40px !important;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 360px) {
+  .ticket-center .ticket-filter-stack {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .ticket-center .ticket-filter-stack > .ticket-priority-filter {
+    grid-column: 1 !important;
+  }
+
+  .ticket-board-results {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .ticket-board-results > .ticket-clear-filters {
+    grid-column: 1;
+    grid-row: auto;
+    width: 100%;
+  }
+}

@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens. Mobile-first, high-contrast, accessible.
+ * Interfaz en español, optimizada para teléfonos.
+ */
+@theme {
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-500: #2563eb;
+  --color-brand-600: #1d4ed8;
+  --color-brand-700: #1e40af;
+
+  --color-ink: #0f172a;
+  --color-muted: #475569;
+  --color-line: #e2e8f0;
+  --color-surface: #ffffff;
+  --color-canvas: #f1f5f9;
+
+  --color-ok: #15803d;
+  --color-ok-bg: #dcfce7;
+  --color-warn: #b45309;
+  --color-warn-bg: #fef3c7;
+  --color-danger: #b91c1c;
+  --color-danger-bg: #fee2e2;
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  /* Inputs are >= 16px to avoid iOS auto-zoom on focus. */
+  font-size: 16px;
+}
+
+/* Reusable component classes kept tiny; most styling is utility-based. */
+@layer components {
+  .btn-primary,
+  .btn-secondary,
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3.5
+      text-base font-semibold transition-colors disabled:cursor-not-allowed
+      disabled:opacity-50 min-h-[52px] w-full;
+  }
+  .btn-primary {
+    @apply bg-brand-500 text-white hover:bg-brand-600 active:bg-brand-700;
+  }
+  .btn-secondary {
+    @apply border border-line bg-surface text-ink hover:bg-brand-50;
+  }
+  .btn-ghost {
+    @apply bg-transparent text-brand-600 hover:bg-brand-50;
+  }
+  .field-label {
+    @apply mb-1.5 block text-sm font-medium text-ink;
+  }
+  .field-input {
+    @apply w-full rounded-xl border border-line bg-surface px-4 py-3 text-base
+      text-ink outline-none transition placeholder:text-slate-400
+      focus:border-brand-500 focus:ring-2 focus:ring-brand-100;
+  }
+  .card {
+    @apply rounded-2xl border border-line bg-surface p-5 shadow-sm;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs
+      font-semibold;
+  }
+}

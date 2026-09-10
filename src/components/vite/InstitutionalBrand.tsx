@@ -1,0 +1,1 @@
+export default function InstitutionalBrand(){return <div className="mc-brand" aria-label="REAL Grupo Tejeda - Oficina Virtual"><img src="/loto-real-logo-transparent.png" alt="REAL"/><span><strong>Grupo Tejeda</strong><small>OFICINA VIRTUAL</small></span></div>;}

@@ -1,0 +1,2 @@
+.ticket-filter-stack>.ticket-status-filter[hidden]{display:none!important}
+.supervisor-ticket-inbox-table .ticket-status.status-cancelled{display:none}

@@ -1,0 +1,117 @@
+/* V222 · Visor profesional de evidencias del historial de avances. */
+.transition-evidence-ready {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  margin: 10px;
+  border: 1px solid #2c806d;
+  border-radius: 12px;
+  padding: 11px 12px;
+  background: linear-gradient(135deg, #0b392f, #0b2930);
+  color: #b9f8df;
+}
+
+.transition-evidence-ready > svg { width: 21px; height: 21px; color: #57ddb0; }
+.transition-evidence-ready > span { display: grid; min-width: 0; gap: 2px; }
+.transition-evidence-ready > span strong { font-size: 11px; }
+.transition-evidence-ready > span small { color: #91c9bb; font-size: 8px; line-height: 1.4; }
+.transition-evidence-ready > button {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #5ac9f4;
+  border-radius: 10px;
+  padding: 8px 11px;
+  background: linear-gradient(135deg, #145d88, #217fac);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.transition-evidence-ready > button svg { width: 16px; height: 16px; }
+.transition-evidence-ready > button b { display: grid; min-width: 21px; height: 21px; place-items: center; border-radius: 999px; background: #081f32; font-size: 9px; }
+
+.transition-evidence-viewer-backdrop {
+  position: fixed;
+  z-index: 1400;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 18px;
+  background: #020b16e8;
+  backdrop-filter: blur(8px);
+}
+
+.transition-evidence-viewer {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(1040px, 100%);
+  max-height: calc(100dvh - 36px);
+  overflow: hidden;
+  border: 1px solid #4385aa;
+  border-radius: 20px;
+  background: #07182d;
+  color: #f4fbff;
+  box-shadow: 0 30px 90px #000b;
+}
+
+.transition-evidence-viewer > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #244b69;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, #153b5d, #102944);
+}
+.transition-evidence-viewer > header > div { min-width: 0; }
+.transition-evidence-viewer > header span { color: #6fddff; font-size: 9px; font-weight: 900; letter-spacing: .12em; }
+.transition-evidence-viewer > header h2 { margin: 4px 0; font-size: 22px; line-height: 1.1; }
+.transition-evidence-viewer > header p { margin: 0; color: #a8c9dd; font-size: 10px; line-height: 1.4; }
+.transition-evidence-viewer > header > button { display: grid; width: 46px; height: 46px; flex: none; place-items: center; border: 1px solid #6acdf2; border-radius: 12px; background: #0b263f; color: #fff; cursor: pointer; }
+.transition-evidence-viewer > header > button svg { width: 22px; }
+
+.transition-evidence-viewer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.transition-evidence-viewer-grid > article { min-width: 0; overflow: hidden; border: 1px solid #2b5876; border-radius: 15px; background: #0a2039; }
+.transition-evidence-viewer-photo { position: relative; display: block; aspect-ratio: 4 / 3; overflow: hidden; background: #020912; }
+.transition-evidence-viewer-photo img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.transition-evidence-viewer-photo > span { position: absolute; right: 10px; bottom: 10px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid #69cbed; border-radius: 8px; padding: 7px 9px; background: #061a2dde; color: #e7faff; font-size: 8px; font-weight: 900; }
+.transition-evidence-viewer-photo > span svg { width: 13px; }
+.transition-evidence-viewer-info { display: grid; gap: 9px; padding: 12px; }
+.transition-evidence-viewer-info > div { display: flex; align-items: center; gap: 9px; }
+.transition-evidence-viewer-info > div > svg { width: 18px; flex: none; color: #68d7ff; }
+.transition-evidence-viewer-info > div > span { display: grid; gap: 2px; }
+.transition-evidence-viewer-info strong { font-size: 11px; }
+.transition-evidence-viewer-info small { color: #a9c8db; font-size: 9px; }
+.transition-evidence-viewer-info > :is(time, a, .transition-evidence-no-location) { display: flex; min-height: 34px; align-items: center; gap: 7px; border-radius: 9px; padding: 7px 9px; font-size: 9px; font-weight: 800; }
+.transition-evidence-viewer-info > :is(time, .transition-evidence-no-location) { background: #102b45; color: #bdd6e7; }
+.transition-evidence-viewer-info > a { border: 1px solid #2c806d; background: #0c3d34; color: #a6f1d9; text-decoration: none; }
+.transition-evidence-viewer-info > :is(time, a, .transition-evidence-no-location) svg { width: 15px; flex: none; }
+.transition-evidence-viewer-delete { display: flex; min-height: 38px; align-items: center; justify-content: center; gap: 7px; border: 1px solid #a84a64; border-radius: 9px; background: #4a2030; color: #ffd7e1; font-size: 9px; font-weight: 900; cursor: pointer; }
+.transition-evidence-viewer-delete svg { width: 14px; }
+
+@media (max-width: 700px) {
+  .transition-evidence-ready { grid-template-columns: auto minmax(0, 1fr); }
+  .transition-evidence-ready > button { grid-column: 1 / -1; width: 100%; min-height: 48px; font-size: 10px; }
+  .transition-evidence-viewer-backdrop { display: block; padding: 0; background: #07182d; }
+  .transition-evidence-viewer { display: block; width: 100%; height: 100dvh; max-height: 100dvh; overflow-x: hidden; overflow-y: auto; border: 0; border-radius: 0; overscroll-behavior-y: contain; scrollbar-width: none; }
+  .transition-evidence-viewer::-webkit-scrollbar { display: none; width: 0; height: 0; }
+  .transition-evidence-viewer > header { position: sticky; z-index: 5; top: 0; padding: 13px 12px; }
+  .transition-evidence-viewer > header h2 { font-size: 18px; }
+  .transition-evidence-viewer > header p { font-size: 9px; }
+  .transition-evidence-viewer > header > button { width: 44px; height: 44px; }
+  .transition-evidence-viewer-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 12px; overflow: visible; }
+  .transition-evidence-viewer-photo { aspect-ratio: 4 / 3; }
+}

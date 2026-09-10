@@ -1,0 +1,73 @@
+/* V221 · Navegación administrativa móvil sin carruseles. */
+@media (max-width: 900px) {
+  .atlas-admin .admin-tabbed-section .admin-section-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    align-items: stretch !important;
+    justify-content: center !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    gap: 8px !important;
+    padding: 8px !important;
+    overflow: visible !important;
+    scroll-snap-type: none !important;
+    scrollbar-width: none !important;
+  }
+
+  .atlas-admin .admin-tabbed-section .admin-section-tabs > button {
+    display: flex !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    min-height: 48px !important;
+    flex: none !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 7px !important;
+    padding: 8px 7px !important;
+    overflow: hidden !important;
+    text-align: center !important;
+    white-space: normal !important;
+  }
+
+  .atlas-admin .admin-tabbed-section .admin-section-tabs > button > svg {
+    width: 17px !important;
+    height: 17px !important;
+    flex: none !important;
+  }
+
+  .atlas-admin .admin-tabbed-section .atlas-filter-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    gap: 8px !important;
+    padding: 8px !important;
+    overflow: visible !important;
+    scroll-snap-type: none !important;
+    scrollbar-width: none !important;
+  }
+
+  .atlas-admin .admin-tabbed-section .atlas-filter-tabs > button {
+    display: flex !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    min-height: 46px !important;
+    flex: none !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 8px !important;
+    overflow: hidden !important;
+    text-align: center !important;
+    white-space: normal !important;
+  }
+
+  .atlas-admin .admin-tabbed-section :is(.admin-section-tabs, .atlas-filter-tabs)::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+}

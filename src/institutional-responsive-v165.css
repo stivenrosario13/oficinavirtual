@@ -1,0 +1,589 @@
+/* Capa institucional responsive V165. Se carga al final para unificar estilos heredados. */
+:root {
+  --v165-bg: #041426;
+  --v165-panel: #08223b;
+  --v165-panel-2: #0b2d4b;
+  --v165-line: #2b6284;
+  --v165-line-strong: #4aa9d0;
+  --v165-text: #f4fbff;
+  --v165-muted: #a5c5d7;
+  --v165-accent: #63d8ff;
+  --v165-radius: 10px;
+  --v165-shadow: 0 16px 40px rgba(0, 8, 18, .34);
+}
+
+/* Superficies y tarjetas coherentes */
+:is(
+  .support-department-portal,
+  .automatic-findings,
+  .finding-table-card,
+  .report-panel,
+  .ticket-board,
+  .maintenance-board,
+  .technician-picker,
+  .admin-section,
+  .notification-center
+) {
+  border: 1px solid var(--v165-line) !important;
+  border-radius: var(--v165-radius) !important;
+  background: linear-gradient(150deg, var(--v165-panel), #061b30) !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.04), var(--v165-shadow) !important;
+}
+
+:is(
+  .ticket-card,
+  .agency-transition-card,
+  .department-user-list > article,
+  .personnel-card,
+  .maintenance-list > article
+) {
+  border-radius: 9px !important;
+  border-color: #285d7d !important;
+  background: linear-gradient(145deg, #09243e, #061a2e) !important;
+}
+
+/* Departamentos: jerarquía institucional y métricas ordenadas */
+.support-department-portal > header {
+  padding: 24px 26px !important;
+  border-bottom: 1px solid var(--v165-line) !important;
+  background: linear-gradient(115deg, #071d34, #0c3557 65%, #0d456b) !important;
+}
+.support-department-portal > header span {
+  color: var(--v165-accent) !important;
+  letter-spacing: .15em !important;
+}
+.support-department-portal > header h2 {
+  margin: 7px 0 6px !important;
+  color: #fff !important;
+  font-size: clamp(23px, 2.2vw, 32px) !important;
+  letter-spacing: -.035em !important;
+}
+.support-department-portal > header p {
+  max-width: 720px;
+  color: var(--v165-muted) !important;
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+}
+.department-primary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+  padding: 20px !important;
+}
+.department-primary-grid > button,
+.department-primary-grid > button:last-child:nth-child(odd) {
+  position: relative;
+  grid-column: auto !important;
+  min-height: 250px !important;
+  grid-template-columns: 56px minmax(0, 1fr) !important;
+  grid-template-rows: auto auto 1fr auto !important;
+  gap: 14px 15px !important;
+  padding: 21px !important;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--department-accent) 48%, #315b78) !important;
+  border-radius: 10px !important;
+  background: linear-gradient(145deg, #0b2945, #071d33) !important;
+  box-shadow: 0 12px 30px rgba(0, 8, 18, .3) !important;
+}
+.department-primary-grid > button::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--department-accent);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--department-accent) 45%, transparent);
+}
+.department-primary-grid > button:hover {
+  transform: translateY(-4px) !important;
+  border-color: var(--department-accent) !important;
+  box-shadow: 0 18px 38px rgba(0, 7, 16, .45) !important;
+}
+.department-primary-grid .department-card-icon {
+  width: 56px !important;
+  height: 56px !important;
+  border-radius: 9px !important;
+}
+.department-primary-grid .department-card-copy {
+  gap: 5px !important;
+}
+.department-primary-grid .department-card-copy em {
+  color: var(--department-accent) !important;
+  font-size: 8px !important;
+  font-weight: 900 !important;
+}
+.department-primary-grid .department-card-copy strong {
+  color: #fff !important;
+  font-size: 20px !important;
+  line-height: 1.2 !important;
+}
+.department-primary-grid .department-card-copy small {
+  min-height: 0 !important;
+  color: var(--v165-muted) !important;
+  font-size: 11px !important;
+  line-height: 1.48 !important;
+}
+.department-live-metrics {
+  grid-column: 1 / -1 !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 7px !important;
+  margin: 0 !important;
+}
+.department-live-metrics > span {
+  min-width: 0;
+  padding: 10px 8px !important;
+  border: 1px solid color-mix(in srgb, var(--department-accent) 22%, #234a65) !important;
+  border-radius: 7px !important;
+  background: #05182b !important;
+  text-align: left;
+}
+.department-live-metrics strong { font-size: 18px !important; }
+.department-live-metrics small {
+  overflow: hidden;
+  color: #a4c2d3 !important;
+  font-size: 8px !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.department-primary-grid .department-card-footer {
+  grid-column: 1 / -1 !important;
+  margin-top: 0 !important;
+  padding-top: 13px !important;
+}
+
+/* Hallazgos: categorías ejecutivas y expedientes legibles */
+.automatic-findings > header {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 18px !important;
+  padding: 22px !important;
+  border-bottom: 1px solid var(--v165-line) !important;
+  background: linear-gradient(115deg, #071f38, #0d3b5e) !important;
+}
+.automatic-findings > header h2 {
+  margin: 5px 0 !important;
+  color: #fff !important;
+  font-size: clamp(22px, 2vw, 29px) !important;
+}
+.automatic-findings > header p {
+  max-width: 760px;
+  color: var(--v165-muted) !important;
+  font-size: 12px !important;
+  line-height: 1.55 !important;
+}
+.finding-category-cards {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+  padding: 18px !important;
+  counter-reset: finding-category;
+}
+.finding-category-cards > button {
+  counter-increment: finding-category;
+  position: relative;
+  grid-template-columns: 50px minmax(0, 1fr) 20px !important;
+  min-height: 132px !important;
+  gap: 13px !important;
+  padding: 18px !important;
+  overflow: hidden;
+  border: 1px solid #2c6789 !important;
+  border-radius: 9px !important;
+  background: linear-gradient(145deg, #0b2a47, #071c31) !important;
+  box-shadow: 0 11px 27px rgba(0, 8, 18, .28) !important;
+}
+.finding-category-cards > button::before {
+  content: counter(finding-category, decimal-leading-zero);
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  color: rgba(129, 213, 242, .22);
+  font-size: 23px;
+  font-weight: 900;
+}
+.finding-category-cards > button::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(#69dcff, #167ea9);
+}
+.finding-category-cards > button:hover {
+  transform: translateY(-3px) !important;
+  border-color: #64d9ff !important;
+  background: linear-gradient(145deg, #0e3556, #09243d) !important;
+}
+.finding-category-cards > button > span {
+  width: 50px !important;
+  height: 50px !important;
+  border-radius: 8px !important;
+  background: #0d3b5c !important;
+}
+.finding-category-cards em { font-size: 8px !important; }
+.finding-category-cards strong {
+  padding-right: 19px;
+  color: #fff !important;
+  font-size: 15px !important;
+  line-height: 1.3 !important;
+  white-space: normal !important;
+}
+.finding-category-cards small {
+  width: max-content;
+  margin-top: 5px;
+  padding: 5px 8px;
+  border: 1px solid #2a6687;
+  border-radius: 999px;
+  background: #061a2d;
+  color: #b9d7e7 !important;
+  font-size: 9px !important;
+}
+.finding-table-stack { padding: 16px !important; }
+.finding-table-card {
+  border-radius: 9px !important;
+  box-shadow: 0 14px 34px rgba(0, 8, 18, .36) !important;
+}
+.finding-table-card > header {
+  min-height: 68px;
+  padding: 13px 15px !important;
+  background: linear-gradient(110deg, #0a2a47, #0e466a) !important;
+}
+.finding-table-card > header > div > svg { border-radius: 7px !important; }
+.finding-table-card > header > em { border-radius: 7px !important; }
+.finding-layout-grid .finding-table {
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)) !important;
+  gap: 11px !important;
+  padding: 12px !important;
+}
+.finding-layout-grid .finding-row:not(.finding-head),
+.finding-layout-list .finding-row:not(.finding-head) {
+  position: relative;
+  min-width: 0 !important;
+  gap: 11px !important;
+  padding: 15px 15px 13px 18px !important;
+  border: 1px solid #2b617f !important;
+  border-radius: 8px !important;
+  background: linear-gradient(145deg, #0a2944, #071c31) !important;
+  box-shadow: 0 8px 22px rgba(0, 7, 16, .24) !important;
+}
+.finding-layout-grid .finding-row:not(.finding-head)::after,
+.finding-layout-list .finding-row:not(.finding-head)::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: #54d2fa;
+}
+.finding-row:not(.finding-head) > span::before {
+  color: #69d9ff !important;
+  font-size: 8px !important;
+  letter-spacing: .09em !important;
+}
+.finding-row:not(.finding-head) > span {
+  color: #dceef7 !important;
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+}
+.finding-card-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 7px !important;
+}
+.finding-card-actions button {
+  min-width: 0 !important;
+  min-height: 44px !important;
+  border-radius: 7px !important;
+  padding: 8px 9px !important;
+  font-size: 9px !important;
+  line-height: 1.25 !important;
+}
+
+/* Barras de controles: una sola línea, alineación consistente */
+:is(
+  .automatic-finding-actions,
+  .ticket-filter-stack,
+  .ticket-report-filters,
+  .ticket-report-actions,
+  .table-export-actions,
+  .personnel-toolbar
+) {
+  align-items: stretch !important;
+  gap: 8px !important;
+}
+.automatic-finding-actions {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  width: 100% !important;
+}
+.automatic-finding-actions > * { flex: 1 1 0 !important; min-width: 0 !important; }
+.automatic-finding-actions label {
+  display: grid !important;
+  grid-template-columns: auto minmax(0,1fr) !important;
+  align-items: center !important;
+  min-height: 64px;
+  padding: 7px 10px;
+  border: 1px solid #2b6283;
+  border-radius: 8px;
+  background: #061a2e;
+}
+.automatic-finding-actions label select {
+  grid-column: 1 / -1 !important;
+  width: 100% !important;
+  height: 34px !important;
+  min-width: 0 !important;
+}
+.automatic-finding-actions .finding-layout-toggle {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+  min-height: 64px;
+  border-radius: 8px !important;
+}
+.automatic-finding-actions .finding-layout-toggle button {
+  justify-content: center;
+  min-width: 0;
+  padding: 8px !important;
+}
+.automatic-finding-actions .export-solutions {
+  justify-content: center;
+  min-height: 64px !important;
+  border-radius: 8px !important;
+  text-align: center;
+  white-space: normal !important;
+}
+.ticket-board > header {
+  display: grid !important;
+  grid-template-columns: minmax(250px, .85fr) minmax(0, 2fr) !important;
+  align-items: end !important;
+  gap: 10px !important;
+}
+.ticket-board > header > label { width: 100% !important; min-width: 0 !important; }
+.ticket-filter-stack {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  min-width: 0 !important;
+}
+.ticket-filter-stack > div {
+  display: flex !important;
+  flex: 0 1 auto;
+  align-items: stretch;
+  gap: 5px;
+}
+.ticket-filter-stack > div > button { min-width: max-content; }
+.ticket-priority-filter {
+  flex: 1 1 145px;
+  min-width: 120px !important;
+}
+.ticket-priority-filter select { width: 100% !important; min-width: 0 !important; }
+.ticket-report-filters {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0,1fr)) !important;
+}
+.table-export-actions { display: flex !important; flex-wrap: nowrap !important; }
+
+/* Chat: tamaño estable, salida visible y controles táctiles */
+.support-chat-backdrop { overscroll-behavior: contain; }
+.support-chat-crm {
+  border-radius: 10px !important;
+  background: #06192d !important;
+}
+.support-chat-layout { min-height: 0 !important; }
+.support-chat-layout > :is(aside, main) { min-height: 0 !important; }
+.chat-conversation-list > button {
+  border-radius: 7px !important;
+  touch-action: manipulation;
+}
+.chat-thread-header { background: linear-gradient(110deg, #08223b, #0c3b5b) !important; }
+.chat-thread-tools { gap: 5px !important; }
+.chat-thread-close { flex: 0 0 42px !important; }
+.chat-message-list { overscroll-behavior: contain; }
+.chat-message-list article > div { border-radius: 5px 10px 10px !important; }
+.chat-message-list article.mine > div { border-radius: 10px 5px 10px 10px !important; }
+.chat-composer-row { align-items: end !important; }
+.chat-composer-row > button { min-width: 44px !important; min-height: 44px !important; }
+
+@media (max-width: 1050px) {
+  .department-primary-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+  .finding-category-cards { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+  .ticket-board > header { grid-template-columns: 1fr !important; }
+  .ticket-filter-stack { overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+}
+
+@media (max-width: 760px) {
+  html { text-size-adjust: 100%; -webkit-text-size-adjust: 100%; }
+  body { font-size: 16px; }
+  :is(button, select, input, textarea) { touch-action: manipulation; }
+
+  .support-department-portal > header,
+  .automatic-findings > header { padding: 16px 13px !important; }
+  .support-department-portal > header h2,
+  .automatic-findings > header h2 { font-size: 23px !important; }
+  .support-department-portal > header p,
+  .automatic-findings > header p { font-size: 12px !important; }
+
+  .department-primary-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+    padding: 11px !important;
+  }
+  .department-primary-grid > button,
+  .department-primary-grid > button:last-child:nth-child(odd) {
+    min-height: 218px !important;
+    grid-template-columns: 48px minmax(0,1fr) !important;
+    gap: 11px 12px !important;
+    padding: 16px !important;
+    border-radius: 8px !important;
+  }
+  .department-primary-grid .department-card-icon { width: 48px !important; height: 48px !important; }
+  .department-primary-grid .department-card-copy strong { font-size: 18px !important; }
+  .department-primary-grid .department-card-copy small { font-size: 11px !important; }
+  .department-live-metrics > span { padding: 8px 6px !important; }
+  .department-live-metrics strong { font-size: 16px !important; }
+  .department-primary-grid .department-service-count,
+  .department-primary-grid .department-card-action { font-size: 9px !important; }
+
+  .ticket-hero-actions {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0,1fr)) !important;
+    gap: 5px !important;
+  }
+  .ticket-hero-actions button {
+    min-width: 0 !important;
+    min-height: 56px !important;
+    padding: 6px 3px !important;
+    border-radius: 7px !important;
+    font-size: 9px !important;
+    line-height: 1.2 !important;
+  }
+
+  .finding-category-cards {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+    padding: 10px !important;
+  }
+  .finding-category-cards > button {
+    min-height: 105px !important;
+    grid-template-columns: 44px minmax(0,1fr) 18px !important;
+    gap: 10px !important;
+    padding: 13px !important;
+    border-radius: 8px !important;
+  }
+  .finding-category-cards > button > span { width: 44px !important; height: 44px !important; }
+  .finding-category-cards strong { font-size: 14px !important; }
+  .finding-category-cards small { font-size: 9px !important; }
+  .finding-table-stack { padding: 8px !important; }
+  .finding-table-card > header { padding: 11px !important; }
+  .finding-layout-grid .finding-table { grid-template-columns: 1fr !important; padding: 8px !important; }
+  .finding-layout-grid .finding-row:not(.finding-head),
+  .finding-layout-list .finding-row:not(.finding-head) {
+    grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+    padding: 13px 11px 11px 14px !important;
+    border-radius: 7px !important;
+  }
+  .finding-card-actions { grid-template-columns: 1fr !important; }
+  .finding-card-actions button { width: 100% !important; font-size: 10px !important; }
+
+  /* En teléfono todos los controles permanecen en una sola fila desplazable. */
+  :is(.automatic-finding-actions, .ticket-filter-stack, .ticket-report-filters, .table-export-actions, .personnel-toolbar) {
+    display: flex !important;
+    flex-flow: row nowrap !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    gap: 6px !important;
+    padding: 1px 1px 6px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+  }
+  :is(.automatic-finding-actions, .ticket-filter-stack, .ticket-report-filters, .table-export-actions, .personnel-toolbar) > * {
+    flex: 0 0 142px !important;
+    min-width: 142px !important;
+    max-width: 142px !important;
+    scroll-snap-align: start;
+  }
+  .automatic-finding-actions label { min-height: 62px !important; padding: 6px 8px !important; font-size: 9px !important; }
+  .automatic-finding-actions label select { height: 33px !important; font-size: 11px !important; }
+  .automatic-finding-actions .finding-layout-toggle { min-height: 62px !important; }
+  .automatic-finding-actions .finding-layout-toggle button { min-height: 48px !important; font-size: 9px !important; }
+  .automatic-finding-actions .export-solutions { min-height: 62px !important; padding: 7px !important; font-size: 9px !important; }
+  .ticket-board > header { display: grid !important; grid-template-columns: 1fr !important; gap: 8px !important; }
+  .ticket-filter-stack > div { flex: 0 0 auto !important; min-width: max-content !important; max-width: none !important; }
+  .ticket-filter-stack > div > button { min-height: 48px !important; padding: 6px 9px !important; font-size: 9px !important; }
+  .ticket-priority-filter { min-height: 58px !important; font-size: 8px !important; }
+  .ticket-priority-filter select { height: 34px !important; font-size: 11px !important; }
+  .ticket-report-actions { grid-template-columns: repeat(3,minmax(0,1fr)) !important; gap: 5px !important; }
+
+  /* Chat móvil de una sola vista, sin recortes por barras del navegador. */
+  .support-chat-backdrop {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100dvh !important;
+    padding: 0 !important;
+    background: #03101d !important;
+    backdrop-filter: none !important;
+  }
+  .support-chat-crm {
+    width: 100% !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+  .support-chat-layout { width: 100% !important; height: 100dvh !important; }
+  .support-chat-layout > aside,
+  .support-chat-layout > main { width: 100% !important; height: 100dvh !important; }
+  .support-chat-layout:not(.has-active-chat) > aside { display: flex !important; flex-direction: column !important; }
+  .support-chat-layout:not(.has-active-chat) > main { display: none !important; }
+  .support-chat-layout.has-active-chat > aside { display: none !important; }
+  .support-chat-layout.has-active-chat > main { display: flex !important; }
+  .chat-sidebar-heading {
+    flex: 0 0 auto !important;
+    min-height: 64px !important;
+    padding: max(10px, env(safe-area-inset-top)) 10px 9px 13px !important;
+  }
+  .chat-conversation-search { flex: 0 0 46px !important; }
+  .chat-conversation-list { flex: 1 1 auto !important; height: auto !important; min-height: 0 !important; overflow-y: auto !important; }
+  .chat-conversation-list > button {
+    min-height: 76px !important;
+    border-radius: 0 !important;
+  }
+  .chat-thread-header {
+    flex: 0 0 auto !important;
+    min-height: 66px !important;
+    padding: max(7px, env(safe-area-inset-top)) 6px 7px !important;
+  }
+  .chat-mobile-back { flex: 0 0 38px !important; width: 38px !important; min-width: 38px !important; }
+  .chat-thread-avatar { flex: 0 0 38px !important; width: 38px !important; height: 38px !important; }
+  .chat-thread-close { display: grid !important; width: 40px !important; height: 44px !important; min-width: 40px !important; }
+  .chat-message-list {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    padding: 9px 7px !important;
+    overflow-y: auto !important;
+  }
+  .chat-message-list article { max-width: 91% !important; }
+  .chat-message-list article p { font-size: 14px !important; line-height: 1.42 !important; }
+  .chat-agent-actions { flex: 0 0 auto !important; grid-template-columns: repeat(3,minmax(0,1fr)) !important; }
+  .chat-quick-replies { flex: 0 0 auto !important; }
+  .chat-composer {
+    flex: 0 0 auto !important;
+    padding: 7px 7px max(7px, env(safe-area-inset-bottom)) !important;
+  }
+  .chat-composer-row { grid-template-columns: minmax(0,1fr) 44px 44px !important; gap: 5px !important; }
+  .chat-composer textarea { min-height: 46px !important; max-height: 96px !important; font-size: 16px !important; }
+  .chat-composer-row > button { width: 44px !important; height: 44px !important; }
+  .chat-contact-modal,
+  .chat-profile-panel { width: 100% !important; height: 100dvh !important; max-height: 100dvh !important; border-radius: 0 !important; }
+}
+
+@media (max-width: 390px) {
+  .ticket-hero-actions button { font-size: 8px !important; }
+  :is(.automatic-finding-actions, .ticket-filter-stack, .ticket-report-filters, .table-export-actions, .personnel-toolbar) > * {
+    flex-basis: 132px !important;
+    min-width: 132px !important;
+    max-width: 132px !important;
+  }
+  .department-primary-grid .department-card-footer { gap: 7px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .department-primary-grid > button,
+  .finding-category-cards > button { transition: none !important; }
+}

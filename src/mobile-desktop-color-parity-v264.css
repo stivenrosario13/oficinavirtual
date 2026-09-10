@@ -1,0 +1,281 @@
+/* V264 · Acceso directo a Almacén/Taller y paridad cromática escritorio-móvil. */
+.warehouse-department-selector {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 10px;
+  border: 1px solid rgba(94, 183, 217, .24);
+  border-radius: 17px;
+  background: linear-gradient(145deg, #0a2439, #061725);
+}
+
+.warehouse-department-selector > button {
+  display: grid;
+  min-width: 0;
+  min-height: 82px;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(91, 181, 222, .22);
+  border-radius: 13px;
+  background: linear-gradient(145deg, rgba(15, 48, 71, .96), rgba(7, 27, 44, .99));
+  color: #f5fbff;
+  text-align: left;
+}
+
+.warehouse-department-selector > button:hover,
+.warehouse-department-selector > button.active {
+  border-color: #53d7f7;
+  background: linear-gradient(145deg, #13445f, #0a2c43);
+  box-shadow: inset 3px 0 #58d7fb, 0 10px 25px rgba(0, 8, 20, .24);
+}
+
+.warehouse-department-selector > button > span {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(87, 218, 248, .25);
+  border-radius: 12px;
+  background: rgba(17, 117, 158, .28);
+  color: #62dafa;
+}
+
+.warehouse-department-selector svg { width: 20px; height: 20px; }
+.warehouse-department-selector i { display: grid; min-width: 0; gap: 2px; font-style: normal; }
+.warehouse-department-selector small { color: #6fd8f3; font-size: 9px; font-weight: 900; letter-spacing: .09em; }
+.warehouse-department-selector strong { overflow: hidden; color: #fff; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.warehouse-department-selector em { color: #91afc2; font-size: 10px; font-style: normal; }
+
+@media (max-width: 900px) {
+  html,
+  body,
+  #root,
+  .office-shell,
+  .portal-main-column,
+  .portal-main-column > .workspace {
+    background: #04101c !important;
+    color: #f5fbff !important;
+  }
+
+  .office-shell {
+    --mobile-canvas: #04101c;
+    --mobile-surface: #081b2d;
+    --mobile-raised: #0b253a;
+    --mobile-card: #0f2f46;
+    --mobile-border: rgba(103, 165, 201, .24);
+    --mobile-accent: #58d7fb;
+    --mobile-text: #f5fbff;
+    --mobile-muted: #91afc2;
+  }
+
+  .portal-main-column > .site-header,
+  .portal-main-column .site-header-inner {
+    border-color: var(--mobile-border) !important;
+    background: linear-gradient(120deg, #061726, #0a2b42) !important;
+    color: var(--mobile-text) !important;
+  }
+
+  :where(
+    .ticket-center,
+    .operations-center,
+    .atlas-admin,
+    .atlas-form,
+    .agency-audit-workspace,
+    .support-chat-crm,
+    .notification-center,
+    .profile-settings
+  ) {
+    color: var(--mobile-text) !important;
+  }
+
+  :where(
+    .ticket-hero,
+    .operations-hero,
+    .incident-landing-title,
+    .atlas-form-head,
+    .support-department-portal,
+    .ticket-board,
+    .ticket-list-panel,
+    .ticket-detail,
+    .ticket-history,
+    .ticket-report-dashboard,
+    .automatic-findings,
+    .findings-board,
+    .agency-directory-board,
+    .agency-transition-board,
+    .transition-stage-detail,
+    .transition-history,
+    .maintenance-board,
+    .maintenance-area-hub,
+    .maintenance-form,
+    .maintenance-form-section,
+    .operations-toolbar,
+    .operations-queue,
+    .audit-ledger,
+    .atlas-pane,
+    .admin-readiness,
+    .admin-user-manager,
+    .notification-table-section,
+    .chat-directory,
+    .chat-thread,
+    .profile-settings
+  ) {
+    border-color: var(--mobile-border) !important;
+    background: linear-gradient(145deg, rgba(12, 39, 61, .98), rgba(5, 20, 35, .99)) !important;
+    color: var(--mobile-text) !important;
+    box-shadow: 0 14px 34px rgba(0, 7, 19, .24) !important;
+  }
+
+  :where(
+    .department-card-grid > button,
+    .support-section-tabs > button,
+    .ticket-navigation-card-grid > button,
+    .ticket-card,
+    .finding-table-card,
+    .agency-transition-card,
+    .transition-history-record,
+    .maintenance-movement-card,
+    .maintenance-stat-card,
+    .maintenance-kpis > article,
+    .maintenance-list > article,
+    .atlas-photo-card,
+    .atlas-questions > article,
+    .equipment-question,
+    .user-department-cards > button,
+    .personnel-kind-cards > button,
+    .notification-card,
+    .audit-record-card,
+    .operations-ticket-card,
+    .report-kpi-grid > article,
+    .admin-user-card
+  ) {
+    border-color: var(--mobile-border) !important;
+    background: linear-gradient(145deg, rgba(15, 47, 70, .96), rgba(7, 26, 43, .99)) !important;
+    color: var(--mobile-text) !important;
+  }
+
+  /* Conserva en teléfono los dos acentos que ya existen en escritorio. */
+  .maintenance-area-cards > article.workshop {
+    border-color: #3c7aa3 !important;
+    background: linear-gradient(145deg, #173a5c, #102641) !important;
+  }
+
+  .maintenance-area-cards > article.warehouse {
+    border-color: #2b8a70 !important;
+    background: linear-gradient(145deg, #14483f, #0d302d) !important;
+  }
+
+  :where(
+    .office-shell table,
+    .audit-ledger table,
+    .audit-completed-table,
+    .notification-table,
+    .ticket-table,
+    .finding-table,
+    .maintenance-inventory-table,
+    .agency-import-table,
+    .admin-user-table
+  ) {
+    border-color: var(--mobile-border) !important;
+    background: #071a2b !important;
+    color: var(--mobile-text) !important;
+  }
+
+  :where(.office-shell thead, .office-shell th) {
+    border-color: var(--mobile-border) !important;
+    background: #0b2941 !important;
+    color: #86b8d2 !important;
+  }
+
+  :where(.office-shell tbody, .office-shell tr, .office-shell td) {
+    border-color: rgba(103, 165, 201, .17) !important;
+    background: #081b2d !important;
+    color: var(--mobile-text) !important;
+  }
+
+  :where(.office-shell tbody tr:nth-child(even), .office-shell tbody tr:hover) {
+    background: #0a2237 !important;
+  }
+
+  :where(
+    .office-shell input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    .office-shell select,
+    .office-shell textarea
+  ) {
+    border: 1px solid rgba(105, 172, 207, .32) !important;
+    background: rgba(3, 18, 31, .94) !important;
+    color: var(--mobile-text) !important;
+    box-shadow: none !important;
+  }
+
+  .office-shell option { background: #081b2d; color: #f5fbff; }
+  .office-shell ::placeholder { color: #718fa4 !important; opacity: 1; }
+
+  :where(
+    .audit-detail-modal,
+    .user-manager-modal,
+    .ticket-modal,
+    .maintenance-document-modal,
+    .transition-evidence-viewer,
+    .chat-profile-modal,
+    .notification-center,
+    .profile-settings,
+    .modal-card,
+    [role="dialog"]
+  ) {
+    border-color: var(--mobile-border) !important;
+    background: linear-gradient(145deg, #0b263b, #061725 70%) !important;
+    color: var(--mobile-text) !important;
+  }
+
+  :where(.office-shell h1, .office-shell h2, .office-shell h3, .office-shell h4, .office-shell strong, .office-shell dt) {
+    color: var(--mobile-text) !important;
+  }
+
+  :where(.office-shell p, .office-shell small, .office-shell label, .office-shell dd, .office-shell time) {
+    color: var(--mobile-muted);
+  }
+
+  :where(.office-shell button.primary, .office-shell .primary-button, .maintenance-header-actions > button, .atlas-submit) {
+    border-color: #56c8eb !important;
+    background: linear-gradient(135deg, #18739c, #145d85) !important;
+    color: #fff !important;
+  }
+
+  .warehouse-department-selector {
+    grid-template-columns: 1fr;
+    border-color: var(--mobile-border);
+    background: linear-gradient(145deg, #0a2439, #061725);
+  }
+
+  .warehouse-department-selector > button { min-height: 72px; }
+
+  .notification-toast-stack {
+    z-index: 12000 !important;
+    top: calc(66px + env(safe-area-inset-top)) !important;
+    right: 8px !important;
+    width: calc(100vw - 16px) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .site-header .mobile-main-nav {
+    position: fixed !important;
+    z-index: 11000 !important;
+    top: auto !important;
+    right: 8px !important;
+    bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+    left: 8px !important;
+    border: 1px solid rgba(92, 186, 226, .38) !important;
+    background: rgba(5, 24, 41, .97) !important;
+    color: #f5fbff !important;
+    box-shadow: 0 16px 44px rgba(0, 0, 0, .62) !important;
+  }
+
+  .portal-main-column > .workspace {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom)) !important;
+  }
+}

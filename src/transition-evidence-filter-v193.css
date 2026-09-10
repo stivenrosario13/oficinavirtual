@@ -1,0 +1,75 @@
+.transition-agency-filterbar {
+  display: grid;
+  grid-template-columns: minmax(440px,1.4fr) minmax(190px,.65fr) minmax(280px,1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #285a79;
+  background: linear-gradient(135deg,#091f36,#0d2d49);
+}
+.transition-status-segments { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.transition-status-segments button {
+  display: grid; grid-template-columns: 28px minmax(0,1fr) auto; align-items: center; gap: 8px;
+  min-height: 48px; border: 1px solid #315f7c; border-radius: 13px; padding: 7px 10px;
+  background: #0a223a; color: #b8d5e5; cursor: pointer;
+}
+.transition-status-segments button svg { width: 17px; color: #65d4fa; }
+.transition-status-segments button span { min-width: 0; text-align: left; font-size: 10px; font-weight: 850; line-height: 1.2; }
+.transition-status-segments button b { display: grid; min-width: 25px; height: 25px; place-items: center; border-radius: 999px; background: #153f5b; color: #dff7ff; font-size: 9px; }
+.transition-status-segments button.active { border-color: #62cef1; background: linear-gradient(135deg,#124566,#17658a); box-shadow: 0 0 0 2px #5ed4ff19 inset; color: #fff; }
+.transition-agency-search,.transition-agency-selector { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 48px; border: 1px solid #326887; border-radius: 13px; padding: 0 12px; background: #071b30; color: #65d4fa; }
+.transition-agency-search svg,.transition-agency-selector svg { flex: 0 0 17px; width: 17px; }
+.transition-agency-search input,.transition-agency-selector select { width: 100%; min-width: 0; min-height: 44px; border: 0 !important; outline: 0; background: transparent !important; color: #eefaff !important; font-size: 11px; font-weight: 750; }
+.transition-agency-selector option { background: #0b2741; color: #fff; }
+.transition-agency-selection-empty { display: grid; min-height: 270px; place-content: center; justify-items: center; gap: 8px; border: 1px dashed #386d8b; border-radius: 18px; padding: 28px; background: linear-gradient(145deg,#0b2943,#081d33); text-align: center; }
+.transition-agency-selection-empty svg { width: 42px; height: 42px; padding: 10px; border-radius: 13px; background: #123e5d; color: #6bdcff; }
+.transition-agency-selection-empty strong { color: #fff; font-size: 16px; }
+.transition-agency-selection-empty span { color: #8eb7cf; font-size: 11px; }
+
+.transition-record-evidence { grid-column: 1; margin-top: 12px; overflow: hidden; border: 1px solid #745b2c; border-radius: 14px; background: #241f16; }
+.transition-record-evidence.has-evidence { border-color: #2b765f; background: #0b2c29; }
+.transition-record-evidence > header { display: flex !important; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-bottom: 1px solid #684f28; }
+.transition-record-evidence.has-evidence > header { border-color: #235e50; }
+.transition-record-evidence > header > span { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.transition-record-evidence > header > span > svg { width: 19px; color: #f7c55d; }
+.transition-record-evidence.has-evidence > header > span > svg { color: #68dfb6; }
+.transition-record-evidence > header i { display: grid; min-width: 0; font-style: normal; }
+.transition-record-evidence > header strong { font-size: 11px; }
+.transition-record-evidence > header small { color: #ad9b72; font-size: 8px; }
+.transition-evidence-upload { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; border: 1px solid #48a6ca; border-radius: 10px; padding: 0 10px; background: #123e5c; color: #ecfbff; font-size: 9px; font-weight: 900; cursor: pointer; white-space: nowrap; }
+.transition-evidence-upload svg { width: 14px; }
+.transition-evidence-upload input { display: none; }
+.transition-evidence-upload.disabled { opacity: .45; cursor: not-allowed; }
+.transition-evidence-required { display: flex; align-items: center; gap: 10px; padding: 11px 12px; }
+.transition-evidence-required > svg { width: 20px; color: #f7c55d; }
+.transition-evidence-required span { display: grid; }
+.transition-evidence-required strong { color: #ffe8b4 !important; font-size: 10px !important; }
+.transition-evidence-required small { color: #bda875 !important; font-size: 9px !important; }
+.transition-evidence-gallery { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; padding: 10px; }
+.transition-evidence-gallery figure { min-width: 0; margin: 0; overflow: hidden; border: 1px solid #357d68; border-radius: 11px; background: #071e22; }
+.transition-evidence-gallery a { display: block; aspect-ratio: 4/3; overflow: hidden; }
+.transition-evidence-gallery img { width: 100%; height: 100%; object-fit: cover; transition: transform .2s ease; }
+.transition-evidence-gallery a:hover img { transform: scale(1.04); }
+.transition-evidence-gallery figcaption { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 6px 8px; color: #a9e8d3; font-size: 8px; font-weight: 800; }
+.transition-evidence-gallery figcaption button { display: grid; width: 25px; height: 25px; place-items: center; border: 1px solid #945166; border-radius: 7px; padding: 0; background: #4d2535; color: #ffdce5; cursor: pointer; }
+.transition-evidence-gallery figcaption button svg { width: 12px; }
+.transition-progress-actions button:disabled { opacity: .45; cursor: not-allowed; }
+
+@media (max-width: 1050px) {
+  .transition-agency-filterbar { grid-template-columns: 1fr 1fr; }
+  .transition-status-segments { grid-column: 1 / -1; }
+}
+@media (max-width: 700px) {
+  .transition-agency-filterbar { grid-template-columns: minmax(0,1fr); gap: 8px; padding: 10px; }
+  .transition-status-segments { grid-column: auto; }
+  .transition-status-segments button { grid-template-columns: 22px minmax(0,1fr) 22px; min-height: 44px; padding: 6px; border-radius: 11px; }
+  .transition-status-segments button svg { width: 15px; }
+  .transition-status-segments button span { font-size: 8.5px; }
+  .transition-status-segments button b { min-width: 21px; height: 21px; font-size: 8px; }
+  .transition-agency-search,.transition-agency-selector { min-height: 44px; border-radius: 11px; }
+  .transition-agency-search input,.transition-agency-selector select { min-height: 40px; font-size: 10px; }
+  .transition-record-evidence > header { align-items: stretch; flex-direction: column; }
+  .transition-evidence-upload { width: 100%; min-height: 39px; }
+  .transition-evidence-gallery { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .transition-history-list > article > div > .transition-record-evidence { grid-column: 1 !important; }
+}

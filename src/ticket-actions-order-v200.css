@@ -1,0 +1,34 @@
+/* V200 · La acción seleccionada aparece encima del resumen de la tarjeta. */
+.ticket-card.expanded[data-action-mode] > .ticket-action-modal-heading { order: 1; }
+.ticket-card.expanded[data-action-mode] > .ticket-modal-action-tabs { order: 2; }
+
+.ticket-card.expanded[data-action-mode] > :is(
+  .ticket-management,
+  .ticket-history-summary,
+  .ticket-evidence-empty,
+  div[style]
+) {
+  order: 3;
+}
+
+.ticket-card.expanded[data-action-mode] > :is(
+  .ticket-card-head,
+  .ticket-route-summary,
+  .ticket-location,
+  h3,
+  .ticket-agency:not(.ticket-location),
+  .ticket-description,
+  footer,
+  .ticket-duration-detail,
+  .ticket-resolution
+) {
+  order: 4;
+}
+
+.ticket-card.expanded[data-action-mode] > .ticket-management,
+.ticket-card.expanded[data-action-mode] > .ticket-history-summary,
+.ticket-card.expanded[data-action-mode] > .ticket-evidence-empty,
+.ticket-card.expanded[data-action-mode] > div[style] {
+  margin: 2px 0 8px !important;
+  box-shadow: 0 14px 34px rgba(0, 8, 19, .28) !important;
+}

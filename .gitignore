@@ -1,0 +1,72 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+/dist
+/api/bin/
+/api/obj/
+/api/wwwroot/
+/license-server/bin/
+/license-server/obj/
+**/bin/
+**/obj/
+/artifacts/
+
+# Generated releases, previews and local runtime data
+/outputs/
+/output/
+/preview/
+/scratch/
+/tmp/
+/.codex-temp/
+/.codex-tmp/
+/App_Data/
+
+# Deployment bundles may contain credentials, keys or production archives.
+/deploy/
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+!.env.example
+
+# Excel de importación: solo fuente local. No debe ir al repo ni al bundle.
+/Agencias.xlsx
+~$*.xlsx
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# Claves de service account de Google descargadas (nunca subir)
+n8n-automations-*.json
+*.iam.gserviceaccount.com.json

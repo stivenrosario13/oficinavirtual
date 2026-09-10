@@ -1,0 +1,49 @@
+{
+  "name": "registro-agencias",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n DOTNET,VITE -c magenta,cyan \"dotnet run --project api/RegistroAgencias.Api.csproj --urls http://127.0.0.1:8080\" \"vite\"",
+    "dev:frontend": "vite",
+    "dev:api": "dotnet run --project api/RegistroAgencias.Api.csproj --urls http://127.0.0.1:8080",
+    "build": "tsc -b && vite build",
+    "publish:monster": "powershell -ExecutionPolicy Bypass -File scripts/publish-monster.ps1",
+    "preview": "vite preview",
+    "lint": "eslint src --ext .ts,.tsx",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.0",
+    "exceljs": "^4.4.0",
+    "jspdf": "^4.2.1",
+    "lucide-react": "^0.468.0",
+    "pdf-lib": "1.17.1",
+    "qrcode": "^1.5.4",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@types/node": "^22.10.0",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.17.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "eslint-plugin-react-refresh": "^0.4.16",
+    "globals": "^15.14.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.2",
+    "vite": "^6.0.5",
+    "vitest": "^4.1.9",
+    "web-push": "^3.6.7"
+  },
+  "overrides": {
+    "uuid": "^11.1.0"
+  }
+}

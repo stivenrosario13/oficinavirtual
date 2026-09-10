@@ -1,0 +1,27 @@
+CARGA DE AGENCIAS CERRADAS
+===========================
+
+El listado original contiene 3,319 agencias:
+
+- 3,122 agencias activas.
+- 197 agencias cerradas.
+
+Ejecuta primero 005_import_agencies_ltk.sql si todavía no cargaste las
+agencias activas. Después ejecuta 010_import_closed_agencies.sql.
+
+La carga conserva las agencias cerradas en dbo.agencies con:
+
+operational_status = 'CLOSED'
+is_active = 0
+
+Las agencias cerradas permanecen en la base para consulta e historial, pero
+no aparecen en el formulario de levantamiento porque no deben recibir nuevas
+auditorías.
+
+El resultado final del script 010 debe mostrar:
+
+ACTIVE  3122
+CLOSED  197
+
+validacion = OK
+total_ltk = 3319

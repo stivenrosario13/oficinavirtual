@@ -1,0 +1,293 @@
+/* V228 · Acciones del expediente visibles, un solo scroll móvil y reportes legibles. */
+
+.support-chat-crm .chat-profile-avatar > img {
+  padding: 0 !important;
+  overflow: hidden !important;
+  border-radius: 50% !important;
+  object-fit: cover !important;
+  object-position: center !important;
+}
+
+.support-chat-crm .chat-list-icon.has-avatar {
+  padding: 0 !important;
+  overflow: hidden !important;
+  border-radius: 50% !important;
+}
+
+.support-chat-crm .chat-list-icon.has-avatar > img {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: inherit !important;
+  object-fit: cover !important;
+  object-position: center !important;
+}
+
+@media (min-width: 901px) {
+  .support-chat-crm .chat-contact-modal-list > button {
+    grid-template-columns: 50px minmax(0, 1fr) max-content !important;
+  }
+
+  .support-chat-crm .chat-contact-modal-list > button > span:nth-child(2) > strong {
+    overflow: visible !important;
+    overflow-wrap: anywhere !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+  }
+
+  .support-chat-crm .chat-contact-meta {
+    max-width: 160px !important;
+  }
+
+  .audit-modal-backdrop {
+    z-index: 4600 !important;
+    align-items: flex-start !important;
+    padding: 22px !important;
+  }
+
+  .audit-detail-modal {
+    display: block !important;
+    width: min(1160px, 100%) !important;
+    max-height: calc(100dvh - 44px) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  .audit-detail-modal > header {
+    position: sticky !important;
+    z-index: 50 !important;
+    top: 0 !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: start !important;
+    min-height: 104px !important;
+    gap: 18px !important;
+    padding: 20px 22px !important;
+    overflow: visible !important;
+  }
+
+  .audit-detail-modal > header > div:first-child {
+    min-width: 0 !important;
+    padding-right: 8px !important;
+  }
+
+  .audit-detail-modal > header h2 {
+    overflow-wrap: anywhere !important;
+  }
+
+  .audit-detail-modal .audit-header-actions {
+    position: sticky !important;
+    top: 20px !important;
+    display: flex !important;
+    flex: 0 0 auto !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 9px !important;
+    min-width: max-content !important;
+    overflow: visible !important;
+  }
+
+  .audit-detail-modal .audit-header-actions > button {
+    display: grid !important;
+    flex: 0 0 44px !important;
+    width: 44px !important;
+    min-width: 44px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    place-items: center !important;
+    padding: 0 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  .audit-detail-modal .audit-header-actions > .edit-action {
+    border-color: #48bde8 !important;
+    background: #125279 !important;
+  }
+
+  .audit-detail-modal .audit-header-actions > .delete-action {
+    border-color: #b95770 !important;
+    background: #62283d !important;
+  }
+}
+
+@media (max-width: 760px) {
+  body:has(.notification-center-backdrop) {
+    overflow: hidden !important;
+  }
+
+  .notification-center-backdrop {
+    overflow: hidden !important;
+  }
+
+  .notification-center {
+    display: block !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .notification-center > header {
+    position: sticky !important;
+    z-index: 30 !important;
+    top: 0 !important;
+  }
+
+  .notification-center > :not(header),
+  .notification-tables,
+  .notification-table-section,
+  .notification-table-section .resolved-ticket-table {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    overscroll-behavior: auto !important;
+  }
+
+  .notification-table-section > header {
+    position: static !important;
+  }
+
+  .notification-tables {
+    padding-bottom: max(18px, env(safe-area-inset-bottom)) !important;
+  }
+}
+
+.automatic-findings[aria-labelledby="ticket-reports-title"],
+.automatic-findings[aria-labelledby="ticket-reports-title"] button,
+.automatic-findings[aria-labelledby="ticket-reports-title"] input,
+.automatic-findings[aria-labelledby="ticket-reports-title"] select,
+.automatic-findings[aria-labelledby="ticket-reports-title"] textarea {
+  font-family: Manrope, Inter, "Segoe UI", Arial, sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.automatic-findings[aria-labelledby="ticket-reports-title"] > header h2 {
+  font-size: clamp(25px, 2vw, 32px) !important;
+  line-height: 1.15 !important;
+}
+
+.automatic-findings[aria-labelledby="ticket-reports-title"] > header p {
+  max-width: 850px !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+}
+
+.automatic-findings[aria-labelledby="ticket-reports-title"] .ticket-report-filters > label > span,
+.automatic-findings[aria-labelledby="ticket-reports-title"] .ticket-report-filters > label {
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+}
+
+.automatic-findings[aria-labelledby="ticket-reports-title"] .ticket-report-filters select {
+  font-size: 13px !important;
+  font-weight: 750 !important;
+}
+
+.automatic-findings[aria-labelledby="ticket-reports-title"] .report-action-button strong {
+  font-size: 13px !important;
+  line-height: 1.3 !important;
+}
+
+.automatic-findings[aria-labelledby="ticket-reports-title"] .report-action-button small {
+  display: block !important;
+  color: #c6e5f3 !important;
+  font-size: 10.5px !important;
+  line-height: 1.4 !important;
+}
+
+.report-access-scope small { font-size: 10px !important; line-height: 1.35 !important; }
+.report-access-scope strong { font-size: 18px !important; line-height: 1.25 !important; }
+.report-access-scope p { font-size: 12px !important; line-height: 1.55 !important; }
+
+.report-kpi-grid > article {
+  min-height: 108px !important;
+  padding: 14px !important;
+}
+.report-kpi-grid small { font-size: 9px !important; line-height: 1.35 !important; }
+.report-kpi-grid strong { font-size: 27px !important; line-height: 1.08 !important; }
+.report-kpi-grid em {
+  overflow: visible !important;
+  color: #a8c8d8 !important;
+  font-size: 10px !important;
+  line-height: 1.35 !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+}
+
+.report-module-selector > button {
+  min-height: 116px !important;
+  padding: 15px !important;
+}
+.report-module-selector > button em { font-size: 10px !important; line-height: 1.3 !important; }
+.report-module-selector > button strong { font-size: 16px !important; line-height: 1.25 !important; }
+.report-module-selector > button small { font-size: 11px !important; line-height: 1.4 !important; }
+.report-module-selector > button b { font-size: 10px !important; }
+
+.report-panel > header span,
+.report-inline-heading span { font-size: 10px !important; line-height: 1.35 !important; }
+.report-panel > header h3,
+.report-inline-heading h3 { font-size: 21px !important; line-height: 1.25 !important; }
+.report-panel > header p,
+.report-inline-heading p { font-size: 12px !important; line-height: 1.6 !important; }
+
+:is(
+  .responsible-comparison-chart,
+  .distribution-list,
+  .leaderboard-list,
+  .service-report-table,
+  .personnel-performance-table,
+  .resolved-report-table,
+  .finding-statistics-cards,
+  .finding-type-report
+) {
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+}
+
+:is(
+  .responsible-comparison-chart,
+  .distribution-list,
+  .leaderboard-list,
+  .service-report-table,
+  .personnel-performance-table,
+  .resolved-report-table,
+  .finding-statistics-cards,
+  .finding-type-report
+) small {
+  font-size: 10.5px !important;
+  line-height: 1.45 !important;
+}
+
+.table-export-actions,
+.table-export-actions button,
+.row-export-actions button {
+  font-size: 11px !important;
+  font-weight: 850 !important;
+}
+
+.report-module-empty strong { font-size: 17px !important; }
+.report-module-empty span { font-size: 12px !important; line-height: 1.5 !important; }
+
+@media (max-width: 760px) {
+  .automatic-findings[aria-labelledby="ticket-reports-title"] > header h2 {
+    font-size: 25px !important;
+  }
+
+  .automatic-findings[aria-labelledby="ticket-reports-title"] > header p,
+  .report-panel > header p,
+  .report-inline-heading p {
+    font-size: 13px !important;
+  }
+
+  .report-kpi-grid small { font-size: 10px !important; }
+  .report-kpi-grid em { font-size: 11px !important; }
+  .report-module-selector > button { min-height: 108px !important; }
+  .report-module-selector > button strong { font-size: 17px !important; }
+  .report-module-selector > button small { font-size: 12px !important; }
+}

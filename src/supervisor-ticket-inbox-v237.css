@@ -1,0 +1,11 @@
+.supervisor-ticket-inbox-table{margin:0}
+.supervisor-ticket-table-search{display:grid;grid-template-columns:20px minmax(0,1fr) auto;align-items:center;gap:10px;margin:14px 18px;padding:0 12px;min-height:48px;border:1px solid #326681;border-radius:12px;background:#071c31;color:#69d9ff}
+.supervisor-ticket-table-search>svg{width:18px}
+.supervisor-ticket-table-search input{width:100%;min-width:0;border:0!important;outline:0;background:transparent!important;color:#f4fbff;font-size:13px}
+.supervisor-ticket-table-search input::placeholder{color:#789fb5}
+.supervisor-ticket-table-search button{display:grid;width:32px;height:32px;place-items:center;border:0;border-radius:8px;background:#173b54;color:#bfeeff;cursor:pointer}
+.supervisor-ticket-table-search button svg{width:15px}
+.supervisor-ticket-inbox-table tbody tr{cursor:default}
+.supervisor-ticket-inbox-table td:last-child button{white-space:nowrap}
+.ticket-board[hidden]{display:none!important}
+@media(max-width:760px){.supervisor-ticket-table-search{margin:12px}.supervisor-ticket-inbox-table>header b{white-space:normal}.supervisor-ticket-inbox-table .supervisor-assigned-table-wrap{border-top:1px solid #214761}}

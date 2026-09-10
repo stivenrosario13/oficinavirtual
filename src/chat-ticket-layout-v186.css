@@ -1,0 +1,246 @@
+/* V186 · Directorio de chat legible y filtros de tickets sin compresión */
+
+/* El directorio conserva una fila completa por persona y desplaza la lista. */
+.support-chat-crm .chat-contact-modal {
+  grid-template-rows: auto auto minmax(0, 1fr) !important;
+  min-height: 0 !important;
+}
+.support-chat-crm .chat-contact-modal-list {
+  display: flex !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  flex-direction: column !important;
+  align-content: initial !important;
+  gap: 9px !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.support-chat-crm .chat-contact-modal-list > button {
+  display: grid !important;
+  flex: 0 0 auto !important;
+  grid-template-columns: 50px minmax(0, 1fr) minmax(36px, 190px) !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 78px !important;
+  height: auto !important;
+  align-items: center !important;
+  gap: 13px !important;
+  padding: 12px 14px !important;
+  overflow: hidden !important;
+  border: 1px solid #2f698b !important;
+  border-radius: 14px !important;
+  background: linear-gradient(145deg, #0d3150, #081f36) !important;
+  color: #fff !important;
+  box-shadow: 0 8px 20px rgba(0, 9, 20, .2) !important;
+}
+.support-chat-crm .chat-contact-modal-list > button:hover,
+.support-chat-crm .chat-contact-modal-list > button:focus-visible {
+  border-color: #67d9ff !important;
+  background: linear-gradient(145deg, #114263, #0a2a45) !important;
+}
+.support-chat-crm .chat-contact-avatar {
+  display: grid !important;
+  width: 50px !important;
+  height: 50px !important;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #33799f;
+  border-radius: 50% !important;
+  background: #164a70 !important;
+  color: #84e1ff !important;
+}
+.support-chat-crm .chat-contact-modal-list > button > span:nth-child(2) {
+  display: grid !important;
+  min-width: 0 !important;
+  gap: 3px !important;
+  align-content: center;
+}
+.support-chat-crm .chat-contact-modal-list :is(strong, small, em) {
+  display: block !important;
+  min-width: 0;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+.support-chat-crm .chat-contact-modal-list strong {
+  color: #fff !important;
+  font-size: 14px !important;
+  line-height: 1.25 !important;
+}
+.support-chat-crm .chat-contact-modal-list :is(small, em) {
+  color: #9fc4d7 !important;
+  font-size: 10px !important;
+  line-height: 1.3 !important;
+}
+.support-chat-crm .chat-contact-meta {
+  display: grid !important;
+  min-width: 0 !important;
+  max-width: 190px !important;
+  justify-items: end;
+  gap: 5px !important;
+}
+.support-chat-crm .chat-contact-meta small {
+  width: 100%;
+  color: #acd0e1 !important;
+  text-align: right;
+}
+.support-chat-crm .chat-contact-meta svg {
+  width: 18px !important;
+  height: 18px !important;
+  color: #67d9ff !important;
+}
+
+/* La búsqueda del directorio nunca invade la lista. */
+.support-chat-crm .chat-contact-modal > label {
+  min-height: 52px !important;
+  flex: 0 0 auto !important;
+}
+.support-chat-crm .chat-contact-modal > label input {
+  min-height: 48px !important;
+  font-size: 14px !important;
+}
+
+/* Barra de tickets: búsqueda y filtros comparten el ancho sin aplastar controles. */
+.ticket-center .ticket-board > header {
+  display: grid !important;
+  grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) !important;
+  align-items: stretch !important;
+  gap: 10px !important;
+}
+.ticket-center .ticket-board > header > label {
+  align-self: stretch !important;
+  min-height: 66px !important;
+}
+.ticket-center .ticket-filter-stack {
+  display: flex !important;
+  min-width: 0 !important;
+  flex-flow: row nowrap !important;
+  align-items: stretch !important;
+  gap: 7px !important;
+  padding: 8px !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+}
+.ticket-center .ticket-filter-stack > div {
+  display: grid !important;
+  flex: 1 1 285px !important;
+  grid-template-columns: none !important;
+  grid-auto-flow: column !important;
+  grid-auto-columns: minmax(82px, 1fr) !important;
+  min-width: 270px !important;
+  max-width: 340px !important;
+  gap: 6px !important;
+}
+.ticket-center .ticket-filter-stack > div > button {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 58px !important;
+  padding: 7px 8px !important;
+  overflow: hidden !important;
+  font-size: 11px !important;
+  line-height: 1.2 !important;
+  text-overflow: ellipsis;
+  white-space: normal !important;
+}
+.ticket-center .ticket-filter-stack > .ticket-priority-filter {
+  display: grid !important;
+  flex: 1 1 125px !important;
+  grid-template-columns: 1fr !important;
+  grid-template-rows: auto 36px !important;
+  min-width: 118px !important;
+  max-width: 155px !important;
+  min-height: 58px !important;
+  align-content: center;
+  gap: 3px !important;
+  padding: 6px 8px !important;
+  overflow: hidden !important;
+  font-size: 8px !important;
+  line-height: 1 !important;
+}
+.ticket-center .ticket-filter-stack > .ticket-priority-filter select {
+  grid-column: 1 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 36px !important;
+  padding: 0 25px 0 8px !important;
+  overflow: hidden;
+  font-size: 11px !important;
+  line-height: normal !important;
+  text-overflow: ellipsis;
+}
+.ticket-center .ticket-filter-stack > .primary {
+  flex: 0 1 135px !important;
+  min-width: 118px !important;
+  max-width: 150px !important;
+  min-height: 58px !important;
+  padding: 7px 9px !important;
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+  white-space: normal !important;
+}
+
+@media (max-width: 1100px) {
+  .ticket-center .ticket-board > header {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .ticket-center .ticket-board > header > label {
+    min-height: 50px !important;
+  }
+  .ticket-center .ticket-filter-stack > div {
+    flex-basis: 260px !important;
+    min-width: 250px !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .support-chat-crm .chat-contact-modal-list {
+    padding: 0 10px max(12px, env(safe-area-inset-bottom)) !important;
+  }
+  .support-chat-crm .chat-contact-modal-list > button {
+    grid-template-columns: 46px minmax(0, 1fr) 30px !important;
+    min-height: 72px !important;
+    gap: 10px !important;
+    padding: 10px !important;
+  }
+  .support-chat-crm .chat-contact-avatar {
+    width: 46px !important;
+    height: 46px !important;
+  }
+  .support-chat-crm .chat-contact-meta {
+    width: 30px !important;
+    max-width: 30px !important;
+  }
+  .support-chat-crm .chat-contact-meta small { display: none !important; }
+
+  .ticket-center .ticket-filter-stack > div {
+    grid-auto-columns: minmax(78px, 1fr) !important;
+    min-width: 246px !important;
+  }
+  .ticket-center .ticket-filter-stack > .ticket-priority-filter {
+    flex-basis: 125px !important;
+    min-width: 125px !important;
+  }
+  .ticket-center .ticket-filter-stack > .primary {
+    flex-basis: 126px !important;
+    min-width: 126px !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .support-chat-crm .chat-contact-modal > header strong { font-size: 17px !important; }
+  .support-chat-crm .chat-contact-modal > header small { font-size: 10px !important; }
+  .support-chat-crm .chat-contact-modal > label { margin: 10px !important; }
+  .support-chat-crm .chat-contact-modal > label input { font-size: 16px !important; }
+  .support-chat-crm .chat-contact-modal-list strong { font-size: 13px !important; }
+
+  .ticket-center .ticket-filter-stack { gap: 5px !important; padding: 6px !important; }
+  .ticket-center .ticket-filter-stack > div {
+    grid-auto-columns: minmax(74px, 1fr) !important;
+    min-width: 232px !important;
+  }
+  .ticket-center .ticket-filter-stack > div > button { min-height: 54px !important; font-size: 9px !important; padding: 5px !important; }
+  .ticket-center .ticket-filter-stack > .ticket-priority-filter { min-width: 116px !important; }
+  .ticket-center .ticket-filter-stack > .primary { min-width: 118px !important; min-height: 54px !important; font-size: 9px !important; }
+}

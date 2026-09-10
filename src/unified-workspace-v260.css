@@ -1,0 +1,213 @@
+/* V260 · Lenguaje visual único para todo el portal. Los cambios de estructura
+   siguen limitados al escritorio para conservar la navegación móvil anterior. */
+
+.office-shell {
+  --unified-canvas: #04101c;
+  --unified-surface: #081b2d;
+  --unified-surface-raised: #0b253a;
+  --unified-surface-soft: rgba(12, 39, 61, .78);
+  --unified-border: rgba(103, 165, 201, .22);
+  --unified-border-active: rgba(77, 207, 247, .54);
+  --unified-cyan: #58d7fb;
+  --unified-text: #f5fbff;
+  --unified-muted: #91afc2;
+}
+
+@media (min-width: 901px) {
+  .portal-main-column,
+  .portal-main-column > .workspace {
+    color: var(--unified-text);
+  }
+
+  :where(.atlas-admin, .ticket-center, .operations-center, .atlas-form,
+    .agency-audit-workspace, .notification-center, .profile-settings) {
+    color: var(--unified-text) !important;
+  }
+
+  /* Encabezados principales con la misma identidad del sidebar. */
+  :where(.ticket-hero, .operations-hero, .incident-landing-title,
+    .atlas-form-head, .agency-directory-board > header,
+    .agency-transition-board > header) {
+    border: 1px solid var(--unified-border) !important;
+    border-radius: 22px !important;
+    background:
+      radial-gradient(circle at 88% 0, rgba(80, 215, 251, .16), transparent 32%),
+      linear-gradient(138deg, #0d2d45, #071a2c 62%, #0b273c) !important;
+    box-shadow: inset 0 1px rgba(255, 255, 255, .045), 0 22px 54px rgba(0, 7, 19, .3) !important;
+  }
+
+  :where(.ticket-hero, .operations-hero, .incident-landing-title,
+    .atlas-form-head) :where(h1, h2, h3, strong) {
+    color: var(--unified-text) !important;
+  }
+
+  :where(.ticket-hero, .operations-hero, .incident-landing-title,
+    .atlas-form-head) :where(p, small) {
+    color: var(--unified-muted) !important;
+  }
+
+  :where(.ticket-hero, .operations-hero, .incident-landing-title,
+    .atlas-form-head) > div > span {
+    color: var(--unified-cyan) !important;
+  }
+
+  /* Superficies principales de todas las secciones. */
+  :where(.support-department-portal, .ticket-board, .ticket-list-panel,
+    .ticket-detail, .ticket-workspace, .ticket-form-panel, .automatic-findings,
+    .findings-board, .support-chat-shell, .agency-directory-board,
+    .agency-directory-workspace, .agency-import-preview, .agency-transition-board,
+    .transition-stage-detail, .transition-history, .transition-update-panel,
+    .maintenance-board, .maintenance-dashboard, .maintenance-form,
+    .operations-kpis > article, .operations-toolbar, .audit-ledger,
+    .queue-summary, .queue-lane, .queue-priority-group, .queue-waiting,
+    .atlas-pane, .admin-readiness, .admin-map-panel, .atlas-admin-section,
+    .notification-table-section, .profile-password-form) {
+    border-color: var(--unified-border) !important;
+    background:
+      linear-gradient(145deg, rgba(12, 39, 61, .97), rgba(5, 20, 35, .99)) !important;
+    box-shadow: inset 0 1px rgba(255, 255, 255, .035), 0 16px 42px rgba(0, 7, 19, .24) !important;
+  }
+
+  :where(.support-department-portal, .ticket-board, .ticket-list-panel,
+    .ticket-detail, .ticket-workspace, .ticket-form-panel, .automatic-findings,
+    .findings-board, .agency-directory-board, .agency-import-preview,
+    .agency-transition-board, .transition-stage-detail, .maintenance-board,
+    .maintenance-dashboard, .maintenance-form, .operations-toolbar,
+    .audit-ledger, .queue-summary, .queue-lane, .queue-priority-group,
+    .queue-waiting, .atlas-pane, .notification-table-section) {
+    border-radius: 18px !important;
+  }
+
+  /* Tarjetas, accesos y registros. */
+  :where(.department-card-grid > button, .support-section-tabs > button,
+    .ticket-navigation-card-grid > button, .ticket-card,
+    .finding-table-card, .agency-transition-card, .transition-history-record,
+    .maintenance-movement-card, .maintenance-stat-card,
+    .queue-priority-grid > button, .queue-serving-grid > button,
+    .atlas-photo-card, .atlas-questions > article, .equipment-question,
+    .user-department-cards > button, .personnel-kind-cards > button) {
+    border-color: var(--unified-border) !important;
+    border-radius: 15px !important;
+    background:
+      radial-gradient(circle at 100% 0, rgba(72, 196, 237, .08), transparent 38%),
+      linear-gradient(145deg, rgba(15, 47, 70, .94), rgba(7, 26, 43, .98)) !important;
+    color: var(--unified-text) !important;
+    box-shadow: 0 11px 28px rgba(0, 7, 19, .2) !important;
+    transition: border-color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease !important;
+  }
+
+  :where(.department-card-grid > button, .support-section-tabs > button,
+    .ticket-navigation-card-grid > button, .ticket-card,
+    .agency-transition-card, .queue-priority-grid > button):hover {
+    border-color: var(--unified-border-active) !important;
+    background: linear-gradient(145deg, rgba(20, 62, 89, .98), rgba(8, 33, 52, .99)) !important;
+    box-shadow: inset 3px 0 var(--unified-cyan), 0 18px 38px rgba(0, 7, 19, .32) !important;
+    transform: translateY(-2px) !important;
+  }
+
+  :where(.ticket-center, .operations-center, .atlas-form,
+    .agency-audit-workspace) :where(h1, h2, h3, h4, strong) {
+    color: var(--unified-text);
+  }
+
+  :where(.ticket-center, .operations-center, .atlas-form,
+    .agency-audit-workspace) :where(p, small, label) {
+    color: var(--unified-muted);
+  }
+
+  /* Barras de herramientas y filtros. */
+  :where(.ticket-toolbar, .ticket-filters, .finding-filters,
+    .transition-agency-filterbar, .operations-toolbar, .audit-export-bar,
+    .admin-section-tabs, .atlas-filter-tabs, .queue-summary) {
+    border-color: var(--unified-border) !important;
+    background: linear-gradient(90deg, rgba(5, 24, 41, .98), rgba(10, 45, 65, .88)) !important;
+  }
+
+  :where(.office-shell input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    .office-shell select, .office-shell textarea) {
+    border: 1px solid rgba(105, 172, 207, .3) !important;
+    border-radius: 11px !important;
+    background: rgba(3, 18, 31, .84) !important;
+    color: var(--unified-text) !important;
+  }
+
+  :where(.office-shell input, .office-shell select, .office-shell textarea):focus {
+    border-color: var(--unified-cyan) !important;
+    outline: none !important;
+    box-shadow: 0 0 0 4px rgba(88, 215, 251, .11) !important;
+  }
+
+  /* Tablas con encabezado y filas iguales a Auditorías completadas. */
+  :where(.admin-table, .audit-table, .resolved-ticket-table, .audit-ledger,
+    .agency-import-table, .ticket-table, .findings-table) {
+    overflow: hidden;
+    border: 1px solid var(--unified-border) !important;
+    border-radius: 16px !important;
+    background: rgba(3, 16, 29, .58) !important;
+  }
+
+  :where(.admin-th, .audit-th, .resolved-ticket-head, .audit-ledger-head,
+    .agency-import-table thead, .ticket-table thead, .findings-table thead) {
+    background: #061a2d !important;
+    color: #789eb4 !important;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+  }
+
+  :where(.admin-tr:not(.admin-th), .audit-tr:not(.audit-th),
+    .resolved-ticket-row:not(.resolved-ticket-head), .audit-ledger-row,
+    .agency-import-table tbody tr, .ticket-table tbody tr,
+    .findings-table tbody tr) {
+    border-color: rgba(72, 137, 172, .2) !important;
+    background: rgba(7, 28, 46, .38) !important;
+  }
+
+  :where(.admin-tr:not(.admin-th), .audit-tr:not(.audit-th),
+    .resolved-ticket-row:not(.resolved-ticket-head), .audit-ledger-row,
+    .agency-import-table tbody tr, .ticket-table tbody tr,
+    .findings-table tbody tr):hover {
+    background: linear-gradient(90deg, rgba(17, 68, 95, .76), rgba(8, 35, 55, .74)) !important;
+    box-shadow: inset 3px 0 var(--unified-cyan);
+  }
+
+  :where(.office-shell th, .office-shell td) {
+    border-color: rgba(72, 137, 172, .2) !important;
+  }
+
+  /* Botones y estados interactivos coherentes. */
+  :where(.office-shell .primary, .office-shell .manage-users-button,
+    .office-shell .operations-export, .office-shell .report-incidence-button,
+    .office-shell .save-audit, .office-shell .open-new-user-button) {
+    border: 1px solid rgba(112, 224, 255, .34) !important;
+    border-radius: 11px !important;
+    background: linear-gradient(135deg, #138fbe, #2bc4ee) !important;
+    color: #fff !important;
+    box-shadow: 0 10px 24px rgba(8, 126, 170, .25), inset 0 1px rgba(255, 255, 255, .2) !important;
+  }
+
+  :where(.office-shell button):focus-visible,
+  :where(.office-shell a):focus-visible {
+    outline: 2px solid var(--unified-cyan) !important;
+    outline-offset: 3px;
+  }
+
+  /* Ventanas emergentes dentro de la misma familia visual. */
+  :where(.audit-detail-modal, .user-manager-modal, .ticket-modal,
+    .transition-evidence-viewer, .chat-profile-modal, .chat-sidebar-menu,
+    .notification-center, .profile-settings) {
+    border-color: var(--unified-border) !important;
+    border-radius: 22px !important;
+    background:
+      radial-gradient(circle at 90% 0, rgba(76, 202, 242, .1), transparent 28%),
+      linear-gradient(145deg, #0b263b, #061725 70%) !important;
+    color: var(--unified-text) !important;
+    box-shadow: 0 34px 90px rgba(0, 5, 15, .58) !important;
+  }
+
+  :where(.ticket-empty, .operations-empty, .queue-empty,
+    .transition-history-empty, .agency-directory-placeholder) {
+    border-color: var(--unified-border) !important;
+    background: rgba(6, 25, 41, .66) !important;
+    color: var(--unified-muted) !important;
+  }
+}

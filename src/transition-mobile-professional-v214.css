@@ -1,0 +1,299 @@
+/* V214 · Agencias en construcción: detalle móvil claro, táctil y sin contenido recortado. */
+@media (max-width: 700px) {
+  .agency-transition-board {
+    min-width: 0;
+    overflow: hidden;
+    border-radius: 16px;
+  }
+
+  .agency-transition-board > header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding: 16px 14px;
+  }
+
+  .agency-transition-board > header > div,
+  .agency-transition-board > header h2,
+  .agency-transition-board > header p {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .agency-transition-board > header > button {
+    width: 100%;
+    min-height: 46px;
+    justify-content: center;
+  }
+
+  .transition-agency-filterbar {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .transition-status-segments {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .transition-status-segments button {
+    grid-template-columns: 26px minmax(0, 1fr) 28px;
+    min-height: 50px;
+    padding: 8px 10px;
+  }
+
+  .transition-status-segments button span {
+    font-size: 10px;
+    line-height: 1.3;
+  }
+
+  .transition-agency-search,
+  .transition-agency-selector {
+    min-height: 48px;
+    padding-inline: 11px;
+  }
+
+  .transition-agency-search input,
+  .transition-agency-selector select {
+    min-height: 44px;
+    font-size: 12px;
+  }
+
+  .agency-transition-workspace.has-selection {
+    width: 100%;
+    min-width: 0;
+    padding: 8px;
+  }
+
+  .transition-stage-detail {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    border-radius: 14px;
+  }
+
+  .transition-stage-detail > header {
+    gap: 12px;
+    padding: 15px 13px;
+  }
+
+  .transition-stage-detail > header h3 {
+    margin-top: 7px;
+    font-size: 20px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .transition-stage-detail > header p {
+    font-size: 11px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
+  .transition-stage-detail > header > strong {
+    justify-self: stretch;
+    text-align: center;
+  }
+
+  .transition-detail-stage-tabs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 10px 10px 3px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+  }
+
+  .transition-detail-stage-tabs button {
+    flex: 0 0 min(70vw, 210px);
+    grid-template-columns: 32px minmax(0, 1fr);
+    min-height: 64px;
+    padding: 9px 10px;
+    text-align: left;
+    scroll-snap-align: start;
+  }
+
+  .transition-detail-stage-tabs button > span {
+    display: grid;
+  }
+
+  .transition-detail-stage-tabs strong {
+    font-size: 11px;
+  }
+
+  .transition-detail-actions {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    margin-inline: 10px;
+    padding: 10px 0 0;
+  }
+
+  .transition-detail-actions button,
+  .transition-detail-actions .process-delete {
+    width: 100%;
+    min-height: 44px;
+    margin-left: 0;
+    white-space: normal;
+  }
+
+  .transition-history-panel {
+    width: auto;
+    margin: 12px 8px;
+    border-radius: 15px;
+  }
+
+  .transition-history-panel > header {
+    gap: 10px;
+    padding: 13px 12px;
+  }
+
+  .transition-history-panel > header > div {
+    align-items: flex-start;
+    min-width: 0;
+  }
+
+  .transition-history-panel > header span {
+    min-width: 0;
+  }
+
+  .transition-history-panel > header strong {
+    font-size: 13px;
+  }
+
+  .transition-history-panel > header small {
+    margin-top: 2px;
+    font-size: 9px;
+    line-height: 1.35;
+  }
+
+  .transition-history-panel > header b {
+    flex: 0 0 auto;
+  }
+
+  .transition-history-list > article {
+    grid-template-columns: 34px minmax(0, 1fr) !important;
+    gap: 9px !important;
+    padding: 14px 10px !important;
+  }
+
+  .transition-history-list article strong {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .transition-history-list article p {
+    margin: 7px 0;
+    font-size: 11px;
+    line-height: 1.55;
+  }
+
+  .transition-record-assignee {
+    min-height: 56px;
+    padding: 10px;
+  }
+
+  .transition-record-assignee strong {
+    font-size: 11px !important;
+    line-height: 1.35;
+  }
+
+  .transition-record-evidence {
+    margin-top: 12px;
+    border-radius: 12px;
+  }
+
+  .transition-record-evidence > header {
+    gap: 11px;
+    padding: 12px 10px;
+  }
+
+  .transition-record-evidence > header strong {
+    font-size: 12px;
+  }
+
+  .transition-record-evidence > header small,
+  .transition-evidence-required small {
+    font-size: 9px !important;
+    line-height: 1.4;
+  }
+
+  .transition-evidence-upload {
+    min-height: 44px;
+    font-size: 10px;
+  }
+
+  .transition-progress-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .transition-progress-actions > button {
+    min-height: 48px !important;
+    padding: 8px !important;
+    font-size: 9px !important;
+    line-height: 1.3 !important;
+  }
+
+  .transition-update-panel,
+  .transition-stage-editor {
+    width: auto;
+    min-width: 0;
+    margin: 12px 8px 18px;
+    padding: 14px 12px;
+    border-radius: 15px;
+  }
+
+  .transition-update-panel label,
+  .transition-stage-editor label {
+    gap: 9px;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .transition-update-panel textarea,
+  .transition-stage-editor textarea {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    height: 124px;
+    min-height: 124px;
+    max-height: 240px;
+    padding: 12px;
+    font-size: 16px;
+    line-height: 1.45;
+    overflow-y: auto;
+  }
+
+  .transition-update-panel > div,
+  .transition-stage-editor > div {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 8px;
+  }
+
+  .transition-update-panel button,
+  .transition-stage-editor button {
+    width: 100%;
+    min-height: 48px;
+    padding: 8px 10px;
+    font-size: 10px;
+    line-height: 1.3;
+    white-space: normal;
+  }
+
+  .transition-pending-warning {
+    padding-top: 2px;
+    font-size: 10px !important;
+    line-height: 1.5 !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .transition-progress-actions {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .transition-evidence-gallery {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

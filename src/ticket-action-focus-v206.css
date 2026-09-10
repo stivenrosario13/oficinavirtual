@@ -1,0 +1,49 @@
+/* V206 · Al ejecutar una acción se muestra únicamente su herramienta. */
+.ticket-card.expanded[data-action-mode] > :is(
+  .ticket-card-head,
+  .ticket-route-summary,
+  .ticket-location,
+  h3,
+  .ticket-agency:not(.ticket-location),
+  .ticket-description,
+  footer,
+  .ticket-duration-detail,
+  .ticket-resolution
+) {
+  display: none !important;
+}
+
+.ticket-card.expanded[data-action-mode] > .ticket-action-modal-heading {
+  margin-bottom: 14px !important;
+}
+
+.ticket-card.expanded[data-action-mode] > :is(
+  .ticket-management,
+  .ticket-history-summary,
+  .ticket-evidence-empty,
+  div[style]
+) {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-right: 0 !important;
+  margin-left: 0 !important;
+}
+
+.ticket-card.expanded[data-action-mode] > .ticket-management {
+  min-height: min(430px, calc(100dvh - 150px));
+  align-content: start;
+}
+
+.ticket-card.expanded[data-action-mode="evidence"] > :is(.ticket-history-summary, .ticket-evidence-empty, div[style]) {
+  margin-top: 18px !important;
+}
+
+@media (max-width: 600px) {
+  .ticket-card.expanded[data-action-mode] {
+    padding-top: 13px !important;
+  }
+
+  .ticket-card.expanded[data-action-mode] > .ticket-management {
+    min-height: 0;
+  }
+}

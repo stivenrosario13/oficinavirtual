@@ -1,0 +1,27 @@
+/* V227 · Renderizado progresivo: las tarjetas fuera de pantalla no consumen pintura inicial. */
+@supports (content-visibility: auto) {
+  :is(
+    .ticket-card:not(.expanded),
+    .finding-ticket-card:not(.expanded),
+    .finding-table-card,
+    .agency-transition-card,
+    .maintenance-list > article,
+    .agency-directory-list > article,
+    .scoped-user-list > article,
+    .audit-list > article,
+    .leaderboard-list > *,
+    .support-config-list > *
+  ) {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 190px;
+  }
+
+  :is(.transition-evidence-viewer-grid, .finding-evidence-gallery.saved, .audit-photo-grid) > * {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 320px;
+  }
+}
+
+:is(.transition-evidence-viewer-grid, .finding-evidence-gallery.saved, .audit-photo-grid) img {
+  background: #081b30;
+}

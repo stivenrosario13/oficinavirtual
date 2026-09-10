@@ -1,0 +1,15 @@
+.ticket-supervisor-gps-resolution{
+  grid-column:1/-1;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  border:1px solid #2f9e7b;
+  border-radius:14px;
+  padding:14px;
+  background:linear-gradient(135deg,#0b372e,#0d493b);
+  color:#eafff7;
+}
+.ticket-supervisor-gps-resolution>svg{flex:none;width:26px;height:26px;color:#6ff0be}
+.ticket-supervisor-gps-resolution>span{display:grid;gap:4px}
+.ticket-supervisor-gps-resolution strong{font-size:13px}
+.ticket-supervisor-gps-resolution small{color:#afe5d2;line-height:1.45}

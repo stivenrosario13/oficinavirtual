@@ -1,0 +1,212 @@
+/* V218 · Cámara GPS para avances y composición móvil estable. */
+
+.transition-camera-gps {
+  background: linear-gradient(145deg, #171b16, #222013) !important;
+}
+
+.transition-camera-button {
+  min-width: 174px !important;
+  border-color: #55c9f5 !important;
+  background: linear-gradient(135deg, #145f8c, #248bb8) !important;
+  color: #fff !important;
+  box-shadow: 0 10px 24px rgb(0 8 20 / 28%) !important;
+}
+
+.transition-camera-button > svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+.transition-camera-location {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid #258b73;
+  border-radius: 12px;
+  background: #0b3d35;
+  color: #b8ffea;
+}
+
+.transition-camera-location > svg {
+  width: 19px;
+  height: 19px;
+  flex: none;
+}
+
+.transition-camera-location > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.transition-camera-location strong { font-size: 10px; }
+.transition-camera-location small { color: #98dfcd; font-size: 8px; }
+
+.transition-photo-location {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 7px;
+  border-top: 1px solid #245b52;
+  color: #8ef0d3 !important;
+  font-size: 8px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.transition-photo-location > svg { width: 12px; height: 12px; }
+
+@media (max-width: 760px) {
+  /* Esta aplicación usa site-header; se evita el max-width de 48px heredado. */
+  .site-header .site-header-inner {
+    display: grid !important;
+    grid-template-columns: minmax(58px, 1fr) auto !important;
+    align-items: center !important;
+    width: 100% !important;
+    gap: 8px !important;
+    overflow: visible !important;
+  }
+
+  .site-header .site-brand {
+    grid-column: 1 !important;
+    min-width: 58px !important;
+    max-width: none !important;
+  }
+
+  .site-header .header-account {
+    grid-column: 2 !important;
+    display: grid !important;
+    grid-auto-flow: column !important;
+    grid-auto-columns: 40px !important;
+    align-items: center !important;
+    justify-content: end !important;
+    width: max-content !important;
+    min-width: max-content !important;
+    max-width: none !important;
+    gap: 5px !important;
+    margin-left: 0 !important;
+    overflow: visible !important;
+  }
+
+  .site-header .header-account > :is(.notification-bell, .header-profile, .header-logout) {
+    display: flex !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 4px !important;
+  }
+
+  .site-header .header-account > .header-profile > :is(span, svg:last-child) {
+    display: none !important;
+  }
+
+  .site-header .header-account > .header-profile > :is(img, svg:first-child) {
+    display: block !important;
+    width: 28px !important;
+    height: 28px !important;
+  }
+
+  .site-header .header-account > .header-logout {
+    border-color: #a84e65 !important;
+    background: linear-gradient(145deg, #52263a, #351d30) !important;
+    color: #ffd5df !important;
+  }
+
+  /* El contenido administrativo conserva una columna completa y texto horizontal. */
+  .atlas-admin .atlas-admin-hero {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    gap: 14px !important;
+    padding: 18px 16px !important;
+    overflow: hidden !important;
+  }
+
+  .atlas-admin .atlas-admin-hero > div:first-child {
+    display: block !important;
+    grid-column: 1 / -1 !important;
+    flex: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+
+  .atlas-admin .atlas-admin-hero > div:first-child > :is(span, h1, p) {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+    writing-mode: horizontal-tb !important;
+    white-space: normal !important;
+  }
+
+  .atlas-admin .atlas-admin-hero h1 {
+    margin: 7px 0 6px !important;
+    font-size: clamp(27px, 8vw, 36px) !important;
+    line-height: 1.05 !important;
+  }
+
+  .atlas-admin .atlas-admin-hero p {
+    font-size: 11px !important;
+    line-height: 1.55 !important;
+  }
+
+  .atlas-admin .admin-hero-actions {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    gap: 9px !important;
+  }
+
+  .atlas-admin .admin-hero-actions > :is(button, .role-chip) {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .transition-camera-gps > header {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  .transition-camera-button {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 50px !important;
+    justify-content: center !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .site-header .site-header-inner {
+    grid-template-columns: minmax(50px, 1fr) auto !important;
+    gap: 5px !important;
+  }
+
+  .site-header .header-account {
+    grid-auto-columns: 36px !important;
+    gap: 3px !important;
+  }
+
+  .site-header .header-account > :is(.notification-bell, .header-profile, .header-logout) {
+    width: 36px !important;
+    min-width: 36px !important;
+    max-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+  }
+}
