@@ -1583,7 +1583,12 @@ export default function TicketCenter({
           const belongsToSelectedTechnologyTeam =
             ticketBelongsToTechnologyTeam(ticket, selectedTechnologyTeam) ||
             (strictTechnologyTechnician && assignedToCurrentUser);
-          const matchesTicketKind=ticket.ticketType===ticketTypeFilter;
+          // Avería Técnica recibe tanto soporte normal como los tickets
+          // internos escalados por Call Center; ambos deben entrar en su
+          // bandeja activa sin perder el origen del caso.
+          const matchesTicketKind=session.supportTeam==="TECHNICAL_FAILURE"
+            ? ticket.ticketType==="SUPPORT" || ticket.ticketType==="INTERNAL"
+            : ticket.ticketType===ticketTypeFilter;
           return (
           (supervisorHistoryView || personalAssignmentView || matchesTicketKind) &&
           (!supervisorHistoryView || supervisorTouchedTicket) &&
