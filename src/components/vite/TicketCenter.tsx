@@ -818,6 +818,9 @@ export default function TicketCenter({
   const isWorkshopOperator=session.supportTeam==="WORKSHOP";
   const isMaintenanceOperator=isWarehouseOperator||isWorkshopOperator;
   const isTechnologyDepartmentManager=session.role==="Technology"&&!session.supportTeam;
+  // Tecnología solicita equipos a Almacén; no necesita entrar al portal de
+  // Taller ni a las operaciones de inventario que administra el almacenero.
+  const isTechnologyWarehouseRequester=isTechnologyDepartmentManager;
   const isDedicatedWarehousePortal=isWarehouseOperator||(session.role==="Administrator"&&maintenanceEntry==="WAREHOUSE");
   const isDedicatedWorkshopPortal=isWorkshopOperator||(session.role==="Administrator"&&maintenanceEntry==="WORKSHOP");
   const isDedicatedMaintenancePortal=isDedicatedWarehousePortal||isDedicatedWorkshopPortal;
@@ -2505,11 +2508,23 @@ export default function TicketCenter({
   // Call Center puede pedir apoyo de otros departamentos, pero no puede
   // cambiar el departamento propietario ni asignar técnicos.
   const canShareTicket = !isSelectedPersonnelView && (canDispatchTicket || isCallCenter);
+  const isDepartmentSupportAdministrator =
+    !!session.supportDepartment &&
+    !session.supportTeam &&
+    session.permissions.canAssignTickets &&
+    session.role !== "GroupAdministrator";
+  const canEscalateCallCenterTicket = (ticket: Ticket) =>
+    isCallCenter &&
+    ticket.ticketType === "INTERNAL" &&
+    ticket.assignedDepartment === "TECHNOLOGY" &&
+    effectiveTechnologyTeam(ticket) === "CALL_CENTER" &&
+    !resolvedStatuses.has(ticket.status);
   const canViewTicketEvidence =
     !isSelectedPersonnelView &&
     (session.role === "Administrator" ||
       session.supportTeam === "CALL_CENTER" ||
-      session.supportTeam === "TECHNICAL_FAILURE");
+      session.supportTeam === "TECHNICAL_FAILURE" ||
+      isDepartmentSupportAdministrator);
   const requiresTechnicianGpsEvidence = (ticket: Ticket) =>
     (isTechnologyTechnician &&
       ticket.assignedTechnicianId === currentUserId) ||
@@ -2531,11 +2546,11 @@ export default function TicketCenter({
   const canAdministerTicket = (ticket: Ticket) =>
     !resolvedStatuses.has(ticket.status) &&
     !isCallCenter &&
-    (session.role === "Administrator" ||
+      (session.role === "Administrator" ||
       (session.permissions.canAssignTickets &&
         !!session.supportDepartment &&
         ticket.assignedDepartment === session.supportDepartment &&
-        (session.supportDepartment !== "TECHNOLOGY" || isTechnologyDispatcher)));
+        (session.supportDepartment !== "TECHNOLOGY" || isTechnologyDispatcher || isTechnologyDepartmentManager)));
   const techniciansForTicket = (
     ticket: Ticket,
     assignedTeam: TechnologyTeam | "" = ticket.assignedTeam || "",
@@ -2706,9 +2721,15 @@ export default function TicketCenter({
           const payload = {
             ...draft,
             assignedDepartment: supportCase.department,
+            // Call Center atiende sus propios tickets internos. No se muestra
+            // un selector de responsables: el backend los asigna al usuario
+            // actualmente autenticado y luego permite escalarlos a Avería.
+            assignedTechnicianId: isCallCenter ? currentUserId : draft.assignedTechnicianId,
             assignedTeam:
               supportCase.department === "TECHNOLOGY"
-                ? (draft.assignedTeam || sessionRoutingTeam !== "ALL")
+                ? isCallCenter
+                  ? "CALL_CENTER"
+                  : (draft.assignedTeam || sessionRoutingTeam !== "ALL")
                     ? draft.assignedTeam || sessionRoutingTeam
                     : technologyTeamFilter !== "ALL"
                       ? technologyTeamFilter
@@ -3772,8 +3793,8 @@ export default function TicketCenter({
               {agencyTransitions.filter(item=>item.status==="ACTIVE").length} en proceso · {agencyTransitions.filter(item=>item.status==="PENDING").length} pendientes <ArrowRight />
             </span>
           </button>}
-          {showFullSupportHome&&canViewMaintenance&&<button className="maintenance-section-entry" onClick={()=>{setMaintenanceSelectedDepartment(null);setMaintenanceArea(isWarehouseOperator?"WAREHOUSE":isWorkshopOperator?"WORKSHOP":null);setSupportStage("maintenance");}}>
-            <span className="support-section-icon"><Wrench /></span><span className="support-section-copy"><em>REQUERIMIENTOS A TALLER Y ALMACÉN · {departments[maintenanceDepartment]||maintenanceDepartment}</em><strong>Mantenimiento y equipos</strong><small>Solicitudes, entregas a técnicos o supervisores, recepción de dañados, reparación, devolución y cadena de custodia.</small></span><span className="support-section-count">{departmentMaintenanceMovements.length} movimientos <ArrowRight /></span>
+          {showFullSupportHome&&canViewMaintenance&&<button className="maintenance-section-entry" onClick={()=>{setMaintenanceSelectedDepartment(null);setMaintenanceArea(isTechnologyWarehouseRequester?"WAREHOUSE":isWarehouseOperator?"WAREHOUSE":isWorkshopOperator?"WORKSHOP":null);setMaintenanceView(isTechnologyWarehouseRequester?"history":"dashboard");setWarehousePanel(null);setSupportStage("maintenance");}}>
+            <span className="support-section-icon"><Wrench /></span><span className="support-section-copy"><em>{isTechnologyWarehouseRequester?"ALMACÉN · SOLICITUDES DE TECNOLOGÍA":`REQUERIMIENTOS A TALLER Y ALMACÉN · ${departments[maintenanceDepartment]||maintenanceDepartment}`}</em>{isTechnologyWarehouseRequester?<strong>Solicitudes a Almacén</strong>:<strong>Mantenimiento y equipos</strong>}<small>{isTechnologyWarehouseRequester?"Envía solicitudes de equipos y consulta tus formularios e historial.":"Solicitudes, entregas a técnicos o supervisores, recepción de dañados, reparación, devolución y cadena de custodia."}</small></span><span className="support-section-count">{isTechnologyWarehouseRequester?warehouseMovements.length:departmentMaintenanceMovements.length} {isTechnologyWarehouseRequester?"formularios":"movimientos"} <ArrowRight /></span>
           </button>}
           {!isTechnologyTechnician&&showFullSupportHome&&session.permissions.canViewSupportFindings && (
             <button
@@ -3834,7 +3855,7 @@ export default function TicketCenter({
               : "Volver al centro de soporte"}
           </button>
           <span>
-            {supervisorHistoryView ? "Historial de mi gestión" : personalAssignmentView ? "Mis tickets asignados" : supportStage === "agencyDirectory" ? "Actualizar agencias" : supportStage === "maintenance" ? "Mantenimiento y equipos" : supportStage === "transitions" ? "Agencias en construcción y reestructuración" : supportStage === "tickets"
+            {supervisorHistoryView ? "Historial de mi gestión" : personalAssignmentView ? "Mis tickets asignados" : supportStage === "agencyDirectory" ? "Actualizar agencias" : supportStage === "maintenance" ? (isTechnologyWarehouseRequester ? "Solicitudes a Almacén" : "Mantenimiento y equipos") : supportStage === "transitions" ? "Agencias en construcción y reestructuración" : supportStage === "tickets"
               ? ticketTypeFilter === "INTERNAL" ? "Tickets internos" : "Tickets de soporte"
               : findingView === "menu"
                 ? "Hallazgos automáticos"
@@ -3998,9 +4019,9 @@ export default function TicketCenter({
         </div>
       </section>}
       {trackingCode!==null&&<EquipmentTracking initialCode={trackingCode} onClose={()=>setTrackingCode(null)}/>}
-      {supportStage==="maintenance"&&maintenanceArea==="WAREHOUSE"&&!warehousePanel&&<button className="wt-lookup-button" onClick={()=>setTrackingCode("")}><QrCode/>Estado y trazabilidad por QR</button>}
+      {supportStage==="maintenance"&&maintenanceArea==="WAREHOUSE"&&!warehousePanel&&!isTechnologyWarehouseRequester&&<button className="wt-lookup-button" onClick={()=>setTrackingCode("")}><QrCode/>Estado y trazabilidad por QR</button>}
       {documentToEdit&&<MaintenanceDocumentEditor item={documentToEdit} onClose={()=>setDocumentToEdit(null)}/>}
-      {supportStage==="maintenance"&&maintenanceArea==="WAREHOUSE"&&!warehousePanel&&!isDedicatedMaintenancePortal&&<div className="mw-section-cards">
+      {supportStage==="maintenance"&&maintenanceArea==="WAREHOUSE"&&!warehousePanel&&!isDedicatedMaintenancePortal&&!isTechnologyWarehouseRequester&&<div className="mw-section-cards">
         <button onClick={()=>setWarehousePanel("requests")}><Send/><strong>{isWarehouseOperator||session.role==="Administrator"?"Comunicaciones de departamentos":"Solicitudes a Almacén"}</strong><small>{isWarehouseOperator||session.role==="Administrator"?"Mensajes y documentos enviados por cada departamento; todo queda organizado en su bandeja.":"Documentos enviados desde este departamento a Almacén General."}</small></button>
         <button onClick={()=>setWarehousePanel("requirements")}><ClipboardList/><strong>Requerimientos</strong><small>Equipos solicitados a Almacén, organizados solo para {departments[maintenanceDepartment]||maintenanceDepartment}.</small></button>
         <button onClick={()=>{setMaintenanceView("inventory");setMaintenanceQuery("");document.getElementById("maintenance-inventory-destination")?.scrollIntoView({behavior:"smooth",block:"start"});}}><Boxes/><strong>Inventario</strong><small>{isDedicatedMaintenancePortal&&!maintenanceSelectedDepartment?"Selecciona abajo un departamento para consultar sus activos.":"Existencias, ubicación de equipos y formularios PDF."}</small></button>
@@ -4012,15 +4033,18 @@ export default function TicketCenter({
       {supportStage==="maintenance"&&!warehousePanel&&isDedicatedMaintenancePortal&&maintenanceArea&&!maintenanceSelectedDepartment&&<MaintenanceOverview area={maintenanceArea} movements={maintenanceMovements} loading={maintenanceLoading} error={maintenanceLoadError} pendingOrders={maintenanceOpenOrders.length} departmentScope={session.role==="Administrator"||isWarehouseOperator?undefined:session.supportDepartment?[session.supportDepartment]:undefined} onRefresh={()=>{maintenanceRetryAfterRef.current=0;void loadMaintenanceMovements();}} onDepartment={(department,view)=>{setMaintenanceSelectedDepartment(department);setMaintenanceView(view);setMaintenanceQuery("");setMaintenanceMovementFilter("ALL");}} onPanel={setWarehousePanel} onDocument={setDocumentToEdit}/>}
       {supportStage==="maintenance"&&!warehousePanel&&maintenanceArea==="WORKSHOP"&&(!isDedicatedMaintenancePortal||!!maintenanceSelectedDepartment)&&<WorkshopBoard department={maintenanceDepartment} onBack={()=>{setMaintenanceSelectedDepartment(null);if(!isDedicatedMaintenancePortal)setMaintenanceArea(null);}} onChanged={()=>{maintenanceRetryAfterRef.current=0;void loadMaintenanceMovements();}} onDocument={id=>{const item=maintenanceMovements.find(m=>m.id===id);if(item)setDocumentToEdit(item);else setTrackingCode(id);}}/>}
       {supportStage==="maintenance"&&!warehousePanel&&maintenanceArea&&["WAREHOUSE"].includes(maintenanceArea)&&(!isDedicatedMaintenancePortal||!!maintenanceSelectedDepartment)&&<section id="maintenance-inventory-destination" className={`maintenance-board maintenance-operations ${maintenanceArea.toLowerCase()}`}>
-        <button className="maintenance-area-back" onClick={()=>{if(isDedicatedMaintenancePortal)setMaintenanceSelectedDepartment(null);else setMaintenanceArea(null);setMaintenanceQuery("");setMaintenanceMovementFilter("ALL");}}><ArrowLeft/> {isDedicatedMaintenancePortal?`Departamentos de ${maintenanceArea==="WORKSHOP"?"Taller":"Almacén"}`:"Taller y Almacén"}</button>
+        <button className="maintenance-area-back" onClick={()=>{if(isTechnologyWarehouseRequester){setMaintenanceArea(null);setSupportStage("home");setMaintenanceView("dashboard");}else if(isDedicatedMaintenancePortal)setMaintenanceSelectedDepartment(null);else setMaintenanceArea(null);setMaintenanceQuery("");setMaintenanceMovementFilter("ALL");}}><ArrowLeft/> {isDedicatedMaintenancePortal?`Departamentos de ${maintenanceArea==="WORKSHOP"?"Taller":"Almacén"}`:isTechnologyWarehouseRequester?"Centro de soporte":"Taller y Almacén"}</button>
         {maintenanceLoadError&&<div className="maintenance-service-warning"><AlertTriangle/><div><strong>No fue posible sincronizar Mantenimiento</strong><span>{maintenanceLoadError}</span></div><button onClick={()=>{maintenanceRetryAfterRef.current=0;void loadMaintenanceMovements();}}><RefreshCw/> Reintentar</button></div>}
         <header>
           <div><span>{maintenanceArea==="WORKSHOP"?"TALLER TÉCNICO · REPARACIÓN Y REEMPLAZO":"ALMACÉN · INVENTARIO, DESPACHO Y DESCARGO"}</span><h2>{departments[maintenanceDepartment]|| (maintenanceArea==="WORKSHOP"?"Taller técnico":"Almacén central")}</h2><p>{maintenanceArea==="WORKSHOP"?"Entradas, salidas, diagnósticos, reparaciones y reemplazos con trazabilidad completa.":"Equipos nuevos, existencias, entregas a departamentos y descargos sin operaciones de reparación."}</p></div>
-          <div className="maintenance-header-actions">{maintenanceArea==="WAREHOUSE"&&!isWarehouseOperator&&session.role!=="Administrator"&&<button onClick={()=>setWarehousePanel("requests")}><Send/> Solicitud a Almacén</button>}<button className="scanner" onClick={()=>openMaintenanceForm(true,maintenanceArea)}><QrCode/> Escanear QR o código</button><button onClick={()=>openMaintenanceForm(false,maintenanceArea)}><Plus/> Nuevo formulario</button></div>
+          <div className="maintenance-header-actions">
+            {maintenanceArea==="WAREHOUSE"&&!isWarehouseOperator&&session.role!=="Administrator"&&<button onClick={()=>setWarehousePanel("requests")}><Send/> {isTechnologyWarehouseRequester?"Solicitar a Almacén":"Solicitud a Almacén"}</button>}
+            {!isTechnologyWarehouseRequester&&<><button className="scanner" onClick={()=>openMaintenanceForm(true,maintenanceArea)}><QrCode/> Escanear QR o código</button><button onClick={()=>openMaintenanceForm(false,maintenanceArea)}><Plus/> Nuevo formulario</button></>}
+          </div>
         </header>
-        <div className="maintenance-quick-actions">
+        {!isTechnologyWarehouseRequester&&<div className="maintenance-quick-actions">
           {(maintenanceArea==="WORKSHOP"?[["ENTRY","Recibir en Taller"],["REPAIR","Registrar reparación"],["REPLACEMENT","Registrar reemplazo"],["EXIT","Entregar reparado"]]:[["REQUEST","Solicitud de equipo"],["NEW_DELIVERY","Entregar equipo nuevo"],["DAMAGED_RETURN","Recibir equipo dañado"],["TRANSFER_TO_WORKSHOP","Entregar a Taller"],["ENTRY","Entrada de equipos"],["EXIT","Entregar / registrar salida"],["DISCHARGE","Registrar descargo"]]).map(([movement,label])=><button key={movement} onClick={()=>openMaintenanceForm(false,maintenanceArea,movement)}><span>{movement==="ENTRY"?<Download/>:movement==="DISCHARGE"?<Trash2/>:movement==="TRANSFER_TO_WORKSHOP"?<Hammer/>:<ArrowRight/>}</span><strong>{label}</strong><small>Formulario QR, hora y responsable</small></button>)}
-        </div>
+        </div>}
         <div className="maintenance-kpis">
           <article><span><Barcode/></span><div><small>ACTIVOS IDENTIFICADOS</small><strong>{maintenanceAssets.length}</strong><em>Seriales únicos en {maintenanceArea==="WORKSHOP"?"Taller":"Almacén"}</em></div></article>
           <article><span><Boxes/></span><div><small>DISPONIBLES / RECIBIDOS</small><strong>{activeMaintenanceAssets}</strong><em>Último movimiento activo</em></div></article>
@@ -4028,7 +4052,7 @@ export default function TicketCenter({
           <article><span><FileText/></span><div><small>FORMULARIOS</small><strong>{maintenanceAreaMovements.length}</strong><em>PDF y QR verificables</em></div></article>
         </div>
         <div className="maintenance-command-bar">
-          <nav aria-label="Vista de mantenimiento"><button className={maintenanceView==="dashboard"?"active":""} onClick={()=>setMaintenanceView("dashboard")}><BarChart3/> Resumen</button><button className={maintenanceView==="inventory"?"active":""} onClick={()=>setMaintenanceView("inventory")}><PackageSearch/> Inventario <b>{maintenanceAssets.length}</b></button>{maintenanceArea==="WAREHOUSE"&&<button className={maintenanceView==="procurement"?"active":""} onClick={()=>setMaintenanceView("procurement")}><ShoppingCart/> Compras y requisiciones <b>{maintenancePendingRequisitions.length}</b></button>}<button className={maintenanceView==="history"?"active":""} onClick={()=>setMaintenanceView("history")}><History/> Formularios e historial <b>{maintenanceAreaMovements.length}</b></button></nav>
+          <nav aria-label="Vista de mantenimiento">{!isTechnologyWarehouseRequester&&<><button className={maintenanceView==="dashboard"?"active":""} onClick={()=>setMaintenanceView("dashboard")}><BarChart3/> Resumen</button><button className={maintenanceView==="inventory"?"active":""} onClick={()=>setMaintenanceView("inventory")}><PackageSearch/> Inventario <b>{maintenanceAssets.length}</b></button>{maintenanceArea==="WAREHOUSE"&&<button className={maintenanceView==="procurement"?"active":""} onClick={()=>setMaintenanceView("procurement")}><ShoppingCart/> Compras y requisiciones <b>{maintenancePendingRequisitions.length}</b></button>}</>}<button className={maintenanceView==="history"?"active":""} onClick={()=>setMaintenanceView("history")}><History/> Formularios e historial <b>{maintenanceAreaMovements.length}</b></button></nav>
           {maintenanceArea==="WAREHOUSE"&&maintenanceView==="inventory"&&(isWarehouseOperator||session.role==="Administrator")&&<><input ref={maintenanceInventoryFileRef} hidden type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={event=>{const file=event.target.files?.[0];if(file)void readMaintenanceInventoryExcel(file);}}/><button type="button" className="maintenance-excel-import" onClick={()=>maintenanceInventoryFileRef.current?.click()}><Upload/> Importar Excel</button></>}
           <label><Search/><input value={maintenanceQuery} onChange={event=>setMaintenanceQuery(event.target.value)} placeholder="Buscar serial, formulario, producto, agencia o responsable..."/>{maintenanceQuery&&<button type="button" onClick={()=>setMaintenanceQuery("")} aria-label="Limpiar búsqueda"><X/></button>}</label>
         </div>
@@ -4707,7 +4731,7 @@ export default function TicketCenter({
                       <span className="ticket-card-actions">
                         {canViewTicketEvidence && <button type="button" onClick={() => { setExpandedTicketId(ticket.id); setTicketActionMode("evidence"); }}><History /> Historial y evidencias</button>}
                         {canDispatchTicket && !resolvedStatuses.has(ticket.status) && <button type="button" onClick={() => { setExpandedTicketId(ticket.id); setTicketActionMode("transfer"); }}><Share2 /> Transferir</button>}
-                        {isCallCenter && canShareTicket && !resolvedStatuses.has(ticket.status) && <button type="button" onClick={() => { setExpandedTicketId(ticket.id); setTicketActionMode("transfer"); }}><Share2 /> Compartir</button>}
+                        {isCallCenter && canShareTicket && !resolvedStatuses.has(ticket.status) && <button type="button" onClick={() => { setExpandedTicketId(ticket.id); setTicketActionMode("transfer"); }}><Share2 /> Compartir y escalar</button>}
                         {canAdministerTicket(ticket) && <button type="button" onClick={() => { setResponsibleQuery(""); setExpandedTicketId(ticket.id); setTicketActionMode("assign"); }}><UserRoundCheck /> {ticket.assignedTechnicianId?"Cambiar responsable":"Asignar responsable"}</button>}
                         {canManageTicket(ticket) && !resolvedStatuses.has(ticket.status) && <button type="button" className="resolve" onClick={() => { setExpandedTicketId(ticket.id); setTicketActionMode("resolve"); }}><CheckCircle2 /> Estado / resolver</button>}
                         {canAdministerTicket(ticket) && <button type="button" className="cancel" onClick={() => { setExpandedTicketId(ticket.id); setTicketActionMode("cancel"); setManagement(current=>({...current,[ticket.id]:{...edit,resolution:""}})); }}><AlertTriangle /> Anular</button>}
@@ -4745,7 +4769,7 @@ export default function TicketCenter({
                           </span>
                         </div>
                       )}
-                    {isExpanded && canManageTicket(ticket) && ticketActionMode && ticketActionMode !== "evidence" && ticketActionMode !== "cancel" && (
+                    {isExpanded && (canManageTicket(ticket) || (ticketActionMode === "transfer" && canEscalateCallCenterTicket(ticket))) && ticketActionMode && ticketActionMode !== "evidence" && ticketActionMode !== "cancel" && (
                       <div className="ticket-management">
                         {ticketActionMode === "resolve" && isAssignedInternalSupervisor(ticket) && <div className="ticket-supervisor-gps-resolution"><MapPin/><span><strong>Resolución presencial desde la agencia</strong><small>Para cerrar tu ticket debes estar en {ticket.terminal}, permitir el GPS y tomar la evidencia con una precisión máxima de ±{TICKET_GPS_MAX_ACCURACY_METERS} m. El sistema validará un radio de {TICKET_AGENCY_RADIUS_METERS} m.</small></span></div>}
                         {ticketActionMode === "resolve" && !ticket.assignedTechnicianId && <div className="ticket-direct-resolution"><ShieldCheck/><span><strong>Resolución directa del departamento</strong><small>No necesitas asignar un técnico. Describe la solución y adjunta la evidencia normal del caso.</small></span></div>}
@@ -4900,7 +4924,7 @@ export default function TicketCenter({
                         />
                         {!resolvedStatuses.has(ticket.status) && (
                           <>
-                            {canShareTicket && (
+                            {canShareTicket && !isCallCenter && (
                               <>
                                 <label className="ticket-action-transfer">
                               Nota de transferencia o seguimiento
@@ -5034,6 +5058,15 @@ export default function TicketCenter({
                                 gridColumn: "1 / -1",
                               }}
                             >
+                              {ticketActionMode === "transfer" && canEscalateCallCenterTicket(ticket) && (
+                                <button
+                                  type="button"
+                                  disabled={saving}
+                                  onClick={() => void routeTicket(ticket, true)}
+                                >
+                                  <Share2 /> Compartir y escalar a Avería Técnica
+                                </button>
+                              )}
                               {ticketActionMode === "transfer" && canDispatchTicket &&
                                 ticket.assignedDepartment === "TECHNOLOGY" &&
                                 effectiveTechnologyTeam(ticket) ===
@@ -5527,7 +5560,7 @@ export default function TicketCenter({
                       </label>
                     </>
                   )}
-                  {session.role !== "GroupAdministrator" && <label>
+                  {session.role !== "GroupAdministrator" && !isCallCenter && <label>
                     Responsable asignado (opcional)
                     <input
                       type="search"
@@ -5542,6 +5575,15 @@ export default function TicketCenter({
                       <optgroup label="Todos los supervisores">{visibleDraftAssignees.filter(isSupervisorAssignee).map(item=><option key={item.id} value={item.id}>{item.name} · Supervisor</option>)}</optgroup>
                     </select>
                   </label>}
+                  {isCallCenter && (
+                    <div className="ticket-auto-responsible" role="status">
+                      <UserRoundCheck />
+                      <span>
+                        <strong>Responsable automático</strong>
+                        <small>Este ticket quedará asignado a tu usuario. Si necesitas apoyo, usa Compartir para escalarlo a Avería Técnica.</small>
+                      </span>
+                    </div>
+                  )}
                   {possibleDuplicateTickets.length > 0 && (
                     <aside className="ticket-duplicate-warning" role="alert">
                       <AlertTriangle />

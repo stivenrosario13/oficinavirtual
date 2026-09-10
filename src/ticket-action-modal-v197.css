@@ -1,4 +1,20 @@
 /* V197 · Modal completo de acciones del ticket. */
+.ticket-auto-responsible {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 10px 13px;
+  border: 1px solid rgba(73, 203, 247, .42);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(17, 75, 108, .68), rgba(8, 35, 60, .9));
+  color: #ccefff;
+}
+.ticket-auto-responsible > svg { width: 24px; height: 24px; color: #62d8ff; flex: 0 0 auto; }
+.ticket-auto-responsible span { display: grid; gap: 3px; min-width: 0; }
+.ticket-auto-responsible strong { color: #fff; font-size: 13px; }
+.ticket-auto-responsible small { color: #a9cede; line-height: 1.35; }
+
 .ticket-card.expanded[data-action-mode] {
   top: 16px !important;
   right: 16px !important;

@@ -2016,10 +2016,11 @@ sealed partial class Database
                     await duplicateReader.DisposeAsync();throw duplicate;
                 }
             }
-            // Call Center registra y comparte incidencias internas; la asignación
-            // de responsables corresponde al soporte del departamento receptor.
-            if(supportTeam=="CALL_CENTER"&&!string.IsNullOrWhiteSpace(body.AssignedTechnicianId)){await transaction.RollbackAsync(ct);return null;}
-            var requestedTechnicianId=role=="GroupAdministrator"?null:body.AssignedTechnicianId;
+            // Los tickets internos creados por Call Center quedan asignados al
+            // usuario que los registra. Así la respuesta nunca queda vacía y el
+            // caso aparece inmediatamente en su bandeja personal. El responsable
+            // del área receptora se elige únicamente al escalarlo.
+            var requestedTechnicianId=supportTeam=="CALL_CENTER"?userId:role=="GroupAdministrator"?null:body.AssignedTechnicianId;
             if(!string.IsNullOrWhiteSpace(requestedTechnicianId)&&!canAssignTickets){await transaction.RollbackAsync(ct);return null;}
             if(!await ValidTicketAssignee(connection,transaction,requestedTechnicianId,department,team,ticketType,agencyGroup,ct)){await transaction.RollbackAsync(ct);return null;}
             var id=Guid.NewGuid();const string insert="""
@@ -2120,24 +2121,25 @@ sealed partial class Database
         {
             var state=await LoadTicketState(connection,transaction,id,ct);if(state is null){await transaction.RollbackAsync(ct);return new(false,"NOT_FOUND","Ticket no encontrado.");}
             if(state.Status is "RESOLVED" or "CLOSED" or "CANCELLED"){await transaction.RollbackAsync(ct);return new(false,"CONFLICT","No se puede reasignar un ticket finalizado.");}
-            if(supportTeam=="CALL_CENTER"){await transaction.RollbackAsync(ct);return new(false,"FORBIDDEN","Call Center solo puede compartir el ticket con otros departamentos; no puede transferirlo ni asignar responsables.");}
             var department=body.AssignedDepartment!.Trim().ToUpperInvariant();await using(var catalog=new SqlCommand("SELECT COUNT(*) FROM dbo.support_departments WHERE code=@department AND is_active=1;",connection,transaction)){catalog.Parameters.AddWithValue("@department",department);if(Convert.ToInt32(await catalog.ExecuteScalarAsync(ct))==0){await transaction.RollbackAsync(ct);return new(false,"VALIDATION","El departamento de destino no está activo.");}}
             var team=department=="TECHNOLOGY"?(body.AssignedTeam?.Trim().ToUpperInvariant()??(department==state.Department?state.Team:"TECHNICAL_FAILURE")):null;if(team is not (null or "CALL_CENTER" or "TECHNICAL_FAILURE" or "TECHNICIANS")){await transaction.RollbackAsync(ct);return new(false,"VALIDATION","El equipo de Tecnología no es válido.");}
+            var callCenterEscalation=supportTeam=="CALL_CENTER"&&state.TicketType=="INTERNAL"&&state.Department=="TECHNOLOGY"&&department=="TECHNOLOGY"&&team=="TECHNICAL_FAILURE"&&string.IsNullOrWhiteSpace(body.AssignedTechnicianId);
+            if(supportTeam=="CALL_CENTER"&&!callCenterEscalation){await transaction.RollbackAsync(ct);return new(false,"FORBIDDEN","Call Center solo puede compartir tickets internos escalándolos a Avería Técnica.");}
             if(role=="Technology"&&supportTeam is "TECHNICIANS" or "WAREHOUSE" or "WORKSHOP"){await transaction.RollbackAsync(ct);return new(false,"FORBIDDEN","Los técnicos no pueden asignar ni transferir tickets.");}
             var requestedTechnician=string.IsNullOrWhiteSpace(body.AssignedTechnicianId)?null:body.AssignedTechnicianId;
             var changesResponsible=!string.Equals(state.TechnicianId,requestedTechnician,StringComparison.OrdinalIgnoreCase);
             var changesDepartment=!string.Equals(state.Department,department,StringComparison.OrdinalIgnoreCase);
             if(state.TechnicianId is not null&&changesDepartment){await transaction.RollbackAsync(ct);return new(false,"CONFLICT","Primero deja el ticket sin responsable antes de transferirlo a otro departamento.");}
-            if(changesResponsible)
+            if(changesResponsible&&!callCenterEscalation)
             {
                 if(!await CanAdministerTicket(connection,transaction,id,role,supportTeam,true,ct)){await transaction.RollbackAsync(ct);return new(false,"FORBIDDEN","Solo el administrador o el soporte del área propietaria puede cambiar el responsable.");}
             }
-            else if(!await CanWorkTicket(connection,transaction,id,userId,role,supportTeam,true,ct)){await transaction.RollbackAsync(ct);return new(false,"FORBIDDEN","No tienes permiso para reasignar este ticket.");}
+            else if(!callCenterEscalation&&!await CanWorkTicket(connection,transaction,id,userId,role,supportTeam,true,ct)){await transaction.RollbackAsync(ct);return new(false,"FORBIDDEN","No tienes permiso para reasignar este ticket.");}
             if(supportTeam=="CALL_CENTER"&&state.TicketType!="INTERNAL"){await transaction.RollbackAsync(ct);return new(false,"FORBIDDEN","Call Center solo puede escalar tickets internos.");}
             if(!await ValidTicketAssignee(connection,transaction,body.AssignedTechnicianId,department,team,state.TicketType,state.AgencyGroup,ct)){await transaction.RollbackAsync(ct);return new(false,"VALIDATION","El técnico seleccionado no pertenece al destino o no supervisa esta agencia.");}
             const string update="UPDATE dbo.support_tickets SET assigned_department=@department,assigned_team=@team,assigned_technician_id=@technician,status=CASE WHEN @technician IS NULL THEN 'OPEN' ELSE 'IN_PROGRESS' END,updated_at=SYSUTCDATETIME() WHERE id=@id;";
             await using(var command=new SqlCommand(update,connection,transaction)){command.Parameters.AddWithValue("@id",id);command.Parameters.AddWithValue("@department",department);command.Parameters.AddWithValue("@team",Db(team));command.Parameters.AddWithValue("@technician",Db(string.IsNullOrWhiteSpace(body.AssignedTechnicianId)?null:body.AssignedTechnicianId));await command.ExecuteNonQueryAsync(ct);}
-            var assigned=requestedTechnician is not null;var escalated=!assigned&&(state.Department!=department||state.Team!=team);var action=changesResponsible?(assigned?(state.TechnicianId is null?"ASSIGNED":"REASSIGNED"):"UNASSIGNED"):escalated?"ESCALATED":"ROUTED";await AddTicketHistory(connection,transaction,id,action,state.Department,department,state.Team,team,userId,actorName,body.Comment,ct);
+            var assigned=requestedTechnician is not null;var escalated=!assigned&&(state.Department!=department||state.Team!=team);var action=escalated?"ESCALATED":changesResponsible?(assigned?(state.TechnicianId is null?"ASSIGNED":"REASSIGNED"):"UNASSIGNED"):"ROUTED";await AddTicketHistory(connection,transaction,id,action,state.Department,department,state.Team,team,userId,actorName,body.Comment,ct);
             await AddTicketNotifications(connection,transaction,id,action,requestedTechnician,department,state.AgencyGroup,userId,actorName,assigned?(state.TechnicianId is null?"Se te asignó un ticket de soporte.":"Se te reasignó un ticket de soporte."):$"El ticket fue enviado a {department}{(team is null?"":$" / {team}")}.",!assigned,ct);
             await transaction.CommitAsync(ct);return new(true,"OK",null);
         }
