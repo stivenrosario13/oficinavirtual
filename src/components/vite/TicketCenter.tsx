@@ -1655,6 +1655,7 @@ export default function TicketCenter({
       session.id,
       session.email,
       session.displayName,
+      session.supportTeam,
     ],
   );
   const ticketsPerPage = 12;
