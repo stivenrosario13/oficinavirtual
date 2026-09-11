@@ -7,6 +7,8 @@ const read = (path: string) =>
 
 const program = read("api/Program.cs");
 const database = read("api/DatabaseSqlServerScoped.cs");
+const agencyLocationSeedDatabase = read("api/DatabaseAgencyLocationSeed.cs");
+const agencyLocationSeed = JSON.parse(read("api/Data/agency-locations-sonadora-20260907.json")) as Array<{codigo:string;direccion:string|null;latitude:number;longitude:number}>;
 const migration = read(
   "database-mssql/028_department_ticket_workflow_history_notifications.sql",
 );
@@ -105,10 +107,11 @@ describe("flujo departamental de tickets", () => {
     expect(center).toContain("ticketWorkspaceView === \"menu\" && teamViewChosen");
   });
 
-  it("limita la actualización de agencias al administrador principal", () => {
+  it("limita la actualización de agencias al administrador principal y Franklin", () => {
     expect(program).toContain('AddPolicy("AgencyDirectoryManage"');
     expect(program).toContain('MapPut("/api/technology/agencies/{id:guid}"');
-    expect(program).toContain('values["canManageAgencies"]=!maintenanceOperator&&account.Role=="Administrator"');
+    expect(program).toContain('IsFranklinAgencyAdministrator');
+    expect(program).toContain('account.Role=="Technology"&&IsFranklinAgencyAdministrator(account.Email)');
     expect(program).toContain('RequireAuthorization("AgencyDirectoryManage")');
     expect(database).toContain("UpdateAgencyDirectory");
     expect(database).toContain("AGENCY_DIRECTORY_UPDATED");
@@ -139,6 +142,16 @@ describe("flujo departamental de tickets", () => {
     expect(app).toContain('window.addEventListener("support-live-refresh", refreshAgencyCatalog)');
     expect(admin).toContain('window.addEventListener("support-live-refresh", refreshAgencyCatalog)');
     expect(directoryStyles).toContain(".agency-import-preview");
+  });
+
+  it("sincroniza una sola vez las direcciones y coordenadas del archivo Soñadora", () => {
+    expect(agencyLocationSeed).toHaveLength(3403);
+    expect(new Set(agencyLocationSeed.map((item) => item.codigo)).size).toBe(3403);
+    expect(agencyLocationSeed.every((item) => item.latitude >= -90 && item.latitude <= 90 && item.longitude >= -180 && item.longitude <= 180)).toBe(true);
+    expect(agencyLocationSeedDatabase).toContain('AgencyLocationSeedId = "SONADORA-2026-09-07"');
+    expect(agencyLocationSeedDatabase).toContain("dbo.agency_location_imports");
+    expect(agencyLocationSeedDatabase).toContain("AGENCY_LOCATIONS_SYNCHRONIZED");
+    expect(database).toContain("EnsureBundledAgencyLocations(connection,ct)");
   });
 
   it("clasifica hallazgos y mantenimiento por el departamento propietario", () => {

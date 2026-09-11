@@ -42,6 +42,7 @@ sealed partial class Database
                 """;
             await using var command=new SqlCommand(sql,connection);
             await command.ExecuteNonQueryAsync(ct);
+            await EnsureBundledAgencyLocations(connection,ct);
             agencyDirectorySchemaReady=true;
         }
         finally{AgencyDirectorySchemaLock.Release();}

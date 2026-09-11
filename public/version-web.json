@@ -1,7 +1,8 @@
 {
-  "release": "V322",
+  "release": "V323",
   "builtAt": "2026-09-11",
   "changes": [
+    "call-center-card-navigation-franklin-agency-access-photo-token-recovery-sonadora-locations-v323",
     "persistent-device-session-local-times-eight-evidence-serial-scan-v322",
     "device-local-chat-time-and-role-safe-mobile-chat-push-v321",
     "warehouse-only-pdf-management-optional-signature-scanner-history-v320",
@@ -404,11 +405,3 @@
     "evidence-before-next-record-workflow"
   ]
 }
-
-
-
-
-
-
-
-    "template-pdf-archive-and-complete-document-history-v313",
