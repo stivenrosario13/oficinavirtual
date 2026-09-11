@@ -114,8 +114,14 @@ const statusLabels: Record<string, string> = {
   RESOLVED: "Resuelto",
   CLOSED: "Cerrado",
 };
+const chatDate = (value: string) => {
+  const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)
+    ? value
+    : `${value}Z`;
+  return new Date(normalized);
+};
 const conversationTimeLabel = (value: string) => {
-  const date = new Date(value);
+  const date = chatDate(value);
   if (Number.isNaN(date.getTime())) return "";
   const today = new Date();
   const isToday =
@@ -1346,7 +1352,7 @@ export default function SupportChat({
                             <header>
                               <strong>{message.senderName}</strong>
                               <time>
-                                {new Date(message.createdAt).toLocaleString(
+                                {chatDate(message.createdAt).toLocaleString(
                                   "es-DO",
                                 )}
                               </time>

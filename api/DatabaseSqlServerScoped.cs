@@ -2395,8 +2395,8 @@ sealed partial class Database
         WHERE m.is_bot=0 AND m.deleted_at IS NULL AND c.deleted_at IS NULL
           AND ISNULL(m.sender_user_id,N'')<>s.user_id
           AND NOT EXISTS(SELECT 1 FROM dbo.support_conversation_mutes cm WHERE cm.conversation_id=c.id AND cm.user_id=s.user_id)
-          AND ((c.category LIKE 'DIRECT:%' AND (u.role='ADMIN' OR c.supervisor_user_id=s.user_id OR SUBSTRING(c.category,8,80)=s.user_id))
-            OR (ISNULL(c.category,'') NOT LIKE 'DIRECT:%' AND (u.role='ADMIN' OR (u.role='GROUP_ADMIN' AND c.supervisor_user_id=s.user_id)
+          AND ((c.category LIKE 'DIRECT:%' AND (u.role='ADMINISTRATOR' OR c.supervisor_user_id=s.user_id OR SUBSTRING(c.category,8,80)=s.user_id))
+            OR (ISNULL(c.category,'') NOT LIKE 'DIRECT:%' AND (u.role='ADMINISTRATOR' OR (u.role='GROUP_ADMIN' AND c.supervisor_user_id=s.user_id)
               OR (c.assigned_department='TECHNOLOGY' AND u.role='TECHNOLOGY')
               OR (c.assigned_department='GENERAL_SERVICES' AND u.role='GENERAL_SERVICES')
               OR (c.assigned_department='HUMAN_RESOURCES' AND u.role='HUMAN_RESOURCES'))))

@@ -244,6 +244,11 @@ describe("centro de soporte por agencia", () => {
     expect(pushService).toContain('notification=ticket&ticketId=');
     expect(pushService).toContain('notification=chat&conversationId=');
     expect(database).toContain("PendingChatPushDeliveries");
+    expect(database).toContain("u.role='ADMINISTRATOR'");
+    expect(database).not.toContain("u.role='ADMIN' OR c.supervisor_user_id=s.user_id");
+    expect(pushService).toContain("DateTime.SpecifyKind(item.CreatedAt,DateTimeKind.Utc)");
+    expect(chat).toContain("const chatDate = (value: string)");
+    expect(chat).toContain("chatDate(message.createdAt).toLocaleString");
     expect(app).toContain("supportNavigationFromUrl");
     expect(app).toContain('url.searchParams.has("ticket")?"TICKET"');
     expect(app).toContain('setSupportNavigation({...pendingNotificationTarget,requestKey:Date.now()})');
@@ -458,19 +463,19 @@ describe("centro de soporte por agencia", () => {
     expect(program).toContain(
       'MapDelete("/api/agency-transitions/{id:guid}/stages/{stageId:guid}"',
     );
-    expect(program).toContain('version = "2026.09.10.319"');
-    expect(program).toContain('X-Application-Release"]="V319"');
+    expect(program).toContain('version = "2026.09.11.321"');
+    expect(program).toContain('X-Application-Release"]="V321"');
     expect(program).toContain("AddResponseCompression");
     expect(program).toContain('CacheControl = "public,max-age=31536000,immutable"');
     expect(program).toContain('form["locationCapturedAt"]');
     expect(database).toContain("accuracy_meters decimal(8,2)");
     expect(apiProject).toContain(
-      "<AssemblyName>RegistroAgencias.SqlServer.V319</AssemblyName>",
+      "<AssemblyName>RegistroAgencias.SqlServer.V321</AssemblyName>",
     );
     expect(webConfig).toContain(
-      'processPath=".\\RegistroAgencias.SqlServer.V319.exe"',
+      'processPath=".\\RegistroAgencias.SqlServer.V321.exe"',
     );
-    expect(releaseGuard).toContain('var release = "V319"');
+    expect(releaseGuard).toContain('var release = "V321"');
     expect(v228Styles).toContain("z-index: 4600 !important");
     expect(v228Styles).toContain("overflow-y: auto !important");
     expect(v228Styles).toContain(".notification-tables");
@@ -624,7 +629,7 @@ describe("centro de soporte por agencia", () => {
     expect(center).toContain("AGENCIA SELECCIONADA");
     expect(center).toContain("incident-report-view");
     expect(supportStyles).not.toContain(":not(.supervisor-assigned-cases)");
-    expect(app).toContain("Web V319");
+    expect(app).toContain("Web V321");
   });
 
   it("abre el tablero departamental del supervisor y protege tickets duplicados", () => {
@@ -813,8 +818,8 @@ describe("centro de soporte por agencia", () => {
     expect(professionalSidebarV254).toContain(".portal-main-column");
     expect(professionalSidebarV254).toContain("@media (max-width: 900px)");
     expect(professionalSidebarV254).toContain("transform: translateX(-105%)");
-    expect(applicationIndex).toContain('name="app-release" content="V319"');
-    expect(applicationIndex).toContain('/release-guard.js?v=V319');
+    expect(applicationIndex).toContain('name="app-release" content="V321"');
+    expect(applicationIndex).toContain('/release-guard.js?v=V321');
   });
 
   it("abre Avería en el menú operativo y adapta la cola con zoom y barra azul", () => {

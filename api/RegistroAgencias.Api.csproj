@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
-    <AssemblyName>RegistroAgencias.SqlServer.V319</AssemblyName>
+    <AssemblyName>RegistroAgencias.SqlServer.V321</AssemblyName>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <PublishSingleFile>false</PublishSingleFile>
@@ -12,5 +12,3 @@
   <ItemGroup><PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.3" /><PackageReference Include="WebPush" Version="1.0.13" /></ItemGroup>
   <ItemGroup><Content Remove="App_Data\**" /><None Remove="App_Data\**" /></ItemGroup>
 </Project>
-
-

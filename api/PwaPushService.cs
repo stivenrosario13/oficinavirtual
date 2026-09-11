@@ -83,7 +83,8 @@ sealed class PwaPushService : BackgroundService
         {
             try
             {
-                var url=$"/?notification=ticket&ticketId={item.TicketId:D}&ticket={item.TicketNumber}&department={Uri.EscapeDataString(item.AssignedDepartment)}&ticketType={Uri.EscapeDataString(item.TicketType)}&ticketStatus={Uri.EscapeDataString(item.TicketStatus)}&notificationKey={Uri.EscapeDataString($"TICKET_EVENT:{item.NotificationId:D}")}&notificationAt={Uri.EscapeDataString(item.CreatedAt.ToUniversalTime().ToString("O"))}";
+                var notificationAt=DateTime.SpecifyKind(item.CreatedAt,DateTimeKind.Utc).ToString("O");
+                var url=$"/?notification=ticket&ticketId={item.TicketId:D}&ticket={item.TicketNumber}&department={Uri.EscapeDataString(item.AssignedDepartment)}&ticketType={Uri.EscapeDataString(item.TicketType)}&ticketStatus={Uri.EscapeDataString(item.TicketStatus)}&notificationKey={Uri.EscapeDataString($"TICKET_EVENT:{item.NotificationId:D}")}&notificationAt={Uri.EscapeDataString(notificationAt)}";
                 var payload=JsonSerializer.Serialize(new{title=$"Ticket #{item.TicketNumber}",body=string.IsNullOrWhiteSpace(item.Message)?item.Subject:item.Message,icon="/loto-real-logo-transparent.png",tag=$"ticket-{item.TicketNumber}-{item.NotificationId:N}",url,requireInteraction=true,renotify=false,vibrate=new[]{180,80,180}});
                 await client.SendNotificationAsync(new PushSubscription(item.Endpoint,item.P256dh,item.Auth),payload,vapid);
                 await db.MarkPushDelivered(item.NotificationId,item.Endpoint,ct);
@@ -101,7 +102,8 @@ sealed class PwaPushService : BackgroundService
         {
             try
             {
-                var url=$"/?notification=chat&conversationId={item.ConversationId:D}&department={Uri.EscapeDataString(item.AssignedDepartment)}&notificationKey={Uri.EscapeDataString($"CHAT_MESSAGE:{item.MessageId:D}")}&notificationAt={Uri.EscapeDataString(item.CreatedAt.ToUniversalTime().ToString("O"))}";
+                var notificationAt=DateTime.SpecifyKind(item.CreatedAt,DateTimeKind.Utc).ToString("O");
+                var url=$"/?notification=chat&conversationId={item.ConversationId:D}&department={Uri.EscapeDataString(item.AssignedDepartment)}&notificationKey={Uri.EscapeDataString($"CHAT_MESSAGE:{item.MessageId:D}")}&notificationAt={Uri.EscapeDataString(notificationAt)}";
                 var payload=JsonSerializer.Serialize(new{title=$"Mensaje de {item.SenderName}",body=item.Message,icon="/loto-real-logo-transparent.png",tag=$"chat-{item.MessageId:N}",url,requireInteraction=true,renotify=false,vibrate=new[]{180,80,180}});
                 await client.SendNotificationAsync(new PushSubscription(item.Endpoint,item.P256dh,item.Auth),payload,vapid);
                 await db.MarkPushDelivered(item.MessageId,item.Endpoint,ct);
