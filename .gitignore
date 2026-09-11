@@ -23,6 +23,7 @@
 /api/bin/
 /api/obj/
 /api/wwwroot/
+/api/App_Data/
 /license-server/bin/
 /license-server/obj/
 **/bin/
