@@ -1,7 +1,8 @@
 {
-  "release": "V318",
+  "release": "V319",
   "builtAt": "2026-09-10",
   "changes": [
+    "institutional-alm-pdf-signed-receipt-modern-requirements-v319",
     "multi-item-equipment-component-return-pdf-requirements-flow-v318",
     "technology-warehouse-request-forms-agency-installer-flow-v317",
     "technology-warehouse-request-view-for-department-and-primary-administrators-v316",

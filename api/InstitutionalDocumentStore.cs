@@ -41,8 +41,8 @@ sealed class InstitutionalFile
     // This lets saving a template update its communication PDF instead of
     // creating an ever-growing list of duplicate drafts.
     public long? TemplateId {get;set;}
-    public double SealX {get;set;}=65;
-    public double SealY {get;set;}=72;
+    public double SealX {get;set;}=73;
+    public double SealY {get;set;}=71;
     public string? ReceiptSignature {get;set;}
     public string? CorrectionNote {get;set;}
     public string? DecisionBy {get;set;}
@@ -57,7 +57,7 @@ sealed class InstitutionalFile
     public bool Recipient(DocumentActor a)=>OwnerUserName!=a.Id&&(RecipientUserName is not null?RecipientUserName==a.Id:RecipientDepartment==a.Department);
     public bool Shared(DocumentActor a)=>SharedWith.Any(s=>s.RecipientUserName is not null?s.RecipientUserName==a.Id:s.RecipientDepartment==a.Department);
     public bool Accessible(DocumentActor a)=>a.Allowed&&(Trashed?OwnerUserName==a.Id:a.Manager||OwnerUserName==a.Id||Recipient(a)||Shared(a)||(Area=="files"&&Department==a.Department));
-    public InstitutionalFile For(DocumentActor a){IsOwner=OwnerUserName==a.Id;IsRecipient=Recipient(a);CanMove=ReceivedByUserName==a.Id;CanEdit=!Trashed&&ReceivedUtc is null&&(IsOwner||SharedWith.Any(s=>s.CanEdit&&(s.RecipientUserName is not null?s.RecipientUserName==a.Id:s.RecipientDepartment==a.Department)));return this;}
+    public InstitutionalFile For(DocumentActor a){IsOwner=OwnerUserName==a.Id;IsRecipient=Recipient(a)||(OwnerUserName!=a.Id&&a.Manager&&RecipientDepartment=="Almacén");CanMove=ReceivedByUserName==a.Id;CanEdit=!Trashed&&ReceivedUtc is null&&(IsOwner||SharedWith.Any(s=>s.CanEdit&&(s.RecipientUserName is not null?s.RecipientUserName==a.Id:s.RecipientDepartment==a.Department)));return this;}
 }
 record InstitutionalTemplate(long Id,string Name,string Content,string Department,string OwnerUserName,bool IsSystem,DateTime UpdatedUtc);
 partial class Database
@@ -151,4 +151,4 @@ partial class Database
     public async Task<long?> InstitutionalSaveTemplate(DocumentActor a,long? id,string name,string content,CancellationToken ct){await using var c=await Open(ct);await EnsureInstitutionalSchema(c,ct);await using var cmd=new SqlCommand(id is >0?"UPDATE dbo.institutional_editable_templates SET name=@name,content=@content,updated_at=SYSUTCDATETIME() OUTPUT INSERTED.id WHERE id=@id AND owner_id=@user":"INSERT INTO dbo.institutional_editable_templates(owner_id,department,name,content) OUTPUT INSERTED.id VALUES(@user,@dept,@name,@content)",c);cmd.Parameters.AddWithValue("@id",id??0);cmd.Parameters.AddWithValue("@user",a.Id);cmd.Parameters.AddWithValue("@dept",a.Department);cmd.Parameters.AddWithValue("@name",name);cmd.Parameters.AddWithValue("@content",content);var value=await cmd.ExecuteScalarAsync(ct);return value is null?null:Convert.ToInt64(value);}
     public async Task<bool> InstitutionalDeleteTemplate(DocumentActor a,long id,CancellationToken ct){await using var c=await Open(ct);await EnsureInstitutionalSchema(c,ct);await using var cmd=new SqlCommand("DELETE FROM dbo.institutional_editable_templates WHERE id=@id AND owner_id=@user",c);cmd.Parameters.AddWithValue("@id",id);cmd.Parameters.AddWithValue("@user",a.Id);return await cmd.ExecuteNonQueryAsync(ct)==1;}
 }
-record InstitutionalAction(string? Title=null,string? Description=null,string? Note=null,string? RecipientUserName=null,string? RecipientDepartment=null,bool CanEdit=false,long ShareId=0,double SealX=65,double SealY=72,string? SignatureData=null);
+record InstitutionalAction(string? Title=null,string? Description=null,string? Note=null,string? RecipientUserName=null,string? RecipientDepartment=null,bool CanEdit=false,long ShareId=0,double SealX=73,double SealY=71,string? SignatureData=null);

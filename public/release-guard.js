@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  var release = "V318";
+  var release = "V319";
   var storageKey = "real-agencias-active-release";
 
   function reloadWithRelease() {
@@ -38,6 +38,5 @@
     reloadWithRelease();
   }
 })();
-
 
 

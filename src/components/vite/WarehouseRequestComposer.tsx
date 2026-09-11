@@ -1,50 +1,21 @@
 import {useMemo,useState} from "react";
 import {Boxes,FileText,PackagePlus,Plus,RotateCcw,Send,Trash2,X} from "lucide-react";
 import type {PortalSession} from "@/lib/session";
+import {buildWarehouseRequestPdf,type WarehouseRequestLineKind} from "./warehouseRequestPdf";
 import "./warehouseRequestComposer.css";
 
 type Agency={id:string;codigo:string;terminal:string;grupo:string};
 type Recipient={id:string;name:string;department:string;isTechnician:boolean;isAgencySupervisor?:boolean;role?:string|null};
-type LineKind="EQUIPMENT"|"COMPONENT"|"RETURN";
+type LineKind=WarehouseRequestLineKind;
 type RequestLine={id:string;kind:LineKind;name:string;quantity:number;serial:string;note:string};
 
 const departmentNames:Record<string,string>={TECHNOLOGY:"Tecnología",GENERAL_SERVICES:"Servicios Generales"};
-const kindNames:Record<LineKind,string>={EQUIPMENT:"Equipo",COMPONENT:"Componente",RETURN:"Devolución a Almacén"};
 const newLine=(kind:LineKind="EQUIPMENT"):RequestLine=>({id:crypto.randomUUID(),kind,name:"",quantity:1,serial:"",note:""});
 
 function requestNumber(){
   const now=new Date();
   const stamp=[now.getFullYear(),String(now.getMonth()+1).padStart(2,"0"),String(now.getDate()).padStart(2,"0"),String(now.getHours()).padStart(2,"0"),String(now.getMinutes()).padStart(2,"0"),String(now.getSeconds()).padStart(2,"0")].join("");
   return `SOL-ALM-${stamp}-${crypto.randomUUID().slice(0,4).toUpperCase()}`;
-}
-
-async function createRequestPdf(input:{number:string;department:string;agency:Agency;installer:string;priority:string;notes:string;lines:RequestLine[];createdBy:string}){
-  const {jsPDF}=await import("jspdf");
-  const pdf=new jsPDF({unit:"mm",format:"a4",compress:true});
-  const navy:[number,number,number]=[9,31,53],cyan:[number,number,number]=[56,189,225],ink:[number,number,number]=[26,47,64],muted:[number,number,number]=[92,111,126];
-  const pageHeader=()=>{pdf.setFillColor(...navy);pdf.rect(0,0,210,34,"F");pdf.setTextColor(...cyan);pdf.setFont("helvetica","bold");pdf.setFontSize(7);pdf.text("REAL · GRUPO TEJEDA · OFICINA VIRTUAL",14,10);pdf.setTextColor(255,255,255);pdf.setFontSize(16);pdf.text("SOLICITUD A ALMACÉN",14,21);pdf.setFontSize(8);pdf.text(input.number,14,28);};
-  pageHeader();
-  pdf.setTextColor(...ink);pdf.setFontSize(8);pdf.setFont("helvetica","bold");
-  pdf.text("DEPARTAMENTO SOLICITANTE",14,44);pdf.text("AGENCIA QUE REQUIERE",75,44);pdf.text("PRIORIDAD",166,44);
-  pdf.setFont("helvetica","normal");pdf.text(departmentNames[input.department]||input.department,14,50);pdf.text(`${input.agency.codigo} · ${input.agency.terminal}`,75,50);pdf.text(input.priority,166,50);
-  pdf.setFont("helvetica","bold");pdf.text("GRUPO",14,60);pdf.text("TÉCNICO INSTALADOR",75,60);pdf.text("SOLICITADO POR",145,60);
-  pdf.setFont("helvetica","normal");pdf.text(input.agency.grupo,14,66);pdf.text(input.installer,75,66);pdf.text(input.createdBy,145,66);
-  pdf.setDrawColor(190,207,218);pdf.line(14,72,196,72);
-  let y=81;
-  const tableHeader=()=>{pdf.setFillColor(...navy);pdf.rect(14,y-6,182,8,"F");pdf.setTextColor(255,255,255);pdf.setFont("helvetica","bold");pdf.setFontSize(7);pdf.text("TIPO",17,y-1);pdf.text("EQUIPO / COMPONENTE / DEVOLUCIÓN",48,y-1);pdf.text("CANT.",139,y-1);pdf.text("SERIAL / DETALLE",157,y-1);y+=7;};
-  tableHeader();
-  for(const line of input.lines){
-    const description=pdf.splitTextToSize(`${line.name}${line.note?` · ${line.note}`:""}`,85) as string[];
-    const serial=pdf.splitTextToSize(line.serial||"Pendiente / no aplica",38) as string[];
-    const height=Math.max(12,Math.max(description.length,serial.length)*4+5);
-    if(y+height>270){pdf.addPage();pageHeader();y=48;tableHeader();}
-    pdf.setTextColor(...ink);pdf.setFont("helvetica","normal");pdf.setFontSize(7.5);pdf.text(kindNames[line.kind],17,y+4);pdf.text(description,48,y+4);pdf.text(String(line.quantity),144,y+4,{align:"center"});pdf.text(serial,157,y+4);pdf.setDrawColor(215,225,233);pdf.line(14,y+height,196,y+height);y+=height;
-  }
-  if(y>235){pdf.addPage();pageHeader();y=48;}
-  pdf.setFont("helvetica","bold");pdf.setTextColor(...muted);pdf.text("MOTIVO Y OBSERVACIONES",14,y+8);pdf.setFont("helvetica","normal");pdf.setTextColor(...ink);pdf.text(pdf.splitTextToSize(input.notes||"Sin observaciones adicionales.",182),14,y+15);
-  pdf.setFontSize(6);pdf.setTextColor(...muted);pdf.text("Almacén debe marcar el documento como recibido antes de autorizarlo o rechazarlo. La entrega física se documenta por separado.",14,288);
-  for(let page=1;page<=pdf.getNumberOfPages();page++){pdf.setPage(page);pdf.setFontSize(6);pdf.setTextColor(...muted);pdf.text(`${page} / ${pdf.getNumberOfPages()}`,196,294,{align:"right"});}
-  return pdf.output("arraybuffer");
 }
 
 export default function WarehouseRequestComposer({session,department,agencies,recipients,equipmentOptions,componentOptions,onClose,onSaved}:{session:PortalSession;department:string;agencies:Agency[];recipients:Recipient[];equipmentOptions:string[];componentOptions:string[];onClose:()=>void;onSaved:(number:string)=>void}){
@@ -59,7 +30,7 @@ export default function WarehouseRequestComposer({session,department,agencies,re
     if(!lines.length||lines.some(line=>!line.name.trim()||line.quantity<1||(line.kind==="RETURN"&&!line.serial.trim()))){setError("Completa todos los renglones. Las devoluciones requieren el serial del equipo devuelto.");return;}
     setBusy(true);
     try{
-      const bytes=await createRequestPdf({number,department,agency,installer:installer.name,priority,notes,lines,createdBy:session.displayName});
+      const bytes=await buildWarehouseRequestPdf({number,department,agency,installer:installer.name,priority,notes,lines,createdBy:session.displayName,createdByLogin:session.email||session.id,origin:window.location.origin});
       const form=new FormData();
       form.append("file",new Blob([bytes],{type:"application/pdf"}),`${number}.pdf`);
       form.append("area","communications");form.append("channel","requirements");form.append("title",`Solicitud a Almacén ${number}`);
