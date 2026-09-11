@@ -35,6 +35,7 @@ import {
   type OperationsAuditEvent,
   type OperationsTicket,
 } from "@/lib/operations-center";
+import {deviceDate,deviceTimestamp} from "@/lib/display";
 
 type OperationsCenterProps = {
   mode: "audit" | "queue";
@@ -88,7 +89,7 @@ const formatDuration = (minutes: number) => {
 };
 
 const elapsed = (createdAt: string, now: number) => {
-  const minutes = Math.max(0, Math.floor((now - Date.parse(createdAt)) / 60000));
+  const minutes = Math.max(0, Math.floor((now - deviceTimestamp(createdAt)) / 60000));
   return formatDuration(minutes);
 };
 
@@ -97,7 +98,7 @@ const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""'
 const downloadAuditCsv = (events: OperationsAuditEvent[]) => {
   const header = ["Fecha", "Ticket", "Acción", "Actor", "Departamento", "Agencia", "Grupo", "Prioridad", "Estado", "Comentario"];
   const rows = events.map((event) => [
-    new Date(event.createdAt).toLocaleString("es-DO"),
+    deviceDate(event.createdAt).toLocaleString("es-DO"),
     `#${event.ticketNumber}`,
     actionLabels[event.action] || event.action,
     event.actorName,
@@ -301,7 +302,7 @@ export default function OperationsCenter({ mode, onSessionExpired, onOpenTicket,
             {filteredEvents.map((event) => {
               const expanded = selectedEvent === event.id;
               return <article key={event.id} className={`audit-ledger-row action-${event.action.toLowerCase()}${expanded ? " expanded" : ""}`}>
-                <time>{new Date(event.createdAt).toLocaleDateString("es-DO")}<small>{new Date(event.createdAt).toLocaleTimeString("es-DO")}</small></time>
+                <time>{deviceDate(event.createdAt).toLocaleDateString("es-DO")}<small>{deviceDate(event.createdAt).toLocaleTimeString("es-DO")}</small></time>
                 <span className="audit-action"><i>{event.action === "RESOLVED" || event.action === "CLOSED" ? <CheckCircle2 /> : event.action === "CREATED" ? <TicketCheck /> : <Activity />}</i><strong>{actionLabels[event.action] || event.action}</strong><small>{statusLabels[event.status] || event.status}</small></span>
                 <span><strong>#{event.ticketNumber} · {event.subject}</strong><small>{event.agency} · {event.group}</small></span>
                 <span><strong>{event.actorName}</strong><small>{event.ticketType === "INTERNAL" ? "Ticket interno" : "Soporte"}</small></span>

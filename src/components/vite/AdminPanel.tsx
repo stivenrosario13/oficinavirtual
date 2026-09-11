@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import type { PortalSession } from "@/lib/session";
 import { roleLabel } from "@/lib/session";
+import {deviceDate} from "@/lib/display";
 
 type Group = {
   grupo: string;
@@ -1997,7 +1998,7 @@ export default function AdminPanel({
                   </div>
                   <span>
                     {group.lastUpdated
-                      ? new Date(group.lastUpdated).toLocaleString("es-DO")
+                      ? deviceDate(group.lastUpdated).toLocaleString("es-DO")
                       : "Sin registros"}
                   </span>
                 </div>
@@ -2061,7 +2062,7 @@ export default function AdminPanel({
                   </div>
                   <span>
                     {agency.lastUpdated
-                      ? new Date(agency.lastUpdated).toLocaleString("es-DO")
+                      ? deviceDate(agency.lastUpdated).toLocaleString("es-DO")
                       : "Sin registros"}
                   </span>
                 </div>
@@ -2152,7 +2153,7 @@ export default function AdminPanel({
                     <em>{administrator.percent}%</em>
                     <small>
                       {administrator.lastUpdated
-                        ? new Date(administrator.lastUpdated).toLocaleString(
+                        ? deviceDate(administrator.lastUpdated).toLocaleString(
                             "es-DO",
                           )
                         : "Sin registros"}
@@ -2238,8 +2239,8 @@ export default function AdminPanel({
                     <strong>{audit.submittedByLogin ? `@${usernameValue(audit.submittedByLogin)}` : "No registrado"}</strong>
                   </span>
                   <time className="audit-time-cell" dateTime={audit.submittedAt}>
-                    <strong>{new Date(audit.submittedAt).toLocaleDateString("es-DO")}</strong>
-                    <small>{new Date(audit.submittedAt).toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" })}</small>
+                    <strong>{deviceDate(audit.submittedAt).toLocaleDateString("es-DO")}</strong>
+                    <small>{deviceDate(audit.submittedAt).toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" })}</small>
                   </time>
                   <span>
                     {audit.latitude.toFixed(5)}, {audit.longitude.toFixed(5)}
@@ -3399,7 +3400,7 @@ function AuditViewer({
           <div>
             <small>Registro de la auditoría</small>
             <strong>{audit.submittedByLogin ? `@${usernameValue(audit.submittedByLogin)}` : "Login no disponible"}</strong>
-            <span>{new Date(audit.submittedAt).toLocaleString("es-DO")}</span>
+            <span>{deviceDate(audit.submittedAt).toLocaleString("es-DO")}</span>
           </div>
         </article>
       </div>
@@ -3442,7 +3443,7 @@ function AuditViewer({
                   {Math.round(photo.accuracy)} m
                 </span>
                 <small>
-                  {new Date(photo.capturedAt).toLocaleString("es-DO")}
+                  {deviceDate(photo.capturedAt).toLocaleString("es-DO")}
                 </small>
               </div>
             </article>
@@ -3481,7 +3482,7 @@ function AuditViewer({
         <strong>Observación del levantamiento</strong>
         <p>{audit.observations || "El empleado no agregó observaciones."}</p>
         <small>
-          Enviada el {new Date(audit.submittedAt).toLocaleString("es-DO")}
+          Enviada el {deviceDate(audit.submittedAt).toLocaleString("es-DO")}
         </small>
       </div>
     </>

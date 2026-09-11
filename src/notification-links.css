@@ -3119,6 +3119,7 @@
 }
 .ticket-card.expanded .finding-photo-upload:hover { border-color:#73ddff; background:linear-gradient(135deg,#10425f,#0d2c47); }
 .ticket-card.expanded .ticket-evidence-dropzone.is-dragging { border-color:#63ddff; background:linear-gradient(135deg,#155477,#0d3555); box-shadow:0 0 0 3px #63ddff33, inset 0 0 24px #63ddff18; transform:translateY(-1px); }
+.ticket-serial-capture-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;grid-column:1/-1;padding:14px;border:1px solid #315e79;border-radius:14px;background:#0a2035}.ticket-serial-capture-grid section{display:grid;gap:8px}.ticket-serial-capture-grid label{display:grid;gap:6px;color:#cbe9f7;font-weight:800}.ticket-serial-capture-grid input[type=text],.ticket-serial-capture-grid input:not([type]){width:100%}.ticket-serial-photo{display:flex!important;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:9px 12px;border:1px solid #49bde9;border-radius:10px;background:#123b59;color:#82ddff!important;cursor:pointer}.ticket-serial-photo svg{width:18px}.ticket-serial-photo input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}.ticket-serial-capture-grid>small{grid-column:1/-1;color:#9fc4d8}@media(max-width:700px){.ticket-serial-capture-grid{grid-template-columns:1fr}}
 .ticket-evidence-drop-hint { color:#b8ecff !important; font-size:10px !important; }
 .ticket-card.expanded .finding-photo-upload > span { display:grid;gap:5px;justify-items:start; }
 .ticket-card.expanded .finding-photo-upload small { color:#8fbad0;font-weight:600; }

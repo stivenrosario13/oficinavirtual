@@ -13,7 +13,7 @@ async function repairApplication() {
     console.warn("Application cache recovery", error);
   }
   const url = new URL(window.location.href);
-    url.searchParams.set("recovery", "V321");
+    url.searchParams.set("recovery", "V322");
   window.location.replace(url.toString());
 }
 

@@ -225,6 +225,8 @@ type TicketManagementDraft = {
   sharedWithDepartments: string[];
   routingComment: string;
   evidence: File[];
+  replacementSerial: string;
+  removedSerial: string;
 };
 type TicketEvidenceLocation = {
   latitude: number;
@@ -1012,6 +1014,8 @@ export default function TicketCenter({
               sharedWithDepartments: ticket.sharedWithDepartments || [],
               routingComment: "",
               evidence: [],
+              replacementSerial: "",
+              removedSerial: "",
             },
           ]),
         ),
@@ -2967,19 +2971,19 @@ export default function TicketCenter({
   };
 
   const handleTicketEvidenceFiles = async (ticket: Ticket, edit: TicketManagementDraft, selectedFiles: File[]) => {
-    if (!selectedFiles.length) return;
+    if (!selectedFiles.length) return false;
     const files = [...edit.evidence, ...selectedFiles];
-    if (files.length > 6) {
-      setError("Puedes adjuntar un máximo de 6 evidencias.");
-      return;
+    if (files.length > 8) {
+      setError("Puedes adjuntar un máximo de 8 evidencias.");
+      return false;
     }
     if (files.some((file) => !["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(file.type))) {
       setError("Las evidencias deben ser imágenes JPG, PNG o WebP.");
-      return;
+      return false;
     }
     if (files.some((file) => file.size > 8 * 1024 * 1024)) {
       setError("Cada evidencia debe pesar 8 MB o menos.");
-      return;
+      return false;
     }
     if (requiresTechnicianGpsEvidence(ticket)) {
       try {
@@ -2993,7 +2997,7 @@ export default function TicketCenter({
         setTicketEvidenceLocations((current) => ({ ...current, [ticket.id]: location }));
       } catch (captureError) {
         setError((captureError as Error).message);
-        return;
+        return false;
       }
     }
     setManagement((current) => ({
@@ -3001,6 +3005,24 @@ export default function TicketCenter({
       [ticket.id]: { ...edit, evidence: files },
     }));
     setError("");
+    return true;
+  };
+
+  const scanTicketSerialEvidence = async (ticket: Ticket,edit: TicketManagementDraft,file: File,target: "replacementSerial"|"removedSerial") => {
+    if(!await handleTicketEvidenceFiles(ticket,edit,[file]))return;
+    type BarcodeResult={rawValue?:string};
+    type BarcodeDetectorConstructor=new()=>{detect:(source:ImageBitmap)=>Promise<BarcodeResult[]>};
+    const Detector=(window as unknown as {BarcodeDetector?:BarcodeDetectorConstructor}).BarcodeDetector;
+    if(!Detector){setNotice("La foto quedó agregada. Este navegador no dispone de lectura automática; escribe el serial manualmente.");return;}
+    try{
+      const bitmap=await createImageBitmap(file);
+      const results=await new Detector().detect(bitmap);
+      bitmap.close();
+      const serial=(results[0]?.rawValue||"").trim().toUpperCase();
+      if(!serial){setNotice("La foto quedó agregada, pero no se pudo leer el código. Puedes escribir el serial manualmente.");return;}
+      setManagement(current=>({...current,[ticket.id]:{...(current[ticket.id]||edit),[target]:serial}}));
+      setNotice("Serial "+serial+" leído desde la fotografía.");
+    }catch{setNotice("La foto quedó agregada, pero no se pudo leer el código. Puedes escribir el serial manualmente.");}
   };
 
   const resolveTicketWithEvidence = async (ticket: Ticket) => {
@@ -3013,8 +3035,8 @@ export default function TicketCenter({
       setError("Adjunta al menos una evidencia para resolver o cerrar el ticket.");
       return;
     }
-    if (values.evidence.length > 6) {
-      setError("Puedes adjuntar un máximo de 6 evidencias.");
+    if (values.evidence.length > 8) {
+      setError("Puedes adjuntar un máximo de 8 evidencias.");
       return;
     }
     setSaving(true);
@@ -3023,6 +3045,8 @@ export default function TicketCenter({
       const form = new FormData();
       form.append("status", values.status === "CLOSED" ? "CLOSED" : "RESOLVED");
       form.append("resolution", values.resolution.trim());
+      form.append("replacementSerial",values.replacementSerial.trim());
+      form.append("removedSerial",values.removedSerial.trim());
       const requiresGps = requiresTechnicianGpsEvidence(ticket);
       if (requiresGps) {
         const location=ticketEvidenceLocations[ticket.id];
@@ -4648,6 +4672,8 @@ export default function TicketCenter({
                     ticket.sharedWithDepartments || [],
                   routingComment: "",
                   evidence: [],
+                  replacementSerial: "",
+                  removedSerial: "",
                 };
                 const ticketAssignees = techniciansForTicket(
                   { ...ticket, assignedDepartment: edit.assignedDepartment },
@@ -5027,6 +5053,11 @@ export default function TicketCenter({
                                 </fieldset>
                               </>
                             )}
+                            {["RESOLVED","CLOSED"].includes(edit.status)&&<div className="ticket-serial-capture-grid">
+                              <section><label>Serial del equipo reemplazado<input value={edit.replacementSerial} maxLength={120} onChange={event=>setManagement(current=>({...current,[ticket.id]:{...edit,replacementSerial:event.target.value.toUpperCase()}}))} placeholder="Escanea la foto o escribe el serial"/></label><label className="ticket-serial-photo"><ScanBarcode/> Foto del serial reemplazado<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={event=>{const input=event.currentTarget,file=input.files?.[0];if(file)void scanTicketSerialEvidence(ticket,edit,file,"replacementSerial");input.value="";}}/></label></section>
+                              <section><label>Serial del equipo retirado<input value={edit.removedSerial} maxLength={120} onChange={event=>setManagement(current=>({...current,[ticket.id]:{...edit,removedSerial:event.target.value.toUpperCase()}}))} placeholder="Escanea la foto o escribe el serial"/></label><label className="ticket-serial-photo"><ScanBarcode/> Foto del serial retirado<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={event=>{const input=event.currentTarget,file=input.files?.[0];if(file)void scanTicketSerialEvidence(ticket,edit,file,"removedSerial");input.value="";}}/></label></section>
+                              <small>La fotografía se agrega a las evidencias. Si la etiqueta tiene código de barras o QR compatible, el serial se completa automáticamente.</small>
+                            </div>}
                             {["RESOLVED","CLOSED"].includes(edit.status)&&<label
                               className="finding-photo-upload ticket-action-resolve ticket-evidence-dropzone"
                               style={{ gridColumn: "1 / -1" }}
@@ -5044,7 +5075,7 @@ export default function TicketCenter({
                               <span>
                                 <Upload /> Evidencia para resolver o cerrar
                                 <small>
-                                  1 imagen obligatoria · puedes agregar 2 adicionales o más · máximo 6 imágenes de 8 MB
+                                  1 imagen obligatoria · hasta 8 imágenes de 8 MB
                                 </small>
                                 <small className="ticket-evidence-drop-hint">Arrastra imágenes aquí o selecciónalas desde tus archivos.</small>
                                 <small>

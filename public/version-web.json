@@ -1,7 +1,8 @@
 {
-  "release": "V321",
+  "release": "V322",
   "builtAt": "2026-09-11",
   "changes": [
+    "persistent-device-session-local-times-eight-evidence-serial-scan-v322",
     "device-local-chat-time-and-role-safe-mobile-chat-push-v321",
     "warehouse-only-pdf-management-optional-signature-scanner-history-v320",
     "institutional-alm-pdf-signed-receipt-modern-requirements-v319",

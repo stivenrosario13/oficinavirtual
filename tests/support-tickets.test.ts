@@ -249,6 +249,7 @@ describe("centro de soporte por agencia", () => {
     expect(pushService).toContain("DateTime.SpecifyKind(item.CreatedAt,DateTimeKind.Utc)");
     expect(chat).toContain("const chatDate = (value: string)");
     expect(chat).toContain("chatDate(message.createdAt).toLocaleString");
+    expect(app).toContain("deviceDate(item.updatedAt).toLocaleString");
     expect(app).toContain("supportNavigationFromUrl");
     expect(app).toContain('url.searchParams.has("ticket")?"TICKET"');
     expect(app).toContain('setSupportNavigation({...pendingNotificationTarget,requestKey:Date.now()})');
@@ -264,7 +265,7 @@ describe("centro de soporte por agencia", () => {
     expect(database).toContain("m.created_at>=s.created_at");
     expect(database).toContain("receipt.read_at IS NOT NULL OR receipt.dismissed_at IS NOT NULL");
     expect(app).toContain("notificationReceiptFromUrl");
-    expect(app).toContain("Date.parse(candidate.updatedAt)<=openedAt");
+    expect(app).toContain("deviceTimestamp(candidate.updatedAt)<=openedAt");
     expect(manifest).toContain('"src":"/loto-real-logo.svg"');
     expect(manifest).toContain('"sizes":"any"');
   });
@@ -273,7 +274,12 @@ describe("centro de soporte por agencia", () => {
     expect(program).toContain("options.SlidingExpiration = true");
     expect(program).toContain("IsPersistent=true");
     expect(program).toContain('PersistKeysToFileSystem(new DirectoryInfo(dataProtectionPath))');
+    expect(program).toContain('MapPost("/api/admin/session/restore"');
+    expect(program).toContain("CreatePersistentLoginToken(account.Id,ct)");
     expect(app).toContain('fetch("/api/admin/session", { cache: "no-store", credentials: "same-origin" })');
+    expect(app).toContain('persistentSessionStorageKey="oficina-virtual-device-session"');
+    expect(app).toContain('fetch("/api/admin/session/restore"');
+    expect(app).toContain("rememberPersistentSession(authenticated)");
     expect(app).not.toContain('includes("presence-touch-v2")');
     expect(database).toContain("N'joel.vizcaino'");
     expect(database).toContain("N'eddi.bono'");
@@ -463,19 +469,19 @@ describe("centro de soporte por agencia", () => {
     expect(program).toContain(
       'MapDelete("/api/agency-transitions/{id:guid}/stages/{stageId:guid}"',
     );
-    expect(program).toContain('version = "2026.09.11.321"');
-    expect(program).toContain('X-Application-Release"]="V321"');
+    expect(program).toContain('version = "2026.09.11.322"');
+    expect(program).toContain('X-Application-Release"]="V322"');
     expect(program).toContain("AddResponseCompression");
     expect(program).toContain('CacheControl = "public,max-age=31536000,immutable"');
     expect(program).toContain('form["locationCapturedAt"]');
     expect(database).toContain("accuracy_meters decimal(8,2)");
     expect(apiProject).toContain(
-      "<AssemblyName>RegistroAgencias.SqlServer.V321</AssemblyName>",
+      "<AssemblyName>RegistroAgencias.SqlServer.V322</AssemblyName>",
     );
     expect(webConfig).toContain(
-      'processPath=".\\RegistroAgencias.SqlServer.V321.exe"',
+      'processPath=".\\RegistroAgencias.SqlServer.V322.exe"',
     );
-    expect(releaseGuard).toContain('var release = "V321"');
+    expect(releaseGuard).toContain('var release = "V322"');
     expect(v228Styles).toContain("z-index: 4600 !important");
     expect(v228Styles).toContain("overflow-y: auto !important");
     expect(v228Styles).toContain(".notification-tables");
@@ -629,7 +635,7 @@ describe("centro de soporte por agencia", () => {
     expect(center).toContain("AGENCIA SELECCIONADA");
     expect(center).toContain("incident-report-view");
     expect(supportStyles).not.toContain(":not(.supervisor-assigned-cases)");
-    expect(app).toContain("Web V321");
+    expect(app).toContain("Web V322");
   });
 
   it("abre el tablero departamental del supervisor y protege tickets duplicados", () => {
@@ -738,6 +744,12 @@ describe("centro de soporte por agencia", () => {
   });
 
   it("documenta soluciones con varias evidencias y auditoría PDF", () => {
+    expect(program).toContain("Adjunta entre 1 y 8 fotografías de evidencia.");
+    expect(program).toContain('form["replacementSerial"]');
+    expect(program).toContain('form["removedSerial"]');
+    expect(center).toContain("scanTicketSerialEvidence");
+    expect(center).toContain("Foto del serial reemplazado");
+    expect(center).toContain("Foto del serial retirado");
     expect(program).toContain("form.Files.Count is < 1 or > 6");
     expect(program).toContain("ValidEvidenceImage");
     expect(database).toContain("finding_resolution_evidence");
@@ -818,8 +830,8 @@ describe("centro de soporte por agencia", () => {
     expect(professionalSidebarV254).toContain(".portal-main-column");
     expect(professionalSidebarV254).toContain("@media (max-width: 900px)");
     expect(professionalSidebarV254).toContain("transform: translateX(-105%)");
-    expect(applicationIndex).toContain('name="app-release" content="V321"');
-    expect(applicationIndex).toContain('/release-guard.js?v=V321');
+    expect(applicationIndex).toContain('name="app-release" content="V322"');
+    expect(applicationIndex).toContain('/release-guard.js?v=V322');
   });
 
   it("abre Avería en el menú operativo y adapta la cola con zoom y barra azul", () => {

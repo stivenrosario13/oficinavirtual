@@ -1,5 +1,6 @@
 export type PortalSession = {
   authenticated: boolean;
+  persistentSessionToken?: string | null;
   id: string;
   email: string;
   displayName: string;

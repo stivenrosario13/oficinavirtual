@@ -33,6 +33,7 @@ import SupportChat from "@/components/vite/SupportChat";
 import type { PortalSession } from "@/lib/session";
 import { sessionRoleLabel } from "@/lib/session";
 import type { OperationsTicket } from "@/lib/operations-center";
+import {deviceDate,deviceTimestamp} from "@/lib/display";
 
 const EquipmentTracking = lazy(()=>import("./components/vite/WorkshopBoard").then(module=>({default:module.EquipmentTracking})));
 const AdminPanel = lazy(() => import("@/components/vite/AdminPanel"));
@@ -344,6 +345,10 @@ const supportNavigationFromUrl=(href:string):SupportNavigationTarget|null=>{
 const notificationReceiptFromUrl=(href:string):PendingNotificationReceipt|null=>{const url=new URL(href,window.location.origin);const key=url.searchParams.get("notificationKey")||"";const at=url.searchParams.get("notificationAt")||"";return (key.startsWith("TICKET_EVENT:")||key.startsWith("CHAT_MESSAGE:"))&&Number.isFinite(Date.parse(at))?{key,at}:null;};
 const clearNotificationDeepLink=()=>{const url=new URL(window.location.href);["notification","ticketId","ticket","department","ticketType","ticketStatus","conversationId","notificationKey","notificationAt"].forEach(key=>url.searchParams.delete(key));window.history.replaceState(null,"",`${url.pathname}${url.search}${url.hash}`);};
 
+const persistentSessionStorageKey="oficina-virtual-device-session";
+const storedPersistentSession=()=>localStorage.getItem(persistentSessionStorageKey)||"";
+const rememberPersistentSession=(session:Partial<PortalSession>)=>{if(session.persistentSessionToken)localStorage.setItem(persistentSessionStorageKey,session.persistentSessionToken);};
+
 export default function App() {
   const [equipmentCode,setEquipmentCode]=useState(()=>new URLSearchParams(window.location.search).get("equipment"));
   const [pendingNotificationTarget,setPendingNotificationTarget]=useState<SupportNavigationTarget|null>(()=>supportNavigationFromUrl(window.location.href));
@@ -488,10 +493,18 @@ export default function App() {
     });
   };
   useEffect(() => {
-    fetch("/api/admin/session", { cache: "no-store", credentials: "same-origin" })
-      .then(async (response) => {
-        if (!response?.ok) return;
-        const restored = (await response.json()) as Partial<PortalSession>;
+    const restore=async()=>{
+      let response=await fetch("/api/admin/session", { cache: "no-store", credentials: "same-origin" });
+      let restored=response.ok?(await response.json()) as Partial<PortalSession>:{authenticated:false};
+      if(!restored.authenticated&&storedPersistentSession()){
+        response=await fetch("/api/admin/session/restore",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:storedPersistentSession()})});
+        restored=response.ok?(await response.json()) as Partial<PortalSession>:{authenticated:false};
+        if(!restored.authenticated)localStorage.removeItem(persistentSessionStorageKey);
+      }
+      return restored;
+    };
+    restore()
+      .then((restored) => {
         if (!restored.authenticated || !restored.permissions || !restored.role)
           return;
         const authenticated = restored as PortalSession;
@@ -503,8 +516,9 @@ export default function App() {
   }, []);
 
   const expireIfUnauthorized = useCallback((loadError: unknown) => {
-    if ((loadError as Error & { status?: number }).status === 401)
-      setSession(null);
+    if ((loadError as Error & { status?: number }).status !== 401)return;
+    if(storedPersistentSession()){window.location.reload();return;}
+    setSession(null);
   }, []);
 
   const loadGroups = useCallback(async (silent = false) => {
@@ -629,7 +643,7 @@ export default function App() {
             : Promise.resolve(null),
         ]);
         if (ticketResponse.status === 401 || chatResponse?.status === 401) {
-          setSession(null);
+          expireIfUnauthorized({status:401});
           return;
         }
         if (!ticketResponse.ok) return;
@@ -657,7 +671,7 @@ export default function App() {
         }));
         const items: NotificationItem[] = [...tickets, ...chats].sort(
           (a, b) =>
-            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+            deviceTimestamp(b.updatedAt) - deviceTimestamp(a.updatedAt),
         );
         const incoming = new Set(items.map(notificationIdentity));
         const visibleItems = items;
@@ -705,6 +719,7 @@ export default function App() {
   }, [
     canUseSupportChat,
     canViewTicketNotifications,
+    expireIfUnauthorized,
     sessionId,
     sessionMustChangePassword,
   ]);
@@ -762,7 +777,9 @@ export default function App() {
     void loadGroups();
   };
   const logout = async () => {
-    await fetch("/api/admin/logout", { method: "POST" }).catch(() => undefined);
+    const token=storedPersistentSession();
+    localStorage.removeItem(persistentSessionStorageKey);
+    await fetch("/api/admin/logout", { method: "POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token}) }).catch(() => undefined);
     setSession(null);
     setGroups([]);
     setAgencies([]);
@@ -797,8 +814,8 @@ export default function App() {
     }
   };
   const openNotificationDestination = (item: NotificationItem) => {
-    const openedAt=Date.parse(item.updatedAt);
-    const readThrough=ticketNotifications.filter(candidate=>!candidate.isRead&&Date.parse(candidate.updatedAt)<=openedAt);
+    const openedAt=deviceTimestamp(item.updatedAt);
+    const readThrough=ticketNotifications.filter(candidate=>!candidate.isRead&&deviceTimestamp(candidate.updatedAt)<=openedAt);
     if(readThrough.length){const keys=[...new Set(readThrough.map(notificationIdentity))];void api("/api/notifications/state",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({keys,action:"READ"})}).catch(expireIfUnauthorized);const readKeys=new Set(keys);setTicketNotifications(current=>current.map(candidate=>readKeys.has(notificationIdentity(candidate))?{...candidate,isRead:true}:candidate));setUnreadNotifications(current=>Math.max(0,current-readKeys.size));}
     setNotificationCenterOpen(false);
     setView("tickets");
@@ -844,9 +861,9 @@ export default function App() {
   };
   useEffect(()=>{
     if(!session||!pendingNotificationReceipt)return;
-    const cutoff=Date.parse(pendingNotificationReceipt.at);
+    const cutoff=deviceTimestamp(pendingNotificationReceipt.at);
     const keys=new Set<string>([pendingNotificationReceipt.key]);
-    ticketNotifications.forEach(item=>{if(!item.isRead&&Date.parse(item.updatedAt)<=cutoff)keys.add(notificationIdentity(item));});
+    ticketNotifications.forEach(item=>{if(!item.isRead&&deviceTimestamp(item.updatedAt)<=cutoff)keys.add(notificationIdentity(item));});
     setPendingNotificationReceipt(null);
     void api("/api/notifications/state",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({keys:[...keys],action:"READ"})}).then(()=>{setTicketNotifications(current=>current.map(item=>keys.has(notificationIdentity(item))?{...item,isRead:true}:item));setUnreadNotifications(current=>Math.max(0,current-keys.size));}).catch(expireIfUnauthorized);
   },[expireIfUnauthorized,pendingNotificationReceipt,session,ticketNotifications]);
@@ -948,7 +965,7 @@ export default function App() {
           )}
         </span>
         <span className="notification-row-actions">
-          <time>{new Date(item.updatedAt).toLocaleString("es-DO")}</time>
+          <time>{deviceDate(item.updatedAt).toLocaleString("es-DO")}</time>
           <span>
             {!item.isRead && <button type="button" onClick={(event) => { event.stopPropagation(); markNotificationsRead([item]); }}><CheckCheck /> Leído</button>}
             <button type="button" className="notification-dismiss" onClick={(event) => { event.stopPropagation(); dismissNotifications([item]); }}><Trash2 /> Descartar</button>
@@ -991,6 +1008,7 @@ export default function App() {
     return (
       <PortalLogin
         onSuccess={(authenticated) => {
+          rememberPersistentSession(authenticated);
           setSession(authenticated);
           setView(initialViewForSession(authenticated));
         }}
@@ -1191,7 +1209,7 @@ export default function App() {
             <TicketCenter
               key={`${view}:${supportNavigation?.requestKey ?? "normal"}:${supportEntryRequest}`}
               session={session}
-              onSessionExpired={() => setSession(null)}
+              onSessionExpired={() => expireIfUnauthorized({status:401})}
               navigationTarget={supportNavigation}
               supervisorInboxRequestKey={supervisorTicketInboxRequest}
               maintenanceEntry={view === "warehouse" ? "WAREHOUSE" : view === "workshop" ? "WORKSHOP" : null}
@@ -1202,7 +1220,7 @@ export default function App() {
             <OperationsCenter
               mode={view === "queue" ? "queue" : "audit"}
               teamScope={view==="queue"?technologyQueueTeam:null}
-              onSessionExpired={() => setSession(null)}
+              onSessionExpired={() => expireIfUnauthorized({status:401})}
               onOpenTicket={openTicketFromOperations}
             />
           </Suspense>
@@ -1336,7 +1354,7 @@ export default function App() {
                 <Suspense fallback={<Loading />}>
                   <TicketCenter
                     session={session}
-                    onSessionExpired={() => setSession(null)}
+                    onSessionExpired={() => expireIfUnauthorized({status:401})}
                     reportAgency={{ ...agency, grupo: group }}
                     onCloseReport={() => setReportAgencyOpen(false)}
                   />
@@ -1380,12 +1398,12 @@ export default function App() {
           <Suspense fallback={<Loading />}>
             <AdminPanel
               session={session}
-              onSessionExpired={() => setSession(null)}
+              onSessionExpired={() => expireIfUnauthorized({status:401})}
             />
           </Suspense>
         )}
         {equipmentCode&&<Suspense fallback={<p>Abriendo seguimiento…</p>}><EquipmentTracking initialCode={equipmentCode!} onClose={()=>{const url=new URL(window.location.href);url.searchParams.delete("equipment");window.history.replaceState(null,"",url);setEquipmentCode(null);}}/></Suspense>}
-        <footer>© 2026 Oficina Virtual · Control seguro y confidencial · Web V321</footer>
+        <footer>© 2026 Oficina Virtual · Control seguro y confidencial · Web V322</footer>
       </main>
       </div>
       {pushPromptOpen&&<div className="push-permission-backdrop"><section className="push-permission-card" role="dialog" aria-modal="true" aria-label="Activar notificaciones"><BellRing/><h2>Activa las notificaciones del teléfono</h2><p>Recibe avisos de tickets y asignaciones aunque no tengas la página abierta.</p><button type="button" onClick={()=>void subscribePhonePush().catch(error=>window.alert(error.message))}>Activar notificaciones</button><button type="button" className="secondary" onClick={()=>{setPushPromptOpen(false);localStorage.setItem('push-prompt-dismissed','1');}}>Ahora no</button></section></div>}
@@ -1552,7 +1570,7 @@ export default function App() {
         session.permissions.canUseSupportChat && (
           <SupportChat
             session={session}
-            onSessionExpired={() => setSession(null)}
+            onSessionExpired={() => expireIfUnauthorized({status:401})}
             openConversationId={
               supportNavigation?.kind === "CHAT"
                 ? supportNavigation.conversationId
@@ -1637,5 +1655,3 @@ function Empty({ text }: { text: string }) {
     </div>
   );
 }
-
-

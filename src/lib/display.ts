@@ -52,9 +52,23 @@ export function mapsUrl(lat: number, lng: number): string {
   return `https://www.google.com/maps?q=${lat},${lng}`;
 }
 
+export function deviceDate(value: string | number | Date | null | undefined): Date {
+  if(value instanceof Date)return value;
+  if(typeof value==="number")return new Date(value);
+  const text=String(value||"").trim();
+  if(!text)return new Date(Number.NaN);
+  const dateOnly=/^\d{4}-\d{2}-\d{2}$/.test(text);
+  const normalized=dateOnly?text+"T00:00:00":/[zZ]$|[+-]\d{2}:?\d{2}$/.test(text)?text:text.replace(" ","T")+"Z";
+  return new Date(normalized);
+}
+
+export function deviceTimestamp(value: string | number | Date | null | undefined): number {
+  return deviceDate(value).getTime();
+}
+
 export function fmtDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
-  const d = new Date(iso);
+  const d = deviceDate(iso);
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString("es-DO", {
     dateStyle: "short",

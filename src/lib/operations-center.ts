@@ -1,3 +1,5 @@
+import {deviceTimestamp} from "./display";
+
 export type OperationsTicketHistory = {
   id: string;
   action: string;
@@ -95,7 +97,7 @@ export function activeTicketsByDepartment(tickets: OperationsTicket[]) {
   tickets
     .filter((ticket) => activeTicketStatuses.has(ticket.status))
     .sort((left, right) => {
-      const byDate = Date.parse(left.createdAt) - Date.parse(right.createdAt);
+      const byDate = deviceTimestamp(left.createdAt) - deviceTimestamp(right.createdAt);
       return byDate || left.ticketNumber - right.ticketNumber;
     })
     .forEach((ticket) => {
@@ -111,7 +113,7 @@ export function sortTicketsByPriority(tickets: OperationsTicket[]) {
     const rightPriority = priorityOrder.indexOf(right.priority as (typeof priorityOrder)[number]);
     const priorityDifference = (leftPriority < 0 ? priorityOrder.length : leftPriority) -
       (rightPriority < 0 ? priorityOrder.length : rightPriority);
-    return priorityDifference || Date.parse(left.createdAt) - Date.parse(right.createdAt);
+    return priorityDifference || deviceTimestamp(left.createdAt) - deviceTimestamp(right.createdAt);
   });
 }
 
@@ -163,7 +165,7 @@ export function buildTicketAuditEvents(tickets: OperationsTicket[]): OperationsA
   });
   return events.sort(
     (left, right) =>
-      Date.parse(right.createdAt) - Date.parse(left.createdAt) ||
+      deviceTimestamp(right.createdAt) - deviceTimestamp(left.createdAt) ||
       right.ticketNumber - left.ticketNumber,
   );
 }
@@ -171,7 +173,7 @@ export function buildTicketAuditEvents(tickets: OperationsTicket[]): OperationsA
 export function averageClosedMinutes(tickets: OperationsTicket[]) {
   const durations = tickets
     .filter((ticket) => ["RESOLVED", "CLOSED"].includes(ticket.status))
-    .map((ticket) => Date.parse(ticket.updatedAt) - Date.parse(ticket.createdAt))
+    .map((ticket) => deviceTimestamp(ticket.updatedAt) - deviceTimestamp(ticket.createdAt))
     .filter((duration) => Number.isFinite(duration) && duration >= 0);
   if (!durations.length) return 0;
   return Math.round(durations.reduce((total, duration) => total + duration, 0) / durations.length / 60000);
