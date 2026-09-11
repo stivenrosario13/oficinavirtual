@@ -32,6 +32,7 @@ import {
   sortTicketsByPriority,
   technologyAreaLabels,
   turnCode,
+  ticketsInOperationalQueue,
   type OperationsAuditEvent,
   type OperationsTicket,
 } from "@/lib/operations-center";
@@ -192,6 +193,7 @@ export default function OperationsCenter({ mode, onSessionExpired, onOpenTicket,
       next.setHours(7, 30, 0, 0);
       if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 1);
       timer = window.setTimeout(() => {
+        setNow(Date.now());
         void load(true);
         scheduleDailyRefresh();
       }, Math.max(1000, next.getTime() - now.getTime()));
@@ -240,7 +242,8 @@ export default function OperationsCenter({ mode, onSessionExpired, onOpenTicket,
   }, [action, auditEvents, department, period, query]);
 
   const departmentQueues = useMemo(() => activeTicketsByDepartment(tickets), [tickets]);
-  const queues = useMemo(() => activeTicketsByTechnologyArea(tickets), [tickets]);
+  const queueTickets = useMemo(() => ticketsInOperationalQueue(tickets, new Date(now)), [now, tickets]);
+  const queues = useMemo(() => activeTicketsByTechnologyArea(queueTickets), [queueTickets]);
   const queueDepartments = ["CALL_CENTER", "TECHNICAL_FAILURE", "TECHNICIANS"].filter(
     (code) => department === "ALL" || department === code,
   );
@@ -250,14 +253,14 @@ export default function OperationsCenter({ mode, onSessionExpired, onOpenTicket,
   const averageMinutes = averageClosedMinutes(tickets);
   const auditedActive = Array.from(departmentQueues.values()).reduce((total, items) => total + items.length, 0);
   const areaMetrics = useMemo(() => ["CALL_CENTER", "TECHNICAL_FAILURE", "TECHNICIANS"].map((code) => {
-    const areaTickets = tickets.filter((ticket) => ticket.assignedDepartment === "TECHNOLOGY" && (ticket.assignedTeam || (ticket.assignedTechnicianName ? "TECHNICIANS" : "TECHNICAL_FAILURE")) === code);
+    const areaTickets = queueTickets.filter((ticket) => ticket.assignedDepartment === "TECHNOLOGY" && (ticket.assignedTeam || (ticket.assignedTechnicianName ? "TECHNICIANS" : "TECHNICAL_FAILURE")) === code);
     const pending = areaTickets.filter((ticket) => ticket.status === "OPEN" || ticket.status === "PENDING").length;
     const inProgress = areaTickets.filter((ticket) => ticket.status === "IN_PROGRESS").length;
     const completed = areaTickets.filter((ticket) => ticket.status === "RESOLVED" || ticket.status === "CLOSED").length;
     const total = pending + inProgress + completed;
     const percent = (value: number) => total ? Math.round(value * 100 / total) : 0;
     return { code, total, pending, inProgress, completed, pendingPercent: percent(pending), inProgressPercent: percent(inProgress), completedPercent: percent(completed) };
-  }), [tickets]);
+  }), [queueTickets]);
   const largestVisibleQueue = Math.max(0, ...queueDepartments.map((code) => (queues.get(code) || []).length));
   const automaticQueueZoom = viewportWidth < 520
     ? largestVisibleQueue > 15 ? 0.72 : largestVisibleQueue > 9 ? 0.84 : 1
@@ -391,7 +394,7 @@ export default function OperationsCenter({ mode, onSessionExpired, onOpenTicket,
               </section>;
             })}
           </div>
-          <footer className="queue-footer"><span><i /> EN VIVO</span><p>Call Center, Avería Técnica y Técnicos separados y ordenados por prioridad y fecha de creación.</p><time>{new Date(now).toLocaleString("es-DO", { dateStyle: "full", timeStyle: "medium" })}</time></footer>
+          <footer className="queue-footer"><span><i /> EN VIVO</span><p>Nuevo ciclo diario a las 07:30 · tickets del día separados por área y ordenados por prioridad.</p><time>{new Date(now).toLocaleString("es-DO", { dateStyle: "full", timeStyle: "medium" })}</time></footer>
           </div>
         </>
       )}

@@ -1,7 +1,8 @@
 {
-  "release": "V326",
+  "release": "V327",
   "builtAt": "2026-09-11",
   "changes": [
+    "daily-live-queue-cycle-0730-v327",
     "support-permissions-login-times-daily-queue-attribution-v326",
     "automatic-login-retry-for-monster-sql-wakeup-v325",
     "call-center-resolution-without-equipment-serial-v324",

@@ -77,6 +77,24 @@ export const technologyAreaPrefixes: Record<string, string> = {
 export const activeTicketStatuses = new Set(["OPEN", "IN_PROGRESS", "PENDING"]);
 export const priorityOrder = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
 
+/**
+ * Inicio del ciclo operativo de la cola en la zona horaria local del dispositivo.
+ * A las 07:30 comienza un día nuevo; antes de esa hora todavía se conserva el
+ * ciclo que comenzó a las 07:30 del día anterior. Los tickets históricos no se
+ * eliminan de la base de datos: únicamente dejan de mostrarse en la cola viva.
+ */
+export function operationalQueueStart(now = new Date()) {
+  const start = new Date(now);
+  start.setHours(7, 30, 0, 0);
+  if (start.getTime() > now.getTime()) start.setDate(start.getDate() - 1);
+  return start;
+}
+
+export function ticketsInOperationalQueue<T extends Pick<OperationsTicket, "createdAt">>(tickets: T[], now = new Date()) {
+  const cutoff = operationalQueueStart(now).getTime();
+  return tickets.filter((ticket) => deviceTimestamp(ticket.createdAt) >= cutoff);
+}
+
 export const turnCode = (ticket: Pick<OperationsTicket, "assignedDepartment" | "assignedTeam" | "ticketNumber">) =>
   `${technologyAreaPrefixes[ticket.assignedTeam || ""] || departmentPrefixes[ticket.assignedDepartment] || "TKT"}-${String(ticket.ticketNumber).padStart(4, "0")}`;
 

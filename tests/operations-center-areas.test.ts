@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   activeTicketsByTechnologyArea,
+  operationalQueueStart,
+  ticketsInOperationalQueue,
   turnCode,
   type OperationsTicket,
 } from "../src/lib/operations-center";
@@ -56,5 +58,17 @@ describe("cola tecnológica por áreas", () => {
     expect(turnCode(ticket("7", "CALL_CENTER", "MEDIUM", "2026-09-08T10:00:00Z"))).toBe("CC-0007");
     expect(turnCode(ticket("8", "TECHNICAL_FAILURE", "MEDIUM", "2026-09-08T10:00:00Z"))).toBe("AT-0008");
     expect(turnCode(ticket("9", "TECHNICIANS", "MEDIUM", "2026-09-08T10:00:00Z"))).toBe("TEC-0009");
+  });
+
+  it("reinicia la cola local a las 07:30 sin borrar el historial", () => {
+    const afterCutoff = new Date(2026, 8, 11, 8, 0, 0);
+    const beforeCutoff = new Date(2026, 8, 11, 7, 29, 0);
+    expect(operationalQueueStart(afterCutoff)).toEqual(new Date(2026, 8, 11, 7, 30, 0));
+    expect(operationalQueueStart(beforeCutoff)).toEqual(new Date(2026, 8, 10, 7, 30, 0));
+    const visible = ticketsInOperationalQueue([
+      ticket("10", "CALL_CENTER", "HIGH", "2026-09-11T14:00:00Z"),
+      ticket("11", "CALL_CENTER", "HIGH", "2026-09-10T14:00:00Z"),
+    ], afterCutoff);
+    expect(visible.map((item) => item.id)).toEqual(["10"]);
   });
 });
