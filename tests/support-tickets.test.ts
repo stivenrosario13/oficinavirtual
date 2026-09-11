@@ -469,19 +469,19 @@ describe("centro de soporte por agencia", () => {
     expect(program).toContain(
       'MapDelete("/api/agency-transitions/{id:guid}/stages/{stageId:guid}"',
     );
-    expect(program).toContain('version = "2026.09.11.323"');
-    expect(program).toContain('X-Application-Release"]="V323"');
+    expect(program).toContain('version = "2026.09.11.324"');
+    expect(program).toContain('X-Application-Release"]="V324"');
     expect(program).toContain("AddResponseCompression");
     expect(program).toContain('CacheControl = "public,max-age=31536000,immutable"');
     expect(program).toContain('form["locationCapturedAt"]');
     expect(database).toContain("accuracy_meters decimal(8,2)");
     expect(apiProject).toContain(
-      "<AssemblyName>RegistroAgencias.SqlServer.V323</AssemblyName>",
+      "<AssemblyName>RegistroAgencias.SqlServer.V324</AssemblyName>",
     );
     expect(webConfig).toContain(
-      'processPath=".\\RegistroAgencias.SqlServer.V323.exe"',
+      'processPath=".\\RegistroAgencias.SqlServer.V324.exe"',
     );
-    expect(releaseGuard).toContain('var release = "V323"');
+    expect(releaseGuard).toContain('var release = "V324"');
     expect(v228Styles).toContain("z-index: 4600 !important");
     expect(v228Styles).toContain("overflow-y: auto !important");
     expect(v228Styles).toContain(".notification-tables");
@@ -635,7 +635,7 @@ describe("centro de soporte por agencia", () => {
     expect(center).toContain("AGENCIA SELECCIONADA");
     expect(center).toContain("incident-report-view");
     expect(supportStyles).not.toContain(":not(.supervisor-assigned-cases)");
-    expect(app).toContain("Web V323");
+    expect(app).toContain("Web V324");
   });
 
   it("abre el tablero departamental del supervisor y protege tickets duplicados", () => {
@@ -770,6 +770,17 @@ describe("centro de soporte por agencia", () => {
     expect(center).not.toContain('setSupportStage("tickets");setTicketWorkspaceView("active");setTeamViewChosen(true);}}><span className="support-section-icon"><LifeBuoy/></span><span className="support-section-copy"><em>RECEPCIÓN Y CIERRE');
   });
 
+  it("oculta la captura de serial solamente para el equipo de Call Center", () => {
+    expect(center).toContain('["RESOLVED","CLOSED"].includes(edit.status)&&session.supportTeam!=="CALL_CENTER"&&<div className="ticket-serial-capture-grid">');
+    expect(center).toContain("Foto del serial reemplazado");
+    expect(center).toContain("Foto del serial retirado");
+  });
+
+  it("no muestra asignar o cambiar responsable en las tarjetas de Call Center", () => {
+    expect(center).toContain('!isCallCenter && canAdministerTicket(ticket) && <button type="button"');
+    expect(center).toContain('<Share2 /> Compartir y escalar');
+  });
+
   it("incluye una migración SQL Server idempotente", () => {
     expect(migration).toContain(
       "IF OBJECT_ID(N'dbo.support_tickets', N'U') IS NULL",
@@ -837,8 +848,8 @@ describe("centro de soporte por agencia", () => {
     expect(professionalSidebarV254).toContain(".portal-main-column");
     expect(professionalSidebarV254).toContain("@media (max-width: 900px)");
     expect(professionalSidebarV254).toContain("transform: translateX(-105%)");
-    expect(applicationIndex).toContain('name="app-release" content="V323"');
-    expect(applicationIndex).toContain('/release-guard.js?v=V323');
+    expect(applicationIndex).toContain('name="app-release" content="V324"');
+    expect(applicationIndex).toContain('/release-guard.js?v=V324');
   });
 
   it("abre Avería en el menú operativo y adapta la cola con zoom y barra azul", () => {

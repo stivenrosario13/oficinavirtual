@@ -1,7 +1,8 @@
 {
-  "release": "V323",
+  "release": "V324",
   "builtAt": "2026-09-11",
   "changes": [
+    "call-center-resolution-without-equipment-serial-v324",
     "call-center-card-navigation-franklin-agency-access-photo-token-recovery-sonadora-locations-v323",
     "persistent-device-session-local-times-eight-evidence-serial-scan-v322",
     "device-local-chat-time-and-role-safe-mobile-chat-push-v321",
