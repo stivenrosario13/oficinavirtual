@@ -617,17 +617,24 @@ sealed partial class Database
         Exception? last = null;
         foreach (var candidate in connections)
         {
-            var connection = new SqlConnection(candidate.Value);
-            try { await connection.OpenAsync(ct); return connection; }
-            catch (Exception error) when (!ct.IsCancellationRequested)
+            for(var attempt=0;attempt<3;attempt++)
             {
-                last = error;
-                Console.Error.WriteLine($"SQL Server {candidate.Mode}: {error.Message}");
-                await connection.DisposeAsync();
+                var connection = new SqlConnection(candidate.Value);
+                try { await connection.OpenAsync(ct); return connection; }
+                catch (Exception error) when (!ct.IsCancellationRequested)
+                {
+                    last = error;
+                    Console.Error.WriteLine($"SQL Server {candidate.Mode} (intento {attempt+1}/3): {error.Message}");
+                    await connection.DisposeAsync();
+                    if(!IsTransientConnectionFailure(error)||attempt==2)break;
+                    await Task.Delay(300*(attempt+1),ct);
+                }
             }
         }
         throw last ?? new InvalidOperationException("MSSQL_CONFIG:No existe una conexión de SQL Server utilizable.");
     }
+
+    static bool IsTransientConnectionFailure(Exception error)=>error is TimeoutException||error is SqlException sql&&sql.Number is -2 or 0 or 40 or 53 or 64 or 233 or 258 or 10053 or 10054 or 10060 or 11001 or 1205 or 40197 or 40501 or 40613 or 49918 or 49919 or 49920;
 
     static async Task EnsureSupportChatSchema(SqlConnection connection, CancellationToken ct)
     {

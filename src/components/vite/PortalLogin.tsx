@@ -12,11 +12,26 @@ export default function PortalLogin({ onSuccess }: { onSuccess: (session: Portal
   async function submit(event: React.FormEvent) {
     event.preventDefault(); setLoading(true); setError("");
     try {
-      const response = await fetch("/api/admin/login", {
+      const requestOptions: RequestInit = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
-      });
+      };
+      let response: Response | undefined;
+      let networkError: unknown;
+      const transientStatuses = new Set([500, 502, 503, 504]);
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        try {
+          response = await fetch("/api/admin/login", requestOptions);
+          networkError = undefined;
+          if (!transientStatuses.has(response.status) || attempt === 3) break;
+        } catch (error) {
+          networkError = error;
+          if (attempt === 3) throw error;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 450 * (attempt + 1)));
+      }
+      if (!response) throw networkError instanceof Error ? networkError : new Error("El servidor no respondió. Intenta nuevamente.");
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "No reconocemos ese usuario o contraseña.");
       onSuccess(body as PortalSession);

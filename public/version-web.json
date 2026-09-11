@@ -1,7 +1,8 @@
 {
-  "release": "V324",
+  "release": "V325",
   "builtAt": "2026-09-11",
   "changes": [
+    "automatic-login-retry-for-monster-sql-wakeup-v325",
     "call-center-resolution-without-equipment-serial-v324",
     "call-center-card-navigation-franklin-agency-access-photo-token-recovery-sonadora-locations-v323",
     "persistent-device-session-local-times-eight-evidence-serial-scan-v322",
