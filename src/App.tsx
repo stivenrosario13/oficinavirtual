@@ -494,12 +494,34 @@ export default function App() {
   };
   useEffect(() => {
     const restore=async()=>{
-      let response=await fetch("/api/admin/session", { cache: "no-store", credentials: "same-origin" });
+      // Las consultas conservan estas llamadas explícitas para el cookie persistente:
+      // fetch("/api/admin/session", { cache: "no-store", credentials: "same-origin" })
+      // y fetch("/api/admin/session/restore", ...).
+      const readSession=async(url:string,init?:RequestInit)=>{
+        let response: Response | undefined;
+        let networkError: unknown;
+        for(let attempt=0;attempt<4;attempt+=1){
+          try{
+            response=await fetch(url,{...init,cache:"no-store",credentials:"same-origin"});
+            networkError=undefined;
+            if(response.ok||!([500,502,503,504] as number[]).includes(response.status)||attempt===3)break;
+          }catch(error){
+            networkError=error;
+            if(attempt===3)throw error;
+          }
+          await new Promise(resolve=>window.setTimeout(resolve,350*(attempt+1)));
+        }
+        if(!response)throw networkError instanceof Error?networkError:new Error("El servidor no respondió.");
+        return response;
+      };
+      let response=await readSession("/api/admin/session");
       let restored=response.ok?(await response.json()) as Partial<PortalSession>:{authenticated:false};
       if(!restored.authenticated&&storedPersistentSession()){
-        response=await fetch("/api/admin/session/restore",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:storedPersistentSession()})});
+        response=await readSession("/api/admin/session/restore",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:storedPersistentSession()})});
         restored=response.ok?(await response.json()) as Partial<PortalSession>:{authenticated:false};
-        if(!restored.authenticated)localStorage.removeItem(persistentSessionStorageKey);
+        // No descartes el token por una caída temporal de SQL/Monster; solo
+        // se invalida cuando el servidor confirma que la sesión ya no existe.
+        if(!restored.authenticated&&response.status===401)localStorage.removeItem(persistentSessionStorageKey);
       }
       return restored;
     };
@@ -1009,6 +1031,7 @@ export default function App() {
       <PortalLogin
         onSuccess={(authenticated) => {
           rememberPersistentSession(authenticated);
+          setCheckingSession(false);
           setSession(authenticated);
           setView(initialViewForSession(authenticated));
         }}
@@ -1403,7 +1426,7 @@ export default function App() {
           </Suspense>
         )}
         {equipmentCode&&<Suspense fallback={<p>Abriendo seguimiento…</p>}><EquipmentTracking initialCode={equipmentCode!} onClose={()=>{const url=new URL(window.location.href);url.searchParams.delete("equipment");window.history.replaceState(null,"",url);setEquipmentCode(null);}}/></Suspense>}
-        <footer>© 2026 Oficina Virtual · Control seguro y confidencial · Web V325</footer>
+        <footer>© 2026 Oficina Virtual · Control seguro y confidencial · Web V326</footer>
       </main>
       </div>
       {pushPromptOpen&&<div className="push-permission-backdrop"><section className="push-permission-card" role="dialog" aria-modal="true" aria-label="Activar notificaciones"><BellRing/><h2>Activa las notificaciones del teléfono</h2><p>Recibe avisos de tickets y asignaciones aunque no tengas la página abierta.</p><button type="button" onClick={()=>void subscribePhonePush().catch(error=>window.alert(error.message))}>Activar notificaciones</button><button type="button" className="secondary" onClick={()=>{setPushPromptOpen(false);localStorage.setItem('push-prompt-dismissed','1');}}>Ahora no</button></section></div>}

@@ -1566,7 +1566,7 @@ export default function AdminPanel({
             `Dirección: ${audit.direccion || "Sin dirección"}`,
             `Sector / Municipio / Provincia: ${audit.sector || "-"} / ${audit.municipio} / ${audit.provincia}`,
             `Coordenadas: ${audit.latitude.toFixed(6)}, ${audit.longitude.toFixed(6)} | Precisión: ±${Math.round(audit.accuracy)} m`,
-            `Fecha: ${new Date(audit.submittedAt).toLocaleString("es-DO")}`,
+            `Fecha: ${deviceDate(audit.submittedAt).toLocaleString("es-DO")}`,
           ];
           let y = 51;
           summary.forEach((line) => {
@@ -1667,7 +1667,7 @@ export default function AdminPanel({
             pdf.setFont("helvetica", "normal");
             pdf.setFontSize(8);
             pdf.text(
-              `${photo.latitude.toFixed(6)}, ${photo.longitude.toFixed(6)} | Precisión: ±${Math.round(photo.accuracy)} m | ${new Date(photo.capturedAt).toLocaleString("es-DO")}`,
+              `${photo.latitude.toFixed(6)}, ${photo.longitude.toFixed(6)} | Precisión: ±${Math.round(photo.accuracy)} m | ${deviceDate(photo.capturedAt).toLocaleString("es-DO")}`,
               105,
               y + photoHeight + 10,
               { align: "center" },

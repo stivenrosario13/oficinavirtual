@@ -1,6 +1,7 @@
 import {ArrowDownLeft,ArrowRight,ArrowUpRight,Boxes,ClipboardList,FileText,FolderOpen,History,Monitor,PackageCheck,RefreshCw,Send,UsersRound,Warehouse,Wrench,AlertCircle} from "lucide-react";
 import type {MaintenanceDocumentMovement} from "./maintenanceDocumentPdf";
 import {departmentLabels,formatDocumentTime} from "./maintenanceDocumentPdf";
+import {deviceTimestamp} from "@/lib/display";
 type Area="WAREHOUSE"|"WORKSHOP";
 type View="dashboard"|"inventory"|"history"|"procurement";
 type Panel="requests"|"requirements"|"templates"|"files";
@@ -10,12 +11,12 @@ export default function MaintenanceOverview({area,movements,loading,error,onRefr
  const workshopAllowed=(m:MaintenanceDocumentMovement)=>m.department==="TECHNOLOGY"||(m.department==="GENERAL_SERVICES"&&/INVERSOR|INVERTER/i.test(m.equipmentType));
  const rows=movements.filter(m=>(m.operationalArea===area||(!warehouse&&m.movementType==="TRANSFER_TO_WORKSHOP"))&&(warehouse||workshopAllowed(m))&&(!departmentScope?.length||departmentScope.includes(m.department)));
  const latest=new Map<string,MaintenanceDocumentMovement>();
- for(const item of [...rows].sort((a,b)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime())){const key=item.serialNumber?.trim().toUpperCase();if(key&&!latest.has(key))latest.set(key,item);}
+ for(const item of [...rows].sort((a,b)=>deviceTimestamp(b.createdAt)-deviceTimestamp(a.createdAt))){const key=item.serialNumber?.trim().toUpperCase();if(key&&!latest.has(key))latest.set(key,item);}
  const active=latest.size;
  const pending=warehouse?pendingOrders:[...latest.values()].filter(m=>m.movementType==="TRANSFER_TO_WORKSHOP").length;
   const departments=(warehouse?["TECHNOLOGY","GENERAL_SERVICES"]:["TECHNOLOGY","GENERAL_SERVICES"]).filter(code=>!departmentScope?.length||departmentScope.includes(code));
  const descriptions:Record<string,string>={TECHNOLOGY:"Equipos tecnológicos y periféricos",GENERAL_SERVICES:warehouse?"Herramientas, mobiliario y mantenimiento":"Exclusivo para inversores",HUMAN_RESOURCES:"Recursos y equipos del personal"};
- const recent=[...rows].sort((a,b)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime()).slice(0,5);
+ const recent=[...rows].sort((a,b)=>deviceTimestamp(b.createdAt)-deviceTimestamp(a.createdAt)).slice(0,5);
  const metrics=[{label:warehouse?"Activos identificados":"Equipos identificados",value:active,detail:"Seriales únicos registrados",icon:Boxes},{label:warehouse?"Órdenes abiertas":"Por intervenir",value:pending,detail:warehouse?"Pendientes de recepción":"Enviados desde Almacén",icon:ClipboardList},{label:warehouse?"Salidas registradas":"Intervenciones",value:rows.filter(m=>warehouse?["EXIT","NEW_DELIVERY","TRANSFER_TO_WORKSHOP"].includes(m.movementType):["REPAIR","REPLACEMENT","COMPONENT_REPLACEMENT"].includes(m.movementType)).length,detail:warehouse?"Entregas y transferencias":"Reparaciones y reemplazos",icon:warehouse?ArrowUpRight:Wrench},{label:"Formularios",value:rows.length,detail:"Historial con PDF y QR",icon:FileText}];
  return <section className={"ops-overview "+(warehouse?"warehouse":"workshop")} aria-label={warehouse?"Resumen de Almacén":"Resumen de Taller"}>
   <header className="ops-heading"><div><span className="ops-eyebrow">OFICINA VIRTUAL / OPERACIONES</span><h1>{warehouse?"Almacén central":"Taller técnico"}<span>{warehouse?<Warehouse/>:<Wrench/>}</span></h1><p>{warehouse?"Cada equipo, cada entrega. Todo bajo control.":"De la recepción a la reparación, en un solo lugar."}</p></div><button className="ops-secondary" disabled={loading} onClick={onRefresh}><RefreshCw className={loading?"spin":""}/>{loading?"Actualizando…":"Actualizar"}</button></header>

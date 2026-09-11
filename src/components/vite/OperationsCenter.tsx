@@ -181,6 +181,27 @@ export default function OperationsCenter({ mode, onSessionExpired, onOpenTicket,
     return () => window.removeEventListener("support-live-refresh", refresh);
   }, [load]);
 
+  // La cola se sincroniza también en el corte operativo diario de las 07:30
+  // del dispositivo. El temporizador se vuelve a programar cada 24 horas,
+  // incluso si la pestaña permaneció abierta toda la noche.
+  useEffect(() => {
+    let timer: number | null = null;
+    const scheduleDailyRefresh = () => {
+      const now = new Date();
+      const next = new Date(now);
+      next.setHours(7, 30, 0, 0);
+      if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 1);
+      timer = window.setTimeout(() => {
+        void load(true);
+        scheduleDailyRefresh();
+      }, Math.max(1000, next.getTime() - now.getTime()));
+    };
+    scheduleDailyRefresh();
+    return () => {
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [load]);
+
   useEffect(() => {
     const clock = window.setInterval(() => setNow(Date.now()), 30000);
     const onFullscreen = () => setIsFullscreen(Boolean(document.fullscreenElement));
@@ -210,7 +231,7 @@ export default function OperationsCenter({ mode, onSessionExpired, onOpenTicket,
     return auditEvents.filter((event) => {
       if (department !== "ALL" && event.department !== department) return false;
       if (action !== "ALL" && event.action !== action) return false;
-      if (cutoff && Date.parse(event.createdAt) < cutoff) return false;
+      if (cutoff && deviceTimestamp(event.createdAt) < cutoff) return false;
       if (!normalizedQuery) return true;
       return `${event.ticketNumber} ${event.subject} ${event.agency} ${event.group} ${event.actorName} ${event.comment || ""}`
         .toLocaleLowerCase("es")

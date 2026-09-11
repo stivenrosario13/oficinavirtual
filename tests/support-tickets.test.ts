@@ -473,19 +473,19 @@ describe("centro de soporte por agencia", () => {
     expect(program).toContain(
       'MapDelete("/api/agency-transitions/{id:guid}/stages/{stageId:guid}"',
     );
-    expect(program).toContain('version = "2026.09.11.325"');
-    expect(program).toContain('X-Application-Release"]="V325"');
+    expect(program).toContain('version = "2026.09.11.326"');
+    expect(program).toContain('X-Application-Release"]="V326"');
     expect(program).toContain("AddResponseCompression");
     expect(program).toContain('CacheControl = "public,max-age=31536000,immutable"');
     expect(program).toContain('form["locationCapturedAt"]');
     expect(database).toContain("accuracy_meters decimal(8,2)");
     expect(apiProject).toContain(
-      "<AssemblyName>RegistroAgencias.SqlServer.V325</AssemblyName>",
+      "<AssemblyName>RegistroAgencias.SqlServer.V326</AssemblyName>",
     );
     expect(webConfig).toContain(
-      'processPath=".\\RegistroAgencias.SqlServer.V325.exe"',
+      'processPath=".\\RegistroAgencias.SqlServer.V326.exe"',
     );
-    expect(releaseGuard).toContain('var release = "V325"');
+    expect(releaseGuard).toContain('var release = "V326"');
     expect(v228Styles).toContain("z-index: 4600 !important");
     expect(v228Styles).toContain("overflow-y: auto !important");
     expect(v228Styles).toContain(".notification-tables");
@@ -639,7 +639,7 @@ describe("centro de soporte por agencia", () => {
     expect(center).toContain("AGENCIA SELECCIONADA");
     expect(center).toContain("incident-report-view");
     expect(supportStyles).not.toContain(":not(.supervisor-assigned-cases)");
-    expect(app).toContain("Web V325");
+    expect(app).toContain("Web V326");
   });
 
   it("abre el tablero departamental del supervisor y protege tickets duplicados", () => {
@@ -859,8 +859,8 @@ describe("centro de soporte por agencia", () => {
     expect(professionalSidebarV254).toContain(".portal-main-column");
     expect(professionalSidebarV254).toContain("@media (max-width: 900px)");
     expect(professionalSidebarV254).toContain("transform: translateX(-105%)");
-    expect(applicationIndex).toContain('name="app-release" content="V325"');
-    expect(applicationIndex).toContain('/release-guard.js?v=V325');
+    expect(applicationIndex).toContain('name="app-release" content="V326"');
+    expect(applicationIndex).toContain('/release-guard.js?v=V326');
   });
 
   it("abre Avería en el menú operativo y adapta la cola con zoom y barra azul", () => {

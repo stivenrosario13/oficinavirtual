@@ -1791,7 +1791,9 @@ sealed partial class Database
                    t.created_at,t.updated_at,t.closed_at,t.is_automatic,ISNULL(t.ticket_type,'SUPPORT'),t.assigned_technician_id,u.display_name,
                    COALESCE(p.direccion,a.directory_direccion),COALESCE(p.sector,a.directory_sector),
                    COALESCE(p.municipio,a.directory_municipio),COALESCE(p.provincia,a.directory_provincia),
-                   COALESCE(p.latitude,a.expected_latitude),COALESCE(p.longitude,a.expected_longitude),t.assigned_team,
+                   COALESCE(p.latitude,a.expected_latitude),COALESCE(p.longitude,a.expected_longitude),
+                   CASE WHEN t.assigned_department='TECHNOLOGY' AND COALESCE(ru.support_team,u.support_team) IN('CALL_CENTER','TECHNICAL_FAILURE','TECHNICIANS')
+                        THEN COALESCE(ru.support_team,u.support_team) ELSE t.assigned_team END,
                    COALESCE(t.resolved_by_name,ru.display_name,CASE WHEN t.status IN('RESOLVED','CLOSED') THEN u.display_name END)
             FROM @visible v
             INNER JOIN dbo.support_tickets t ON t.id=v.id
