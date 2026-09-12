@@ -473,19 +473,19 @@ describe("centro de soporte por agencia", () => {
     expect(program).toContain(
       'MapDelete("/api/agency-transitions/{id:guid}/stages/{stageId:guid}"',
     );
-    expect(program).toContain('version = "2026.09.11.328"');
-    expect(program).toContain('X-Application-Release"]="V328"');
+    expect(program).toContain('version = "2026.09.11.329"');
+    expect(program).toContain('X-Application-Release"]="V329"');
     expect(program).toContain("AddResponseCompression");
     expect(program).toContain('CacheControl = "public,max-age=31536000,immutable"');
     expect(program).toContain('form["locationCapturedAt"]');
     expect(database).toContain("accuracy_meters decimal(8,2)");
     expect(apiProject).toContain(
-      "<AssemblyName>RegistroAgencias.SqlServer.V328</AssemblyName>",
+      "<AssemblyName>RegistroAgencias.SqlServer.V329</AssemblyName>",
     );
     expect(webConfig).toContain(
-      'processPath=".\\RegistroAgencias.SqlServer.V328.exe"',
+      'processPath=".\\RegistroAgencias.SqlServer.V329.exe"',
     );
-    expect(releaseGuard).toContain('var release = "V328"');
+    expect(releaseGuard).toContain('var release = "V329"');
     expect(v228Styles).toContain("z-index: 4600 !important");
     expect(v228Styles).toContain("overflow-y: auto !important");
     expect(v228Styles).toContain(".notification-tables");
@@ -613,6 +613,11 @@ describe("centro de soporte por agencia", () => {
     expect(app).toContain("openNotificationDestination");
     expect(center).toContain("navigationTarget?.requestKey");
     expect(adminPanel).toContain("setUserManagerOpen(false)");
+    expect(adminPanel).toContain("creatingUserRef");
+    expect(adminPanel).toContain("deletingUserRef");
+    expect(program).toContain("AdminUserConflictException");
+    expect(database).toContain("WITH (UPDLOCK,HOLDLOCK)");
+    expect(database).toContain("must_change_password=1");
   });
 
   it("muestra avisos emergentes y separa tickets y chat con limpieza", () => {
@@ -639,7 +644,7 @@ describe("centro de soporte por agencia", () => {
     expect(center).toContain("AGENCIA SELECCIONADA");
     expect(center).toContain("incident-report-view");
     expect(supportStyles).not.toContain(":not(.supervisor-assigned-cases)");
-    expect(app).toContain("Web V328");
+    expect(app).toContain("Web V329");
   });
 
   it("abre el tablero departamental del supervisor y protege tickets duplicados", () => {
@@ -862,8 +867,8 @@ describe("centro de soporte por agencia", () => {
     expect(professionalSidebarV254).toContain(".portal-main-column");
     expect(professionalSidebarV254).toContain("@media (max-width: 900px)");
     expect(professionalSidebarV254).toContain("transform: translateX(-105%)");
-    expect(applicationIndex).toContain('name="app-release" content="V328"');
-    expect(applicationIndex).toContain('/release-guard.js?v=V328');
+    expect(applicationIndex).toContain('name="app-release" content="V329"');
+    expect(applicationIndex).toContain('/release-guard.js?v=V329');
   });
 
   it("abre Avería en el menú operativo y adapta la cola con zoom y barra azul", () => {

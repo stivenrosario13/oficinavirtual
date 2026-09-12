@@ -842,19 +842,34 @@ sealed partial class Database
     public async Task<AdminUserRow> CreateAdminUser(AdminUserCreate body, CancellationToken ct)
     {
         var id = Guid.NewGuid(); var salt = RandomNumberGenerator.GetBytes(16); var hash = PasswordHash(body.Password!, salt, 210000);
+        var email = body.Email!.Trim().ToLowerInvariant();
         await using var connection = await Open(ct);
         await EnsureUserPermissionSchema(connection,ct);
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         try
         {
+            Guid? existingId = null;
+            bool existingActive = false;
+            await using (var existing = new SqlCommand("SELECT TOP(1) id,is_active FROM dbo.admin_users WITH (UPDLOCK,HOLDLOCK) WHERE email=@email;", connection, transaction))
+            {
+                existing.Parameters.AddWithValue("@email", email);
+                await using var reader = await existing.ExecuteReaderAsync(ct);
+                if (await reader.ReadAsync(ct)) { existingId = Guid.Parse(reader.GetString(0)); existingActive = reader.GetBoolean(1); }
+            }
+            if (existingId is Guid activeId && existingActive)
+                throw new AdminUserConflictException(activeId);
+            id = existingId ?? id;
             const string sql = """
-                INSERT INTO dbo.admin_users
-                  (id,email,display_name,role,password_salt,password_hash,password_iterations,is_active,region,contact,must_change_password,permissions_json,support_team)
-                VALUES(@id,@email,@name,@role,@salt,@hash,210000,1,@region,@contact,1,@permissions,@supportTeam);
+                IF EXISTS(SELECT 1 FROM dbo.admin_users WHERE id=@id)
+                    UPDATE dbo.admin_users SET email=@email,display_name=@name,role=@role,password_salt=@salt,password_hash=@hash,password_iterations=210000,is_active=1,region=@region,contact=@contact,must_change_password=1,permissions_json=@permissions,support_team=@supportTeam,updated_at=SYSUTCDATETIME() WHERE id=@id;
+                ELSE
+                    INSERT INTO dbo.admin_users
+                      (id,email,display_name,role,password_salt,password_hash,password_iterations,is_active,region,contact,must_change_password,permissions_json,support_team)
+                    VALUES(@id,@email,@name,@role,@salt,@hash,210000,1,@region,@contact,1,@permissions,@supportTeam);
                 """;
             await using (var command = new SqlCommand(sql, connection, transaction))
             {
-                command.Parameters.AddWithValue("@id", id.ToString()); command.Parameters.AddWithValue("@email", body.Email!.Trim().ToLowerInvariant());
+                command.Parameters.AddWithValue("@id", id.ToString()); command.Parameters.AddWithValue("@email", email);
                 command.Parameters.AddWithValue("@name", body.DisplayName!.Trim()); command.Parameters.AddWithValue("@role", body.Role);
                 command.Parameters.AddWithValue("@salt", salt); command.Parameters.AddWithValue("@hash", hash);
                 command.Parameters.AddWithValue("@region", Db(string.IsNullOrWhiteSpace(body.Region) ? null : body.Region.Trim()));

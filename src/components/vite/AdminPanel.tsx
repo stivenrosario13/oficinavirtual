@@ -500,7 +500,9 @@ export default function AdminPanel({
   const [userManagerOpen, setUserManagerOpen] = useState(false);
   const [newUserOpen, setNewUserOpen] = useState(false);
   const [creatingUser, setCreatingUser] = useState(false);
+  const creatingUserRef = useRef(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const deletingUserRef = useRef<string | null>(null);
   const [exportingUsers, setExportingUsers] = useState(false);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [userQuery, setUserQuery] = useState("");
@@ -813,7 +815,8 @@ export default function AdminPanel({
   };
   const createUser = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (creatingUser) return;
+    if (creatingUserRef.current) return;
+    creatingUserRef.current = true;
     setCreatingUser(true);
     setError("");
     try {
@@ -828,6 +831,7 @@ export default function AdminPanel({
       setUsers((current) => [...current, body]);
     } catch (createError) {
       setError((createError as Error).message);
+      creatingUserRef.current = false;
       setCreatingUser(false);
       return;
     }
@@ -846,6 +850,7 @@ export default function AdminPanel({
     setNewUserDepartment("GENERAL_SERVICES");
     setNewUserOpen(false);
     setUserManagerOpen(false);
+    creatingUserRef.current = false;
     setCreatingUser(false);
     setNotice("Usuario creado correctamente.");
   };
@@ -872,8 +877,9 @@ export default function AdminPanel({
     setUserManagerOpen(false);
   };
   const deleteUser = async (user: AdminUser) => {
-    if (user.id === session.id || deletingUserId) return;
+    if (user.id === session.id || deletingUserRef.current) return;
     if (!window.confirm(`¿Eliminar el acceso de ${user.displayName}? La cuenta quedará desactivada y no podrá iniciar sesión. El historial de tickets se conservará.`)) return;
+    deletingUserRef.current = user.id;
     setDeletingUserId(user.id);
     setError("");
     try {
@@ -887,6 +893,7 @@ export default function AdminPanel({
     } catch (deleteError) {
       setError((deleteError as Error).message);
     } finally {
+      deletingUserRef.current = null;
       setDeletingUserId(null);
     }
   };

@@ -1,7 +1,8 @@
 {
-  "release": "V328",
+  "release": "V329",
   "builtAt": "2026-09-11",
   "changes": [
+    "admin-user-reactivation-and-submit-guards-v329",
     "login-database-retry-and-cookie-fallback-v328",
     "daily-live-queue-cycle-0730-v327",
     "support-permissions-login-times-daily-queue-attribution-v326",
