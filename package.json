@@ -11,6 +11,7 @@
     "publish:monster": "powershell -ExecutionPolicy Bypass -File scripts/publish-monster.ps1",
     "package:v330:hot-swap": "powershell -ExecutionPolicy Bypass -File scripts/package-v330-warehouse-hot-swap.ps1",
     "package:v330:ftp-safe": "powershell -ExecutionPolicy Bypass -File scripts/package-v330-monster-ftp-safe.ps1",
+    "package:v330:direct-upload": "powershell -ExecutionPolicy Bypass -File scripts/package-v330-monster-direct-upload.ps1",
     "preview": "vite preview",
     "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc -b --pretty false",
