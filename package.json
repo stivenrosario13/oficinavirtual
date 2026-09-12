@@ -9,6 +9,7 @@
     "dev:api": "dotnet run --project api/RegistroAgencias.Api.csproj --urls http://127.0.0.1:8080",
     "build": "tsc -b && vite build",
     "publish:monster": "powershell -ExecutionPolicy Bypass -File scripts/publish-monster.ps1",
+    "package:v330:hot-swap": "powershell -ExecutionPolicy Bypass -File scripts/package-v330-warehouse-hot-swap.ps1",
     "preview": "vite preview",
     "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc -b --pretty false",

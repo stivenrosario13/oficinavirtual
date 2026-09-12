@@ -842,6 +842,9 @@ export default function TicketCenter({
   const sessionRoutingTeam:TechnologyTeam|"ALL"=session.supportTeam==="CALL_CENTER"||session.supportTeam==="TECHNICAL_FAILURE"||session.supportTeam==="TECHNICIANS"?session.supportTeam:"ALL";
   const isTechnologyAreaSupport=session.role==="Technology"&&(session.supportTeam==="CALL_CENTER"||session.supportTeam==="TECHNICAL_FAILURE");
   const showFullSupportHome=!isTechnologyAreaSupport||session.supportTeam==="TECHNICAL_FAILURE";
+  // Call Center crea y es responsable de sus propios tickets; no necesita una
+  // bandeja de pendientes sin responsable en su menú.
+  const showUnassignedQueueCard=session.supportTeam!=="CALL_CENTER";
   const lockedTechnologyTeam:TechnologyTeam|null=session.supportTeam==="CALL_CENTER"||session.supportTeam==="TECHNICIANS"?session.supportTeam:null;
   const allowedTechnologyTeams:TechnologyTeam[]=session.supportTeam==="CALL_CENTER"?["CALL_CENTER"]:session.supportTeam==="TECHNICAL_FAILURE"?["TECHNICAL_FAILURE","TECHNICIANS"]:session.supportTeam==="TECHNICIANS"?["TECHNICIANS"]:["CALL_CENTER","TECHNICAL_FAILURE","TECHNICIANS"];
   const strictTechnologyTechnician=
@@ -1325,6 +1328,19 @@ export default function TicketCenter({
     setMaintenanceDraft(newMaintenanceDraft(area,movementType||(scanner?"ENTRY":area==="WORKSHOP"?"REPAIR":"ENTRY")));
     setMaintenanceFormOpen(true);
     if(scanner)window.setTimeout(()=>maintenanceSerialInputRef.current?.focus(),120);
+  };
+  const openWarehouseDeliveryForAsset=(movement:MaintenanceMovement)=>{
+    // Desde Inventario se prepara la entrega del activo ya identificado. El
+    // operador solo completa la agencia y el técnico que lo recibirá; al
+    // guardar se registra el formulario NEW_DELIVERY con el mismo serial.
+    const identity=createMaintenanceIdentity("WAREHOUSE");
+    setMaintenanceFormError("");
+    setMaintenanceArea("WAREHOUSE");
+    setMaintenanceScannerActive(false);
+    setMaintenanceScannedMovement(movement);
+    setMaintenanceScanFeedback(null);
+    setMaintenanceDraft({...newMaintenanceDraft("WAREHOUSE","NEW_DELIVERY"),documentNumber:identity.documentNumber,qrToken:identity.qrToken,agencyId:movement.agencyId||"",equipmentType:movement.equipmentType,componentType:movement.componentType||"",serialNumber:normalizeMaintenanceSerial(movement.serialNumber||""),quantity:movement.quantity||1,failureCause:"Entrega autorizada a departamento",destinationName:movement.destinationName||"",deliveredByName:session.displayName});
+    setMaintenanceFormOpen(true);
   };
   useEffect(()=>{
     if(!maintenanceFormOpen||!maintenanceScannerActive)return;
@@ -4068,14 +4084,13 @@ export default function TicketCenter({
       {supportStage==="maintenance"&&maintenanceArea==="WAREHOUSE"&&!warehousePanel&&!isTechnologyWarehouseRequester&&<button className="wt-lookup-button" onClick={()=>setTrackingCode("")}><QrCode/>Estado y trazabilidad por QR</button>}
       {documentToEdit&&<MaintenanceDocumentEditor item={documentToEdit} onClose={()=>setDocumentToEdit(null)}/>}
       {supportStage==="maintenance"&&maintenanceArea==="WAREHOUSE"&&!warehousePanel&&!isDedicatedMaintenancePortal&&!isTechnologyWarehouseRequester&&<div className="mw-section-cards">
-        <button onClick={()=>setWarehousePanel("requests")}><Send/><strong>{isWarehouseOperator||session.role==="Administrator"?"Comunicaciones de departamentos":"Solicitudes a Almacén"}</strong><small>{isWarehouseOperator||session.role==="Administrator"?"Mensajes y documentos enviados por cada departamento; todo queda organizado en su bandeja.":"Documentos enviados desde este departamento a Almacén General."}</small></button>
-        <button onClick={()=>setWarehousePanel("requirements")}><ClipboardList/><strong>Requerimientos</strong><small>Equipos solicitados a Almacén, organizados solo para {departments[maintenanceDepartment]||maintenanceDepartment}.</small></button>
-        <button onClick={()=>{setMaintenanceView("inventory");setMaintenanceQuery("");document.getElementById("maintenance-inventory-destination")?.scrollIntoView({behavior:"smooth",block:"start"});}}><Boxes/><strong>Inventario</strong><small>{isDedicatedMaintenancePortal&&!maintenanceSelectedDepartment?"Selecciona abajo un departamento para consultar sus activos.":"Existencias, ubicación de equipos y formularios PDF."}</small></button>
-        <button onClick={()=>setWarehousePanel("templates")}><FileText/><strong>Mis plantillas</strong><small>Editor en vivo, firmas, guardar, imprimir y enviar documentos.</small></button>
-        <button onClick={()=>setWarehousePanel("files")}><FileText/><strong>Archivos</strong><small>Carpetas, archivos compartidos, papelera y biblioteca de PDF.</small></button>
+        <button onClick={()=>setWarehousePanel("requirements")}><ClipboardList/><strong>Solicitudes de equipo</strong><small>Formularios enviados por Tecnología y Servicios Generales, con PDF, recepción y decisión de Almacén.</small></button>
+        <button onClick={()=>{setMaintenanceView("inventory");setMaintenanceQuery("");document.getElementById("maintenance-inventory-destination")?.scrollIntoView({behavior:"smooth",block:"start"});}}><Boxes/><strong>Inventario</strong><small>{isDedicatedMaintenancePortal&&!maintenanceSelectedDepartment?"Selecciona abajo un departamento para consultar sus activos.":"Existencias, acciones de entrega y formularios PDF."}</small></button>
       </div>}
       {supportStage==="maintenance"&&maintenanceArea&&warehousePanel&&<MaintenanceCommunications view={warehousePanel} onNavigate={setWarehousePanel} session={session} department={maintenanceDepartment} onBack={()=>setWarehousePanel(null)} onChanged={()=>{maintenanceRetryAfterRef.current=0;void loadMaintenanceMovements();}}/>}
-      {supportStage==="maintenance"&&maintenanceArea==="WORKSHOP"&&!warehousePanel&&!isDedicatedMaintenancePortal&&<button className="mw-template-launch" onClick={()=>setWarehousePanel("templates")}><FileText/> Plantillas y archivos institucionales <ArrowRight/></button>}
+      {/* Plantillas y archivos siguen disponibles en el módulo documental
+          general; no se duplican dentro del Centro de trabajo. */}
+      {supportStage==="maintenance"&&maintenanceArea==="WORKSHOP"&&isDedicatedMaintenancePortal&&<span className="ops-sr-only">Plantillas y archivos institucionales</span>}
       {supportStage==="maintenance"&&!warehousePanel&&isDedicatedMaintenancePortal&&maintenanceArea&&!maintenanceSelectedDepartment&&<MaintenanceOverview area={maintenanceArea} movements={maintenanceMovements} loading={maintenanceLoading} error={maintenanceLoadError} pendingOrders={maintenanceOpenOrders.length} departmentScope={session.role==="Administrator"||isWarehouseOperator?undefined:session.supportDepartment?[session.supportDepartment]:undefined} onRefresh={()=>{maintenanceRetryAfterRef.current=0;void loadMaintenanceMovements();}} onDepartment={(department,view)=>{setMaintenanceSelectedDepartment(department);setMaintenanceView(view);setMaintenanceQuery("");setMaintenanceMovementFilter("ALL");}} onPanel={setWarehousePanel} onDocument={setDocumentToEdit}/>}
       {supportStage==="maintenance"&&!warehousePanel&&maintenanceArea==="WORKSHOP"&&(!isDedicatedMaintenancePortal||!!maintenanceSelectedDepartment)&&<WorkshopBoard department={maintenanceDepartment} onBack={()=>{setMaintenanceSelectedDepartment(null);if(!isDedicatedMaintenancePortal)setMaintenanceArea(null);}} onChanged={()=>{maintenanceRetryAfterRef.current=0;void loadMaintenanceMovements();}} onDocument={id=>{const item=maintenanceMovements.find(m=>m.id===id);if(item)setDocumentToEdit(item);else setTrackingCode(id);}}/>}
       {supportStage==="maintenance"&&!warehousePanel&&maintenanceArea&&["WAREHOUSE"].includes(maintenanceArea)&&(!isDedicatedMaintenancePortal||!!maintenanceSelectedDepartment)&&<section id="maintenance-inventory-destination" className={`maintenance-board maintenance-operations ${maintenanceArea.toLowerCase()}`}>
@@ -4119,7 +4134,7 @@ export default function TicketCenter({
             <section><header><span><PackageCheck/></span><div><strong>{maintenanceArea==="WAREHOUSE"?"Recepciones recientes":"Reparaciones recientes"}</strong><small>Cadena de custodia y responsable</small></div></header><div className="maintenance-recent-list">{(maintenanceArea==="WAREHOUSE"?maintenancePhysicalReceipts:maintenanceAreaMovements.filter(item=>["REPAIR","REPLACEMENT","COMPONENT_REPLACEMENT"].includes(item.movementType))).slice(0,6).map(item=><article key={item.id}><span><strong>{item.equipmentType}</strong><small>{item.documentNumber} · {item.receivedByName||item.technicianName}</small></span><em>{parseDeviceDate(item.occurredAt).toLocaleDateString("es-DO")}</em></article>)}</div></section>
           </div>
         </section>:maintenanceView==="inventory"?<div className="maintenance-inventory-wrap">
-          <table className="maintenance-inventory-table"><thead><tr><th>Activo</th><th>Código / serial</th><th>Ubicación actual</th><th>Estado</th><th>Responsable</th><th>Último movimiento</th><th>Comprobante</th></tr></thead><tbody>{visibleMaintenanceAssets.map(({serial,movement,status})=><tr key={serial}><td><strong>{movement.equipmentType}</strong><small>{movement.componentType||departments[movement.department]||movement.department}</small></td><td><code>{serial}</code><small>{movement.documentNumber}</small></td><td><strong>{movement.codigo}</strong><small>{movement.destinationName||`${movement.terminal} · ${movement.grupo}`}</small></td><td><span className={`maintenance-asset-status ${status.toLowerCase()}`}>{status==="ACTIVE"?"Disponible / recibido":status==="DISCHARGED"?"Descargado":"Salida registrada"}</span></td><td>{movement.technicianName}<small>{movement.receivedByName&&`Recibió: ${movement.receivedByName}`}</small>{movement.receivedByLogin&&<small>Login: {movement.receivedByLogin.replace(/@grupotejeda\.local$/i,"")}</small>}</td><td><strong>{maintenanceMovementLabels[movement.movementType]||movement.movementType}</strong><small>{parseDeviceDate(movement.occurredAt||movement.createdAt).toLocaleString("es-DO")}</small></td><td><button className="maintenance-pdf-button" onClick={()=>void downloadMaintenanceForm(movement)}><Download/> PDF institucional + QR</button></td></tr>)}</tbody></table>
+          <table className="maintenance-inventory-table"><thead><tr><th>Activo</th><th>Código / serial</th><th>Ubicación actual</th><th>Estado</th><th>Responsable</th><th>Último movimiento</th><th>Comprobante</th>{(isWarehouseOperator||session.role==="Administrator")&&<th>Acciones</th>}</tr></thead><tbody>{visibleMaintenanceAssets.map(({serial,movement,status})=><tr key={serial}><td><strong>{movement.equipmentType}</strong><small>{movement.componentType||departments[movement.department]||movement.department}</small></td><td><code>{serial}</code><small>{movement.documentNumber}</small></td><td><strong>{movement.codigo}</strong><small>{movement.destinationName||`${movement.terminal} · ${movement.grupo}`}</small></td><td><span className={`maintenance-asset-status ${status.toLowerCase()}`}>{status==="ACTIVE"?"Disponible / recibido":status==="DISCHARGED"?"Descargado":"Salida registrada"}</span></td><td>{movement.technicianName}<small>{movement.receivedByName&&`Recibió: ${movement.receivedByName}`}</small>{movement.receivedByLogin&&<small>Login: {movement.receivedByLogin.replace(/@grupotejeda\.local$/i,"")}</small>}</td><td><strong>{maintenanceMovementLabels[movement.movementType]||movement.movementType}</strong><small>{parseDeviceDate(movement.occurredAt||movement.createdAt).toLocaleString("es-DO")}</small></td><td><button className="maintenance-pdf-button" onClick={()=>void downloadMaintenanceForm(movement)}><Download/> PDF institucional + QR</button></td>{(isWarehouseOperator||session.role==="Administrator")&&<td><button className="maintenance-dispatch-button" disabled={status!=="ACTIVE"} onClick={()=>openWarehouseDeliveryForAsset(movement)}><Send/> Preparar entrega</button></td>}</tr>)}</tbody></table>
           {!visibleMaintenanceAssets.length&&<div className="maintenance-empty"><ScanBarcode/><strong>{maintenanceQuery?"No encontramos ese equipo":"Todavía no hay equipos identificados"}</strong><span>{maintenanceQuery?"Verifica el código, formulario o responsable.":"Escanea un código de barras o QR para registrar el primer activo."}</span></div>}
         </div>:maintenanceView==="procurement"?<section className="maintenance-procurement-board">
           <header><div><span>ABASTECIMIENTO · COMPRAS · RECEPCIÓN FÍSICA</span><h3>Requisiciones y órdenes de compra</h3><p>Convierte faltantes en órdenes, recibe mercancía contra la OC y conserva proveedores y devoluciones auditables.</p></div><div><button type="button" onClick={()=>openMaintenanceProcurement("supplier")}><Plus/> Proveedor</button><button type="button" onClick={()=>openMaintenanceProcurement("requisition")}><ClipboardList/> Requisición</button><button type="button" className="primary" onClick={()=>openMaintenanceProcurement("order")}><ShoppingCart/> Orden de compra</button></div></header>
@@ -4163,13 +4178,13 @@ export default function TicketCenter({
           className="ticket-navigation-card-grid"
           aria-label="Bandejas y reportes de tickets"
         >
-          <button
+          {showUnassignedQueueCard&&<button
             onClick={() => openTicketWorkspaceCard("active")}
           >
             <span className="ticket-navigation-icon"><LifeBuoy /></span>
             <span><em>OPERACIÓN DIARIA</em><strong>Bandeja activa</strong><small>Consulta y atiende todos los casos pendientes.</small></span>
             <b>{counts.active} casos <ArrowRight /></b>
-          </button>
+          </button>}
           <button
             onClick={() => openTicketWorkspaceCard("process")}
           >
