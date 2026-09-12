@@ -473,19 +473,19 @@ describe("centro de soporte por agencia", () => {
     expect(program).toContain(
       'MapDelete("/api/agency-transitions/{id:guid}/stages/{stageId:guid}"',
     );
-    expect(program).toContain('version = "2026.09.11.327"');
-    expect(program).toContain('X-Application-Release"]="V327"');
+    expect(program).toContain('version = "2026.09.11.328"');
+    expect(program).toContain('X-Application-Release"]="V328"');
     expect(program).toContain("AddResponseCompression");
     expect(program).toContain('CacheControl = "public,max-age=31536000,immutable"');
     expect(program).toContain('form["locationCapturedAt"]');
     expect(database).toContain("accuracy_meters decimal(8,2)");
     expect(apiProject).toContain(
-      "<AssemblyName>RegistroAgencias.SqlServer.V327</AssemblyName>",
+      "<AssemblyName>RegistroAgencias.SqlServer.V328</AssemblyName>",
     );
     expect(webConfig).toContain(
-      'processPath=".\\RegistroAgencias.SqlServer.V327.exe"',
+      'processPath=".\\RegistroAgencias.SqlServer.V328.exe"',
     );
-    expect(releaseGuard).toContain('var release = "V327"');
+    expect(releaseGuard).toContain('var release = "V328"');
     expect(v228Styles).toContain("z-index: 4600 !important");
     expect(v228Styles).toContain("overflow-y: auto !important");
     expect(v228Styles).toContain(".notification-tables");
@@ -639,7 +639,7 @@ describe("centro de soporte por agencia", () => {
     expect(center).toContain("AGENCIA SELECCIONADA");
     expect(center).toContain("incident-report-view");
     expect(supportStyles).not.toContain(":not(.supervisor-assigned-cases)");
-    expect(app).toContain("Web V327");
+    expect(app).toContain("Web V328");
   });
 
   it("abre el tablero departamental del supervisor y protege tickets duplicados", () => {
@@ -790,6 +790,9 @@ describe("centro de soporte por agencia", () => {
     expect(portalLogin).toContain("attempt < 4");
     expect(database).toContain("IsTransientConnectionFailure");
     expect(database).toContain("intento {attempt+1}/3");
+    expect(program).toContain("RetryDatabaseAsync");
+    expect(program).toContain("token persistente");
+    expect(program).toContain("se conserva la cookie de sesión");
   });
 
   it("incluye una migración SQL Server idempotente", () => {
@@ -859,8 +862,8 @@ describe("centro de soporte por agencia", () => {
     expect(professionalSidebarV254).toContain(".portal-main-column");
     expect(professionalSidebarV254).toContain("@media (max-width: 900px)");
     expect(professionalSidebarV254).toContain("transform: translateX(-105%)");
-    expect(applicationIndex).toContain('name="app-release" content="V327"');
-    expect(applicationIndex).toContain('/release-guard.js?v=V327');
+    expect(applicationIndex).toContain('name="app-release" content="V328"');
+    expect(applicationIndex).toContain('/release-guard.js?v=V328');
   });
 
   it("abre Avería en el menú operativo y adapta la cola con zoom y barra azul", () => {
