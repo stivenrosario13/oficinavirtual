@@ -1,0 +1,358 @@
+{
+  "supervisorName": {
+    "label": "Supervisor responsable",
+    "type": "text"
+  },
+  "supervisorGroup": {
+    "label": "Grupo del supervisor",
+    "type": "text"
+  },
+  "ownerName": {
+    "label": "Propietario solicitante",
+    "type": "text"
+  },
+  "ownerId": {
+    "label": "Cédula / RNC",
+    "type": "text"
+  },
+  "ownerPhone": {
+    "label": "Teléfono de contacto",
+    "type": "text"
+  },
+  "agencyCode": {
+    "label": "Código de agencia",
+    "type": "text"
+  },
+  "agencyName": {
+    "label": "Agencia",
+    "type": "text"
+  },
+  "agencyGroup": {
+    "label": "Grupo",
+    "type": "text"
+  },
+  "agencySector": {
+    "label": "Sector",
+    "type": "text"
+  },
+  "agencyAddress": {
+    "label": "Dirección del local",
+    "type": "text"
+  },
+  "monthlyRent": {
+    "label": "Renta mensual",
+    "type": "text"
+  },
+  "requiredDate": {
+    "label": "Fecha requerida",
+    "type": "date"
+  },
+  "currentEndDate": {
+    "label": "Vencimiento actual",
+    "type": "date"
+  },
+  "renewalStartDate": {
+    "label": "Nueva vigencia desde",
+    "type": "date"
+  },
+  "renewalEndDate": {
+    "label": "Nueva vigencia hasta",
+    "type": "date"
+  },
+  "currentRent": {
+    "label": "Renta actual",
+    "type": "text"
+  },
+  "newRent": {
+    "label": "Nueva renta",
+    "type": "text"
+  },
+  "increasePercent": {
+    "label": "Porcentaje solicitado",
+    "type": "number"
+  },
+  "ownerRepresentative": {
+    "label": "Representante del propietario",
+    "type": "text"
+  },
+  "ownerRepresentativeId": {
+    "label": "Cédula del representante",
+    "type": "text"
+  },
+  "tenantCompany": {
+    "label": "Empresa inquilina",
+    "type": "text"
+  },
+  "tenantRnc": {
+    "label": "RNC de la empresa",
+    "type": "text"
+  },
+  "tenantRepresentative": {
+    "label": "Representante de la empresa",
+    "type": "text"
+  },
+  "tenantRepresentativeId": {
+    "label": "Cédula del representante",
+    "type": "text"
+  },
+  "advanceMonths": {
+    "label": "Meses adelantados",
+    "type": "number"
+  },
+  "advanceAmount": {
+    "label": "Monto adelantado",
+    "type": "text"
+  },
+  "contractStart": {
+    "label": "Inicio del contrato",
+    "type": "date"
+  },
+  "contractEnd": {
+    "label": "Fin del contrato",
+    "type": "date"
+  },
+  "signingPlace": {
+    "label": "Lugar de firma",
+    "type": "text"
+  },
+  "signingDate": {
+    "label": "Fecha de firma",
+    "type": "date"
+  },
+  "notaryName": {
+    "label": "Notario(a)",
+    "type": "text"
+  },
+  "notaryNumber": {
+    "label": "Matrícula / colegiatura",
+    "type": "text"
+  },
+  "paymentTerms": {
+    "label": "Condiciones de pago",
+    "type": "text"
+  },
+  "renewalTerms": {
+    "label": "Condiciones de renovación o terminación",
+    "type": "text"
+  },
+  "serviceTerms": {
+    "label": "Servicios y responsabilidades",
+    "type": "text"
+  },
+  "contractPurpose": {
+    "label": "Objeto o notas del contrato",
+    "type": "text"
+  },
+  "receiptDate": {
+    "label": "Fecha del recibo",
+    "type": "date"
+  },
+  "paidBy": {
+    "label": "Recibido de",
+    "type": "text"
+  },
+  "amountWords": {
+    "label": "Monto en letras",
+    "type": "text"
+  },
+  "amount": {
+    "label": "Monto a depositar",
+    "type": "text"
+  },
+  "periodStart": {
+    "label": "Período desde",
+    "type": "date"
+  },
+  "periodEnd": {
+    "label": "Período hasta",
+    "type": "date"
+  },
+  "receivedBy": {
+    "label": "Recibido por",
+    "type": "text"
+  },
+  "receiverId": {
+    "label": "Cédula / RNC",
+    "type": "text"
+  },
+  "receiverRole": {
+    "label": "Calidad",
+    "type": "text"
+  },
+  "paymentConcept": {
+    "label": "Concepto del pago",
+    "type": "text"
+  },
+  "place": {
+    "label": "Lugar",
+    "type": "text"
+  },
+  "requestDate": {
+    "label": "Fecha",
+    "type": "date"
+  },
+  "recipientName": {
+    "label": "Destinatario",
+    "type": "text"
+  },
+  "recipientRole": {
+    "label": "Cargo / departamento",
+    "type": "text"
+  },
+  "increaseYear": {
+    "label": "Año correspondiente",
+    "type": "number"
+  },
+  "increaseReason": {
+    "label": "Motivo o fundamento de la solicitud",
+    "type": "text"
+  },
+  "fuelPeriod": {
+    "label": "Período",
+    "type": "month"
+  },
+  "fuelArea": {
+    "label": "Área / ruta",
+    "type": "text"
+  },
+  "fuelBudget": {
+    "label": "Presupuesto o tickets asignados",
+    "type": "text"
+  },
+  "physicalTickets": {
+    "label": "Tickets físicos",
+    "type": "text"
+  },
+  "fuelCredit": {
+    "label": "Crédito disponible",
+    "type": "text"
+  },
+  "fuelOwner": {
+    "label": "Responsable del control",
+    "type": "text"
+  },
+  "fuelNotes": {
+    "label": "Observaciones y conciliación",
+    "type": "text"
+  },
+  "company": {
+    "label": "Empresa titular",
+    "type": "text"
+  },
+  "legalRepresentative": {
+    "label": "Representante legal",
+    "type": "text"
+  },
+  "representativeId": {
+    "label": "Cédula del representante",
+    "type": "text"
+  },
+  "authorizedPerson": {
+    "label": "Persona autorizada",
+    "type": "text"
+  },
+  "authorizedId": {
+    "label": "Cédula de la persona autorizada",
+    "type": "text"
+  },
+  "action": {
+    "label": "Gestión solicitada",
+    "type": "text"
+  },
+  "accountCharge": {
+    "label": "Cargo a cuenta",
+    "type": "text"
+  },
+  "notes": {
+    "label": "Observaciones",
+    "type": "text"
+  },
+  "period": {
+    "label": "Período",
+    "type": "text"
+  },
+  "group": {
+    "label": "Empresa o grupo",
+    "type": "text"
+  },
+  "listOwner": {
+    "label": "Responsable de la relación",
+    "type": "text"
+  },
+  "dueDate": {
+    "label": "Fecha límite",
+    "type": "date"
+  },
+  "recipient": {
+    "label": "Persona que recibe",
+    "type": "text"
+  },
+  "recipientId": {
+    "label": "Cédula",
+    "type": "text"
+  },
+  "recipientDepartment": {
+    "label": "Departamento",
+    "type": "text"
+  },
+  "model": {
+    "label": "Modelo",
+    "type": "text"
+  },
+  "chip": {
+    "label": "Número de chip / línea",
+    "type": "text"
+  },
+  "imei": {
+    "label": "Serial / IMEI",
+    "type": "text"
+  },
+  "penalty": {
+    "label": "Penalidad informada",
+    "type": "text"
+  },
+  "condition": {
+    "label": "Estado del equipo",
+    "type": "text"
+  },
+  "payee": {
+    "label": "A nombre de",
+    "type": "text"
+  },
+  "payeeRnc": {
+    "label": "RNC / identificación",
+    "type": "text"
+  },
+  "bank": {
+    "label": "Banco a depositar",
+    "type": "text"
+  },
+  "accountNumber": {
+    "label": "Número de cuenta",
+    "type": "text"
+  },
+  "accountType": {
+    "label": "Tipo de cuenta",
+    "type": "text"
+  },
+  "policy": {
+    "label": "Póliza / referencia",
+    "type": "text"
+  },
+  "insurancePeriod": {
+    "label": "Período de seguro",
+    "type": "text"
+  },
+  "concept": {
+    "label": "Concepto del pago",
+    "type": "text"
+  },
+  "targetName": {
+    "label": "Agencia o empleado",
+    "type": "text"
+  },
+  "reason": {
+    "label": "Motivo y detalles",
+    "type": "text"
+  }
+}

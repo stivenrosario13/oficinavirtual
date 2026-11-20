@@ -1,0 +1,430 @@
+{
+  "sourceFile": "Inventario de equpos fiscalizados.xlsm",
+  "sourceSha256": "7ede774c440125ebedb4af7fc1756cdeb12b3d939e2cbbda4e3bea7ab61f6964",
+  "sheet": "Hoja1",
+  "sourceRows": 84,
+  "excluded": [
+    {
+      "row": 48,
+      "serial": "2C'POS80'012208263119",
+      "reason": "Serial duplicado"
+    },
+    {
+      "row": 68,
+      "serial": "SIN SERIAL",
+      "reason": "Sin serial"
+    }
+  ],
+  "items": [
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V72504031283",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 2. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V62504093295",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 3. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012203293254",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 4. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012203293007",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 5. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012203293133",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 6. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V82506093294",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 7. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V62504090601",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 8. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012011162464",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 9. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V62504090975",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 10. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012203290674",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 11. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V72504031287",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 12. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V82506091658",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 13. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V82506091007",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 14. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V82506091197",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 15. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V82506091959",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 16. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V82506093186",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 17. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V62504094803",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 18. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V82506091996",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 19. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012011160748",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 20. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V72504031285",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 21. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012107225916",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 22. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012203293075",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 23. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012011162109",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 24. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V62504092750",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 25. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012303061202",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 26. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V82506094898",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 27. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V82506094191",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 28. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012208264200",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 29. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012208263921",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 30. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012208261019",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 31. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012208263640",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 32. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012208263636",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 33. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012208261828",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 34. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012208260598",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 35. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012208262333",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 36. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012208261550",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 37. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012208264264",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 38. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2208261278",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 39. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012208263988",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 40. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012208263850",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 41. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012208263203",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 42. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012203295045",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 43. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012208264187",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 44. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012107224620",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 45. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V62504093273",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 46. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012208263119",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 47. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V72504033881",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 49. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012208264359",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 50. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012208260263",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 51. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012203292012",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 52. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V72504032542",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 53. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012208263321",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 54. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V82506093155",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 55. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012208263893",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 56. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V72504031637",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 57. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012203293278",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 58. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA SEWOO",
+      "serial": "SW24CST003283",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 59. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA SEWOO",
+      "serial": "SW24CST002150",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 60. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA SEWOO",
+      "serial": "SW24CST000888",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 61. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA SEWOO",
+      "serial": "SW24CST002133",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 62. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA SEWOO",
+      "serial": "SW23BST019603",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 63. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA SEWOO",
+      "serial": "SW23BST016609",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 64. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA SEWOO",
+      "serial": "SW24CST000837",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 65. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA SEWOO",
+      "serial": "SW23BST018155",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 66. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "MAQUINA TOUCH MAQUINA LTK AZUL",
+      "serial": "SN\u00f1N159F22092901915",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 67. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "MAQUINA TOUCH 2CONNET MAQUINA",
+      "serial": "2C202508140373",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 69. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "MAQUINA TOUCH 2CONNET MAQUINA",
+      "serial": "2C202601060216",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 70. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "MAQUINA TOUCH 2CONNET MAQUINA",
+      "serial": "2C202512200581",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 71. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "MAQUINA TOUCH 2CONNET MAQUINA",
+      "serial": "2C202601050003",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 72. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'012303065328",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 73. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V72504032132",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 74. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "IMPRESORA 2CONNET",
+      "serial": "2C'POS80'01'V62504093236",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 75. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "ESCANER WITEK SISTEM",
+      "serial": "MIS200BDR2511B702097",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 76. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "ESCANER WITEK SISTEM",
+      "serial": "MIS200BDR2511B702049",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 77. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "ESCANER WITEK SISTEM",
+      "serial": "MIS200BDR2309B702774",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 78. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "ESCANER WITEK SISTEM",
+      "serial": "MIS200BDR2511B701451",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 79. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "ESCANER 2CONNET ESCANER",
+      "serial": "EK256258400230",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 80. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "ESCANER 2CONNET ESCANER",
+      "serial": "EK256258400389",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 81. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "ESCANER 2CONNET ESCANER",
+      "serial": "2C20211104958",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 82. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "ESCANER 2CONNET ESCANER",
+      "serial": "2C20222311693",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 83. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "ESCANER 2CONNET ESCANER",
+      "serial": "EK256258400146",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 84. No es una orden de reparaci\u00f3n."
+    },
+    {
+      "equipment": "ESCANER 2CONNET ESCANER",
+      "serial": "2C20202111392",
+      "notes": "Inventario fiscalizado de Taller. Hoja1, fila 85. No es una orden de reparaci\u00f3n."
+    }
+  ]
+}

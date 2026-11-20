@@ -1,0 +1,14 @@
+ACTUALIZACION V492 - CONTROL DIARIO GERENCIAL DE TICKETS
+
+1. Deten el sitio en MonsterASP.
+2. Extrae el ZIP y sube todos los archivos conservando las carpetas.
+3. Sube el contenido tanto a la raiz publica como a wwwroot cuando el hosting use doble ruta.
+4. Sube web.config al final; debe apuntar a .\RegistroAgencias.SqlServer.V492.exe.
+5. Inicia el sitio y abre /api/version. Debe mostrar "release":"V492".
+6. Cierra sesion e inicia nuevamente como yessica.mercedes o rosmarlin.vittini para renovar los permisos de la sesion.
+7. Usa Gerencia > Cola en vivo y Gerencia > Auditoria operativa.
+
+ALCANCE
+- Yessica Mercedes: Call Center, nombres completos, creados, resueltos y transferidos.
+- Rosmarlin Vittini: Averia Tecnica y Tecnicos, incluidos movimientos y transferencias historicas.
+- La visibilidad queda limitada a los equipos bajo responsabilidad de cada gerente.

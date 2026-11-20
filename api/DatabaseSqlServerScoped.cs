@@ -1,5 +1,6 @@
 using System.Data;
 using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.Data.SqlClient;
 
 sealed partial class Database
@@ -281,7 +282,26 @@ sealed partial class Database
             FROM dbo.support_tickets t INNER JOIN dbo.agencies a ON a.id=t.agency_id INNER JOIN dbo.admin_user_groups ug ON ug.group_name=a.grupo INNER JOIN dbo.admin_users u ON u.id=ug.user_id AND u.role='GROUP_ADMIN' AND u.is_active=1
             WHERE t.status IN('RESOLVED','CLOSED') AND NOT EXISTS(SELECT 1 FROM dbo.support_ticket_notifications n WHERE n.ticket_id=t.id AND n.event_type=t.status AND n.recipient_user_id=CONVERT(nvarchar(80),u.id));
             """;
-            await using var backfillCommand=new SqlCommand(backfillSql,connection);await backfillCommand.ExecuteNonQueryAsync(ct);ticketWorkflowSchemaReady=true;}finally{TicketWorkflowSchemaLock.Release();}
+            await using var backfillCommand=new SqlCommand(backfillSql,connection);await backfillCommand.ExecuteNonQueryAsync(ct);
+            // V430 linked a warehouse failure to its form but marked some new
+            // tickets as supervisor SUPPORT tickets. Reclassify only those
+            // explicitly linked documents; unrelated tickets stay untouched.
+            await using var institutionalTableCheck=new SqlCommand("SELECT OBJECT_ID(N'dbo.institutional_files',N'U')",connection);
+            if(await institutionalTableCheck.ExecuteScalarAsync(ct) is not DBNull)
+            {
+                const string warehouseFailureBackfill="""
+                    UPDATE t SET ticket_type='INTERNAL',
+                        assigned_team=CASE WHEN t.assigned_department='TECHNOLOGY' AND t.assigned_team='TECHNICAL_FAILURE' AND u.support_team='CALL_CENTER' THEN 'CALL_CENTER' ELSE t.assigned_team END,
+                        updated_at=SYSUTCDATETIME()
+                    FROM dbo.support_tickets t
+                    JOIN dbo.institutional_files f ON TRY_CONVERT(uniqueidentifier,JSON_VALUE(CASE WHEN ISJSON(f.metadata)=1 THEN f.metadata ELSE N'{}' END,'$.warehouseRequest.ticketId'))=t.id
+                    LEFT JOIN dbo.admin_users u ON CONVERT(nvarchar(80),u.id)=t.created_by_user_id
+                    WHERE t.ticket_type='SUPPORT' AND JSON_VALUE(CASE WHEN ISJSON(f.metadata)=1 THEN f.metadata ELSE N'{}' END,'$.warehouseRequest.failureCategory') IS NOT NULL;
+                    """;
+                await using var warehouseFailureCommand=new SqlCommand(warehouseFailureBackfill,connection);
+                await warehouseFailureCommand.ExecuteNonQueryAsync(ct);
+            }
+            ticketWorkflowSchemaReady=true;}finally{TicketWorkflowSchemaLock.Release();}
     }
 
     static async Task EnsureFindingEvidenceSchema(SqlConnection connection,CancellationToken ct)
@@ -315,6 +335,28 @@ sealed partial class Database
                 IF COL_LENGTH(N'dbo.finding_resolution_evidence',N'longitude') IS NULL ALTER TABLE dbo.finding_resolution_evidence ADD longitude float NULL;
                 IF COL_LENGTH(N'dbo.finding_resolution_evidence',N'accuracy_meters') IS NULL ALTER TABLE dbo.finding_resolution_evidence ADD accuracy_meters float NULL;
                 IF COL_LENGTH(N'dbo.finding_resolution_evidence',N'location_captured_at') IS NULL ALTER TABLE dbo.finding_resolution_evidence ADD location_captured_at datetime2(3) NULL;
+                IF OBJECT_ID(N'dbo.automatic_finding_notifications',N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.automatic_finding_notifications(
+                        id uniqueidentifier NOT NULL CONSTRAINT DF_automatic_finding_notifications_id DEFAULT(NEWID()) PRIMARY KEY,
+                        finding_id uniqueidentifier NOT NULL,
+                        recipient_user_id nvarchar(80) NOT NULL,
+                        event_type varchar(30) NOT NULL,
+                        message nvarchar(500) NOT NULL,
+                        actor_name nvarchar(160) NOT NULL,
+                        created_at datetime2(3) NOT NULL CONSTRAINT DF_automatic_finding_notifications_created DEFAULT(SYSUTCDATETIME()),
+                        CONSTRAINT FK_automatic_finding_notifications_finding FOREIGN KEY(finding_id) REFERENCES dbo.automatic_findings(id) ON DELETE CASCADE
+                    );
+                    CREATE INDEX IX_automatic_finding_notifications_recipient ON dbo.automatic_finding_notifications(recipient_user_id,created_at DESC);
+                END;
+                INSERT INTO dbo.automatic_finding_notifications(finding_id,recipient_user_id,event_type,message,actor_name,created_at)
+                SELECT af.id,af.assigned_technician_id,'ASSIGNED',N'Tienes un hallazgo automático asignado: '+af.title,N'Soporte',af.updated_at
+                FROM dbo.automatic_findings af WHERE af.assigned_technician_id IS NOT NULL
+                  AND NOT EXISTS(SELECT 1 FROM dbo.automatic_finding_notifications n WHERE n.finding_id=af.id AND n.recipient_user_id=af.assigned_technician_id AND n.event_type IN('ASSIGNED','REASSIGNED'));
+                IF EXISTS(SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.automatic_findings') AND name=N'CK_automatic_findings_status' AND definition NOT LIKE '%CANCELLED%')
+                    ALTER TABLE dbo.automatic_findings DROP CONSTRAINT CK_automatic_findings_status;
+                IF NOT EXISTS(SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.automatic_findings') AND name=N'CK_automatic_findings_status')
+                    ALTER TABLE dbo.automatic_findings WITH CHECK ADD CONSTRAINT CK_automatic_findings_status CHECK(status IN('OPEN','IN_PROGRESS','RESOLVED','CLOSED','CANCELLED'));
                 IF EXISTS(SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.automatic_findings') AND name=N'CK_automatic_findings_department' AND definition NOT LIKE '%HUMAN_RESOURCES%')
                     ALTER TABLE dbo.automatic_findings DROP CONSTRAINT CK_automatic_findings_department;
                 IF NOT EXISTS(SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.automatic_findings') AND name=N'CK_automatic_findings_department')
@@ -369,10 +411,10 @@ sealed partial class Database
                 IF NOT EXISTS(SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.maintenance_movements') AND name=N'CK_maintenance_operational_area') ALTER TABLE dbo.maintenance_movements WITH CHECK ADD CONSTRAINT CK_maintenance_operational_area CHECK(operational_area IN('WORKSHOP','WAREHOUSE'));
                 IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.maintenance_movements') AND name=N'UX_maintenance_document_number') CREATE UNIQUE INDEX UX_maintenance_document_number ON dbo.maintenance_movements(document_number) WHERE document_number IS NOT NULL;
                 IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.maintenance_movements') AND name=N'UX_maintenance_qr_token') CREATE UNIQUE INDEX UX_maintenance_qr_token ON dbo.maintenance_movements(qr_token) WHERE qr_token IS NOT NULL;
-                IF EXISTS(SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.maintenance_movements') AND name=N'CK_maintenance_department' AND definition NOT LIKE '%HUMAN_RESOURCES%')
+                IF EXISTS(SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.maintenance_movements') AND name=N'CK_maintenance_department' AND (definition NOT LIKE '%WAREHOUSE%' OR definition NOT LIKE '%COMMERCIALIZATION%' OR definition NOT LIKE '%TREASURY%' OR definition NOT LIKE '%ACCOUNTING%' OR definition NOT LIKE '%GENERAL_AUDIT%' OR definition NOT LIKE '%VAULT%' OR definition NOT LIKE '%CASHIER%'))
                     ALTER TABLE dbo.maintenance_movements DROP CONSTRAINT CK_maintenance_department;
                 IF NOT EXISTS(SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.maintenance_movements') AND name=N'CK_maintenance_department')
-                    ALTER TABLE dbo.maintenance_movements WITH CHECK ADD CONSTRAINT CK_maintenance_department CHECK(department IN('TECHNOLOGY','GENERAL_SERVICES','HUMAN_RESOURCES'));
+                    ALTER TABLE dbo.maintenance_movements WITH CHECK ADD CONSTRAINT CK_maintenance_department CHECK(department IN('TECHNOLOGY','GENERAL_SERVICES','HUMAN_RESOURCES','WAREHOUSE','ADMINISTRATIVE','WORKSHOP','COMMUNICATION','COMMERCIALIZATION','TREASURY','ACCOUNTING','GENERAL_AUDIT','VAULT','CASHIER','CALL_CENTER','TECHNICAL_FAILURE','SUPERVISION'));
                 """;
             await using(var dependenciesCommand=new SqlCommand(dependenciesSql,connection))await dependenciesCommand.ExecuteNonQueryAsync(ct);
             const string catalogSql="""
@@ -382,16 +424,24 @@ sealed partial class Database
                         id uniqueidentifier NOT NULL CONSTRAINT PK_maintenance_products PRIMARY KEY DEFAULT(NEWID()),
                         department varchar(40) NOT NULL,
                         scan_code nvarchar(120) NOT NULL,
-                        product_name nvarchar(160) NOT NULL,
+                        product_name nvarchar(240) NOT NULL,
                         component_type nvarchar(100) NULL,
                         created_by_name nvarchar(160) NOT NULL,
                         created_at datetime2(3) NOT NULL CONSTRAINT DF_maintenance_products_created DEFAULT(SYSUTCDATETIME()),
                         updated_at datetime2(3) NOT NULL CONSTRAINT DF_maintenance_products_updated DEFAULT(SYSUTCDATETIME()),
                         CONSTRAINT UQ_maintenance_products_department_code UNIQUE(department,scan_code),
-                        CONSTRAINT CK_maintenance_products_department CHECK(department IN('TECHNOLOGY','GENERAL_SERVICES','HUMAN_RESOURCES'))
+                        CONSTRAINT CK_maintenance_products_department CHECK(department IN('TECHNOLOGY','GENERAL_SERVICES','HUMAN_RESOURCES','WAREHOUSE','ADMINISTRATIVE','WORKSHOP','COMMUNICATION','COMMERCIALIZATION','TREASURY','ACCOUNTING','GENERAL_AUDIT','VAULT','CASHIER','CALL_CENTER','TECHNICAL_FAILURE','SUPERVISION'))
                     );
                     CREATE INDEX IX_maintenance_products_name ON dbo.maintenance_products(department,product_name);
                 END;
+                IF COL_LENGTH(N'dbo.maintenance_products',N'product_name')<480
+                    ALTER TABLE dbo.maintenance_products ALTER COLUMN product_name nvarchar(240) NOT NULL;
+                -- Match movement departments before seeding serials; older catalogs rejected
+                -- warehouse/internal deliveries and blocked all maintenance reads on restart.
+                IF EXISTS(SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.maintenance_products') AND name=N'CK_maintenance_products_department' AND (definition NOT LIKE '%WAREHOUSE%' OR definition NOT LIKE '%COMMERCIALIZATION%' OR definition NOT LIKE '%TREASURY%' OR definition NOT LIKE '%ACCOUNTING%' OR definition NOT LIKE '%GENERAL_AUDIT%' OR definition NOT LIKE '%VAULT%' OR definition NOT LIKE '%CASHIER%'))
+                    ALTER TABLE dbo.maintenance_products DROP CONSTRAINT CK_maintenance_products_department;
+                IF NOT EXISTS(SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.maintenance_products') AND name=N'CK_maintenance_products_department')
+                    ALTER TABLE dbo.maintenance_products WITH CHECK ADD CONSTRAINT CK_maintenance_products_department CHECK(department IN('TECHNOLOGY','GENERAL_SERVICES','HUMAN_RESOURCES','WAREHOUSE','ADMINISTRATIVE','WORKSHOP','COMMUNICATION','COMMERCIALIZATION','TREASURY','ACCOUNTING','GENERAL_AUDIT','VAULT','CASHIER','CALL_CENTER','TECHNICAL_FAILURE','SUPERVISION'));
                 """;
             await using(var catalogCommand=new SqlCommand(catalogSql,connection))await catalogCommand.ExecuteNonQueryAsync(ct);
             const string seedCatalogSql="""
@@ -516,10 +566,14 @@ sealed partial class Database
             const string sql="""
                 IF COL_LENGTH('dbo.admin_users','permissions_json') IS NULL ALTER TABLE dbo.admin_users ADD permissions_json nvarchar(max) NULL;
                 IF COL_LENGTH('dbo.admin_users','support_team') IS NULL ALTER TABLE dbo.admin_users ADD support_team varchar(30) NULL;
-                IF EXISTS(SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.admin_users') AND name=N'CK_admin_users_support_team' AND (definition NOT LIKE '%TECHNICIANS%' OR definition NOT LIKE '%WAREHOUSE%' OR definition NOT LIKE '%WORKSHOP%' OR definition NOT LIKE '%GENERAL_SERVICES%'))
+                IF EXISTS(SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.admin_users') AND name=N'CK_admin_users_role' AND (definition NOT LIKE '%WAREHOUSE%' OR definition NOT LIKE '%DEPARTMENT%'))
+                    ALTER TABLE dbo.admin_users DROP CONSTRAINT CK_admin_users_role;
+                IF NOT EXISTS(SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.admin_users') AND name=N'CK_admin_users_role')
+                    EXEC sys.sp_executesql N'ALTER TABLE dbo.admin_users WITH CHECK ADD CONSTRAINT CK_admin_users_role CHECK(role IN(''ADMINISTRATOR'',''VIEWER'',''GROUP_ADMIN'',''FISCALIZADOR'',''TECHNOLOGY'',''GENERAL_SERVICES'',''HUMAN_RESOURCES'',''WAREHOUSE'',''ADMINISTRATIVE'',''DEPARTMENT''))';
+                IF EXISTS(SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.admin_users') AND name=N'CK_admin_users_support_team' AND (definition NOT LIKE '%TECHNICIANS%' OR definition NOT LIKE '%WAREHOUSE%' OR definition NOT LIKE '%WORKSHOP%' OR definition NOT LIKE '%GENERAL_SERVICES%' OR definition NOT LIKE '%role=''WAREHOUSE''%' OR definition NOT LIKE '%DEPARTMENT%' OR definition NOT LIKE '%GENERAL_AUDIT%' OR definition NOT LIKE '%VAULT%' OR definition NOT LIKE '%CASHIER%' OR definition NOT LIKE '%role=''DEPARTMENT'' AND support_team IN(''TECHNOLOGY''%'))
                     ALTER TABLE dbo.admin_users DROP CONSTRAINT CK_admin_users_support_team;
                 IF NOT EXISTS(SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.admin_users') AND name=N'CK_admin_users_support_team')
-                    EXEC sys.sp_executesql N'ALTER TABLE dbo.admin_users WITH CHECK ADD CONSTRAINT CK_admin_users_support_team CHECK(support_team IS NULL OR (role=''TECHNOLOGY'' AND support_team IN(''CALL_CENTER'',''TECHNICAL_FAILURE'',''TECHNICIANS'',''WAREHOUSE'',''WORKSHOP'')) OR (role=''GENERAL_SERVICES'' AND support_team=''WORKSHOP''))';
+                    EXEC sys.sp_executesql N'ALTER TABLE dbo.admin_users WITH CHECK ADD CONSTRAINT CK_admin_users_support_team CHECK((role<>''DEPARTMENT'' AND support_team IS NULL) OR (role=''DEPARTMENT'' AND support_team IN(''TECHNOLOGY'',''GENERAL_SERVICES'',''HUMAN_RESOURCES'',''ADMINISTRATIVE'',''WAREHOUSE'',''WORKSHOP'',''COMMUNICATION'',''COMMERCIALIZATION'',''TREASURY'',''ACCOUNTING'',''GENERAL_AUDIT'',''VAULT'',''CASHIER'',''CALL_CENTER'',''TECHNICAL_FAILURE'',''SUPERVISION'')) OR (role=''TECHNOLOGY'' AND support_team IN(''CALL_CENTER'',''TECHNICAL_FAILURE'',''TECHNICIANS'',''WAREHOUSE'',''WORKSHOP'')) OR (role=''GENERAL_SERVICES'' AND support_team=''WORKSHOP'') OR (role=''WAREHOUSE'' AND support_team=''WAREHOUSE''))';
                 IF NOT EXISTS(SELECT 1 FROM dbo.admin_users WHERE email='jordy.arias@grupotejeda.local')
                     UPDATE dbo.admin_users SET email='jordy.arias@grupotejeda.local' WHERE email='yordy.arias@grupotejeda.local';
                 UPDATE dbo.admin_users SET display_name=N'Jordy Arias' WHERE email='jordy.arias@grupotejeda.local' OR LOWER(display_name)=N'yordy arias';
@@ -528,9 +582,52 @@ sealed partial class Database
                 UPDATE dbo.admin_users SET display_name=N'Michael Tejeda' WHERE email='michael.tejeda@grupotejeda.local' OR LOWER(display_name)=N'maicol tejeda';
                 UPDATE dbo.admin_users SET role='TECHNOLOGY',support_team=NULL,permissions_json=NULL,is_active=1,updated_at=SYSUTCDATETIME()
                 WHERE LOWER(REPLACE(email,'@grupotejeda.local','')) IN(N'joel.vizcaino',N'eddi.bono',N'yesica.mercedes',N'franklin.calderon',N'jordaniel.ortega');
+                UPDATE u SET role='GENERAL_SERVICES',support_team=NULL,
+                    permissions_json=JSON_MODIFY(JSON_MODIFY(JSON_MODIFY(JSON_MODIFY(JSON_MODIFY(JSON_MODIFY(JSON_MODIFY(JSON_MODIFY(
+                        CASE WHEN ISJSON(u.permissions_json)=1 THEN u.permissions_json ELSE N'{}' END,
+                        '$.canAssignTickets',CAST(1 AS bit)),'$.canCreateTickets',CAST(1 AS bit)),'$.canResolveTickets',CAST(1 AS bit)),'$.canViewSupportDashboard',CAST(1 AS bit)),
+                        '$.canViewSupportFindings',CAST(1 AS bit)),'$.canCancelFindingWithoutEvidence',CAST(1 AS bit)),'$.canCancelFindingWithReason',CAST(1 AS bit)),'$.canCancelFindingWithoutReason',CAST(0 AS bit)),
+                    updated_at=CASE WHEN u.role<>'GENERAL_SERVICES' OR ISNULL(u.support_team,'')<>'' THEN SYSUTCDATETIME() ELSE u.updated_at END
+                FROM dbo.admin_users u WHERE LOWER(u.email)=N'deliana.solis@grupotejeda.local';
+                DECLARE @warehouseSalt varbinary(16)=0x7BDEAB3354DED475F071FA4B58B3AB62;
+                DECLARE @warehouseHash varbinary(32)=0x2096941A8EDD017184CAA3E80BA9CC5097824ABE84149E3FD91C58F049B7F8C5;
+                INSERT INTO dbo.admin_users(id,email,display_name,role,password_salt,password_hash,password_iterations,is_active,region,must_change_password,permissions_json,support_team)
+                SELECT CONVERT(char(36),NEWID()),source.email,source.display_name,'WAREHOUSE',@warehouseSalt,@warehouseHash,210000,1,N'Almacén · '+source.position,1,source.permissions_json,'WAREHOUSE'
+                FROM(VALUES
+                  (N'bryan.arias@grupotejeda.local',N'Bryan Arias',N'Gerente',N'{"canAuthorizeWarehouseRequests":true,"canLoadWarehouseInventory":true}'),
+                  (N'diorly.abreu@grupotejeda.local',N'Diorly Abreu',N'Encargada',N'{"canAuthorizeWarehouseRequests":true,"canLoadWarehouseInventory":true,"canCreateWarehouseArticles":true}'),
+                  (N'ana.rodriguez@grupotejeda.local',N'Ana Rodriguez',N'Operadora',N'{"canAuthorizeWarehouseRequests":false,"canLoadWarehouseInventory":true,"canCreateWarehouseArticles":true}'),
+                  (N'fernando.ortiz@grupotejeda.local',N'Fernando Ortiz',N'Operador',N'{"canAuthorizeWarehouseRequests":false,"canLoadWarehouseInventory":false}'),
+                  (N'jordan.hellys@grupotejeda.local',N'Jordan Hellys',N'Operador',N'{"canAuthorizeWarehouseRequests":false,"canLoadWarehouseInventory":false}'),
+                  (N'joan.matos@grupotejeda.local',N'Joan Matos',N'Operador',N'{"canAuthorizeWarehouseRequests":false,"canLoadWarehouseInventory":false}')
+                )source(email,display_name,position,permissions_json)
+                WHERE NOT EXISTS(SELECT 1 FROM dbo.admin_users existing WHERE LOWER(existing.email)=LOWER(source.email));
+                -- Existing warehouse accounts may predate the warehouse role. Keep
+                -- their identities, passwords and saved permissions while fixing
+                -- the role/team used by QR tracking and pickup.
+                UPDATE u SET role='WAREHOUSE',support_team='WAREHOUSE',updated_at=SYSUTCDATETIME()
+                FROM dbo.admin_users u
+                WHERE LOWER(u.email) IN(N'bryan.arias@grupotejeda.local',N'diorly.abreu@grupotejeda.local',N'ana.rodriguez@grupotejeda.local',N'fernando.ortiz@grupotejeda.local',N'jordan.hellys@grupotejeda.local',N'joan.matos@grupotejeda.local')
+                  AND (u.role<>'WAREHOUSE' OR ISNULL(u.support_team,'')<>'WAREHOUSE');
+                DECLARE @adonisPermissions nvarchar(max)=N'{"canView":true,"canManage":false,"canManageUsers":false,"canManageAudits":false,"canViewDashboard":false,"canAudit":false,"canCreateTickets":false,"canAssignTickets":false,"canResolveTickets":true,"canConfigureProfile":true,"canExportAudits":false,"canViewSupportDashboard":true,"canViewAllSupportDepartments":false,"canConfigureSupport":false,"canViewSupportFindings":true,"canUseSupportChat":true,"canManageSupportChat":false,"canModerateSupportChat":false,"canDeleteSupportConversations":false,"canShareSupportConversations":true,"canDeleteSupportTickets":false,"canViewTicketNotifications":true}';
+                IF EXISTS(SELECT 1 FROM dbo.admin_users WHERE LOWER(email)=N'adonis.batista@grupotejeda.local')
+                    UPDATE dbo.admin_users SET display_name=N'Adonis Batista',role='GENERAL_SERVICES',region=N'Técnicos Servicios Generales',support_team=NULL,is_active=1,permissions_json=@adonisPermissions,updated_at=SYSUTCDATETIME() WHERE LOWER(email)=N'adonis.batista@grupotejeda.local';
+                ELSE
+                    INSERT INTO dbo.admin_users(id,email,display_name,role,password_salt,password_hash,password_iterations,is_active,region,must_change_password,permissions_json,support_team)
+                    VALUES(CONVERT(char(36),NEWID()),N'adonis.batista@grupotejeda.local',N'Adonis Batista','GENERAL_SERVICES',@warehouseSalt,@warehouseHash,210000,1,N'Técnicos Servicios Generales',1,@adonisPermissions,NULL);
                 """;
             await using var command=new SqlCommand(sql,connection);
-            await command.ExecuteNonQueryAsync(ct);userPermissionSchemaReady=true;
+            await command.ExecuteNonQueryAsync(ct);
+            await EnsureBryanManagerProfile(connection,ct);
+        await EnsureAdministrativeProfiles(connection,ct);
+            await EnsureGledysAdministrativeProfile(connection,ct);
+            await EnsureLegacyAccountRecovery(connection,ct);
+            await EnsureTechnicianResolutionPermissions(connection,ct);
+            await RestoreWarehouseAuthorizers(connection,ct);
+            await WarehouseArticleCreationAccess.EnsureGrants(connection,ct);
+            await EnsureCallCenterSupportProfile(connection,ct);
+            await EnsureIncidentOperatorPermissions(connection,ct);
+            userPermissionSchemaReady=true;
         }
         finally{UserPermissionSchemaLock.Release();}
     }
@@ -606,8 +703,8 @@ sealed partial class Database
         command.Parameters.AddWithValue("@userId", userId);
     }
     static bool IsGlobal(string role) => role is "Administrator" or "Viewer" or "Fiscalizador";
-    static string DepartmentForRole(string role)=>role switch{"Technology"=>"TECHNOLOGY","GeneralServices"=>"GENERAL_SERVICES","HumanResources"=>"HUMAN_RESOURCES",_=>""};
-    static string ClaimRole(string databaseRole) => databaseRole switch { "ADMINISTRATOR" => "Administrator", "GROUP_ADMIN" => "GroupAdministrator", "FISCALIZADOR" => "Fiscalizador", "TECHNOLOGY" => "Technology", "GENERAL_SERVICES" => "GeneralServices", "HUMAN_RESOURCES" => "HumanResources", _ => "Viewer" };
+    static string DepartmentForRole(string role)=>DepartmentAccounts.IsSupportScope(role)?DepartmentAccounts.SupportDepartment(role):role switch{"Technology"=>"TECHNOLOGY","GeneralServices"=>"GENERAL_SERVICES","HumanResources"=>"HUMAN_RESOURCES",_=>""};
+    static string ClaimRole(string databaseRole) => databaseRole switch { "ADMINISTRATOR" => "Administrator", "ADMINISTRATIVE" => "Administrative", "GROUP_ADMIN" => "GroupAdministrator", "FISCALIZADOR" => "Fiscalizador", "TECHNOLOGY" => "Technology", "GENERAL_SERVICES" => "GeneralServices", "HUMAN_RESOURCES" => "HumanResources", "WAREHOUSE" => "Warehouse", "DEPARTMENT" => "Department", _ => "Viewer" };
     static string? AvatarUrl(string id, bool hasAvatar) => hasAvatar ? $"/api/account/avatar/{id}" : null;
     static byte[] PasswordHash(string password, byte[] salt, int iterations) => Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA256, 32);
 
@@ -739,24 +836,24 @@ sealed partial class Database
     public async Task<AdminIdentity?> AuthenticateUser(string email, string password, CancellationToken ct)
     {
         await using var connection = await Open(ct);
-        await EnsureUserPermissionSchema(connection,ct);
+        await EnsureUserPermissionSchema(connection,ct);await EnsureRecoverySchema(connection,ct);
         const string sql = """
             SELECT TOP (1) id,email,display_name,role,password_salt,password_hash,password_iterations,
-                           must_change_password,CASE WHEN avatar_data IS NULL THEN 0 ELSE 1 END,permissions_json,support_team
+                           must_change_password,CASE WHEN avatar_data IS NULL THEN 0 ELSE 1 END,permissions_json,support_team,COALESCE((SELECT session_version FROM dbo.account_recovery r WHERE r.user_id=CONVERT(nvarchar(80),admin_users.id)),N'')
             FROM dbo.admin_users
             WHERE email=@email AND is_active=1;
             """;
         string id, storedEmail, name, databaseRole;
         byte[] salt, hash;
         int iterations;
-        bool mustChange, hasAvatar;string? permissionsJson,supportTeam;
+        bool mustChange, hasAvatar;string? permissionsJson,supportTeam;string recoveryVersion;
         await using (var command = new SqlCommand(sql, connection))
         {
             command.Parameters.AddWithValue("@email", email);
             await using var reader = await command.ExecuteReaderAsync(ct);
             if (!await reader.ReadAsync(ct)) return null;
             id = reader.GetString(0); storedEmail = reader.GetString(1); name = reader.GetString(2); databaseRole = reader.GetString(3);
-            salt = (byte[])reader[4]; hash = (byte[])reader[5]; iterations = reader.GetInt32(6); mustChange = reader.GetBoolean(7); hasAvatar = reader.GetInt32(8) == 1;permissionsJson=reader.IsDBNull(9)?null:reader.GetString(9);supportTeam=reader.IsDBNull(10)?null:reader.GetString(10);
+            salt = (byte[])reader[4]; hash = (byte[])reader[5]; iterations = reader.GetInt32(6); mustChange = reader.GetBoolean(7); hasAvatar = reader.GetInt32(8) == 1;permissionsJson=reader.IsDBNull(9)?null:reader.GetString(9);supportTeam=reader.IsDBNull(10)?null:reader.GetString(10);recoveryVersion=reader.GetString(11);
         }
         var candidate = PasswordHash(password, salt, iterations);
         var passwordMatches = candidate.Length == hash.Length && CryptographicOperations.FixedTimeEquals(candidate, hash);
@@ -767,22 +864,22 @@ sealed partial class Database
             update.Parameters.AddWithValue("@id", id);
             await update.ExecuteNonQueryAsync(ct);
         }
-        return new(id, storedEmail, name, ClaimRole(databaseRole), mustChange, AvatarUrl(id, hasAvatar),ReadPermissions(permissionsJson),supportTeam);
+        return new(id, storedEmail, name, ClaimRole(databaseRole), mustChange, AvatarUrl(id, hasAvatar),ReadPermissions(permissionsJson),supportTeam){RecoveryVersion=recoveryVersion};
     }
 
     public async Task<AdminIdentity?> Account(Guid id, CancellationToken ct)
     {
         await using var connection = await Open(ct);
-        await EnsureUserPermissionSchema(connection,ct);
+        await EnsureUserPermissionSchema(connection,ct);await EnsureRecoverySchema(connection,ct);
         const string sql = """
-            SELECT email,display_name,role,must_change_password,CASE WHEN avatar_data IS NULL THEN 0 ELSE 1 END,permissions_json,support_team
+            SELECT email,display_name,role,must_change_password,CASE WHEN avatar_data IS NULL THEN 0 ELSE 1 END,permissions_json,support_team,COALESCE((SELECT session_version FROM dbo.account_recovery r WHERE r.user_id=CONVERT(nvarchar(80),admin_users.id)),N'')
             FROM dbo.admin_users WHERE id=@id AND is_active=1;
             """;
         await using var command = new SqlCommand(sql, connection);
         command.Parameters.AddWithValue("@id", id.ToString());
         await using var reader = await command.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct)) return null;
-        return new(id.ToString(), reader.GetString(0), reader.GetString(1), ClaimRole(reader.GetString(2)), reader.GetBoolean(3), AvatarUrl(id.ToString(), reader.GetInt32(4) == 1),ReadPermissions(reader.IsDBNull(5)?null:reader.GetString(5)),reader.IsDBNull(6)?null:reader.GetString(6));
+        return new(id.ToString(), reader.GetString(0), reader.GetString(1), ClaimRole(reader.GetString(2)), reader.GetBoolean(3), AvatarUrl(id.ToString(), reader.GetInt32(4) == 1),ReadPermissions(reader.IsDBNull(5)?null:reader.GetString(5)),reader.IsDBNull(6)?null:reader.GetString(6)){RecoveryVersion=reader.GetString(7)};
     }
 
     public async Task<List<AdminUserRow>> AdminUsers(CancellationToken ct)
@@ -824,6 +921,7 @@ sealed partial class Database
                 list.Add(reader.GetString(1));
                 agencyCounts[id] = agencyCounts.GetValueOrDefault(id) + reader.GetInt32(2);
             }
+        foreach(var user in users)if(!user.Permissions.ContainsKey(AreaManagerAccess.Permission))user.Permissions[AreaManagerAccess.Permission]=AreaManagerAccess.Default(ClaimRole(user.Role),user.SupportTeam,user.Email);
         return users.Select(user => user with { Groups = groups.GetValueOrDefault(user.Id) ?? [], AgencyCount = agencyCounts.GetValueOrDefault(user.Id) }).ToList();
     }
 
@@ -875,7 +973,7 @@ sealed partial class Database
                 command.Parameters.AddWithValue("@region", Db(string.IsNullOrWhiteSpace(body.Region) ? null : body.Region.Trim()));
                 command.Parameters.AddWithValue("@contact", Db(string.IsNullOrWhiteSpace(body.Contact) ? null : body.Contact.Trim()));
                 command.Parameters.AddWithValue("@permissions",Db(WritePermissions(body.Permissions)));
-                command.Parameters.AddWithValue("@supportTeam",Db((body.Role=="TECHNOLOGY"||body.Role=="GENERAL_SERVICES")&&!string.IsNullOrWhiteSpace(body.SupportTeam)?body.SupportTeam:null));
+                command.Parameters.AddWithValue("@supportTeam",Db((body.Role=="TECHNOLOGY"||body.Role=="GENERAL_SERVICES"||body.Role=="WAREHOUSE"||body.Role=="DEPARTMENT")&&!string.IsNullOrWhiteSpace(body.SupportTeam)?body.SupportTeam:null));
                 await command.ExecuteNonQueryAsync(ct);
             }
             await ReplaceAssignments(connection, transaction, id, body.Role!, body.Region, body.Groups, ct);
@@ -903,7 +1001,7 @@ sealed partial class Database
                 command.Parameters.AddWithValue("@active", body.IsActive); command.Parameters.AddWithValue("@region", Db(string.IsNullOrWhiteSpace(body.Region) ? null : body.Region.Trim()));
                 command.Parameters.AddWithValue("@contact", Db(string.IsNullOrWhiteSpace(body.Contact) ? null : body.Contact.Trim()));
                 command.Parameters.AddWithValue("@permissions",Db(WritePermissions(body.Permissions)));
-                command.Parameters.AddWithValue("@supportTeam",Db((body.Role=="TECHNOLOGY"||body.Role=="GENERAL_SERVICES")&&!string.IsNullOrWhiteSpace(body.SupportTeam)?body.SupportTeam:null));
+                command.Parameters.AddWithValue("@supportTeam",Db((body.Role=="TECHNOLOGY"||body.Role=="GENERAL_SERVICES"||body.Role=="WAREHOUSE"||body.Role=="DEPARTMENT")&&!string.IsNullOrWhiteSpace(body.SupportTeam)?body.SupportTeam:null));
                 if (hasPassword) { var salt = RandomNumberGenerator.GetBytes(16); command.Parameters.AddWithValue("@salt", salt); command.Parameters.AddWithValue("@hash", PasswordHash(body.Password!, salt, 210000)); }
                 if (await command.ExecuteNonQueryAsync(ct) == 0) { await transaction.RollbackAsync(ct); return null; }
             }
@@ -993,40 +1091,47 @@ sealed partial class Database
 
     public async Task<AdminIdentity?> ChangeOwnPassword(Guid id, string currentPassword, string newPassword, CancellationToken ct)
     {
+        if (!PasswordChangeValid(newPassword)) return null;
         await using var connection = await Open(ct);
-        await EnsureUserPermissionSchema(connection,ct);
+        await EnsureUserPermissionSchema(connection,ct);await EnsureRecoverySchema(connection,ct);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable,ct);
         const string selectSql = """
             SELECT email,display_name,role,password_salt,password_hash,password_iterations,
-                   CASE WHEN avatar_data IS NULL THEN 0 ELSE 1 END,must_change_password,permissions_json,support_team
-            FROM dbo.admin_users WHERE id=@id AND is_active=1;
+                   CASE WHEN avatar_data IS NULL THEN 0 ELSE 1 END,must_change_password,permissions_json,support_team,
+                   COALESCE((SELECT session_version FROM dbo.account_recovery r WHERE r.user_id=CONVERT(nvarchar(80),admin_users.id)),N'')
+            FROM dbo.admin_users WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND is_active=1;
             """;
-        string email, name, databaseRole; byte[] salt, hash; int iterations; bool hasAvatar, mustChange;Dictionary<string,bool> permissions;string? supportTeam;
-        await using (var command = new SqlCommand(selectSql, connection))
+        string email, name, databaseRole,recoveryVersion; byte[] salt, hash; int iterations; bool hasAvatar, mustChange;Dictionary<string,bool> permissions;string? supportTeam;
+        await using (var command = new SqlCommand(selectSql, connection, transaction))
         {
             command.Parameters.AddWithValue("@id", id.ToString());
             await using var reader = await command.ExecuteReaderAsync(ct);
             if (!await reader.ReadAsync(ct)) return null;
             email = reader.GetString(0); name = reader.GetString(1); databaseRole = reader.GetString(2);
-            salt = (byte[])reader[3]; hash = (byte[])reader[4]; iterations = reader.GetInt32(5); hasAvatar = reader.GetInt32(6) == 1; mustChange = reader.GetBoolean(7);permissions=ReadPermissions(reader.IsDBNull(8)?null:reader.GetString(8));supportTeam=reader.IsDBNull(9)?null:reader.GetString(9);
+            salt = (byte[])reader[3]; hash = (byte[])reader[4]; iterations = reader.GetInt32(5); hasAvatar = reader.GetInt32(6) == 1; mustChange = reader.GetBoolean(7);permissions=ReadPermissions(reader.IsDBNull(8)?null:reader.GetString(8));supportTeam=reader.IsDBNull(9)?null:reader.GetString(9);recoveryVersion=reader.GetString(10);
         }
         var candidate = PasswordHash(currentPassword, salt, iterations);
         var passwordMatches = candidate.Length == hash.Length && CryptographicOperations.FixedTimeEquals(candidate, hash);
         var validTemporaryAccess = mustChange && currentPassword == "123456";
         if (!passwordMatches && !validTemporaryAccess) return null;
         var newSalt = RandomNumberGenerator.GetBytes(16); var newHash = PasswordHash(newPassword, newSalt, 210000);
-        await using (var update = new SqlCommand("UPDATE dbo.admin_users SET password_salt=@salt,password_hash=@hash,password_iterations=210000,must_change_password=0,updated_at=SYSUTCDATETIME() WHERE id=@id;", connection))
+        await using (var update = new SqlCommand("UPDATE dbo.admin_users SET password_salt=@salt,password_hash=@hash,password_iterations=210000,must_change_password=0,updated_at=SYSUTCDATETIME() WHERE id=@id;", connection, transaction))
         {
             update.Parameters.AddWithValue("@salt", newSalt); update.Parameters.AddWithValue("@hash", newHash); update.Parameters.AddWithValue("@id", id.ToString());
             await update.ExecuteNonQueryAsync(ct);
         }
-        return new(id.ToString(), email, name, ClaimRole(databaseRole), false, AvatarUrl(id.ToString(), hasAvatar),permissions,supportTeam);
+        recoveryVersion = await RotatePasswordSessions(connection,transaction,id.ToString(),ct);
+        if (string.Equals(email,Environment.GetEnvironmentVariable("ADMIN_EMAIL")?.Trim(),StringComparison.OrdinalIgnoreCase))
+            await DisableLegacyPasswordAccess(connection,transaction,ct);
+        await transaction.CommitAsync(ct);
+        return new(id.ToString(), email, name, ClaimRole(databaseRole), false, AvatarUrl(id.ToString(), hasAvatar),permissions,supportTeam){RecoveryVersion=recoveryVersion};
     }
 
     public async Task AttachAvatar(Guid id, byte[] data, string mime, CancellationToken ct)
     {
         await using var connection = await Open(ct);
         await using var command = new SqlCommand("UPDATE dbo.admin_users SET avatar_data=@data,avatar_content_type=@mime,updated_at=SYSUTCDATETIME() WHERE id=@id;", connection);
-        command.Parameters.AddWithValue("@data", data); command.Parameters.AddWithValue("@mime", mime); command.Parameters.AddWithValue("@id", id.ToString());
+        command.Parameters.AddWithValue("@data", await StorageFiles.Store(data,"photo",ct)); command.Parameters.AddWithValue("@mime", mime); command.Parameters.AddWithValue("@id", id.ToString());
         await command.ExecuteNonQueryAsync(ct);
     }
 
@@ -1037,7 +1142,7 @@ sealed partial class Database
         command.Parameters.AddWithValue("@id", id.ToString());
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, ct);
         if (!await reader.ReadAsync(ct)) return null;
-        return ((byte[])reader[0], reader.GetString(1));
+        return (await StorageFiles.Read((byte[])reader[0],ct), reader.GetString(1));
     }
 
     public async Task<DatabaseHealth> Health(CancellationToken ct)
@@ -1128,8 +1233,8 @@ sealed partial class Database
     {
         await using var connection = await Open(ct);
         const string sql = """
-            SELECT a.grupo,COUNT(*) AS pending FROM dbo.agencies a
-            WHERE a.status='PENDING'
+            SELECT a.grupo,COUNT(*) AS available FROM dbo.agencies a
+            WHERE a.is_active=1 AND a.status IN ('PENDING','COMPLETED','REVIEW_REQUIRED')
               AND (@scoped=0 OR EXISTS(
                     SELECT 1 FROM dbo.admin_user_groups ug
                     WHERE ug.user_id=@userId AND ug.group_name=a.grupo
@@ -1167,45 +1272,52 @@ sealed partial class Database
     {
         await using var connection = await Open(ct);
         const string sql = """
-            SELECT a.id,a.codigo,a.terminal,a.expected_latitude,a.expected_longitude FROM dbo.agencies a
-            WHERE a.status='PENDING' AND a.grupo=@group
+            SELECT a.id,a.codigo,a.terminal,a.expected_latitude,a.expected_longitude,
+                   COUNT(p.id) AS audit_count,MAX(p.submitted_at) AS last_audited_at,a.status
+            FROM dbo.agencies a
+            OUTER APPLY (SELECT TOP(1) profile.* FROM dbo.agency_profiles profile WHERE profile.agency_id=a.id ORDER BY profile.submitted_at DESC,profile.id DESC) p
+            WHERE a.is_active=1 AND a.status IN ('PENDING','COMPLETED','REVIEW_REQUIRED') AND a.grupo=@group
               AND (@scoped=0 OR EXISTS(
                     SELECT 1 FROM dbo.admin_user_groups ug
                     WHERE ug.user_id=@userId AND ug.group_name=a.grupo
               ))
+            GROUP BY a.id,a.codigo,a.terminal,a.expected_latitude,a.expected_longitude,a.status
             ORDER BY a.terminal;
             """;
         await using var command = new SqlCommand(sql, connection);
         command.Parameters.AddWithValue("@group", group);
         AddScope(command, userId, role);
         await using var reader = await command.ExecuteReaderAsync(ct); var agencies = new List<AgencyRow>();
-        while (await reader.ReadAsync(ct)) agencies.Add(new(Guid.Parse(reader.GetString(0)), reader.GetString(1), reader.GetString(2), reader.IsDBNull(3) ? null : reader.GetDouble(3), reader.IsDBNull(4) ? null : reader.GetDouble(4)));
+        while (await reader.ReadAsync(ct)) agencies.Add(new(Guid.Parse(reader.GetString(0)), reader.GetString(1), reader.GetString(2), reader.IsDBNull(3) ? null : reader.GetDouble(3), reader.IsDBNull(4) ? null : reader.GetDouble(4), reader.GetInt32(5), reader.IsDBNull(6) ? null : DateTime.SpecifyKind(reader.GetDateTime(6), DateTimeKind.Utc), reader.GetString(7)));
         return agencies;
     }
 
-    public async Task<List<DashboardAgency>> PanelAgencies(string group, string userId, string role, CancellationToken ct)
+    public async Task<List<DashboardAgency>> PanelAgencies(string? group, string userId, string role, CancellationToken ct)
     {
         await using var connection = await Open(ct);
         const string sql = """
             SELECT a.codigo,a.terminal,a.grupo,a.status,
                    CASE WHEN a.status='COMPLETED' THEN 100
-                        WHEN a.status='REVIEW_REQUIRED' THEN 75 ELSE 0 END
+                        WHEN a.status='REVIEW_REQUIRED' THEN 75 ELSE 0 END,
+                   MAX(p.submitted_at),COUNT(p.id)
             FROM dbo.agencies a
-            WHERE a.grupo=@group
+            LEFT JOIN dbo.agency_profiles p ON p.agency_id=a.id
+            WHERE (@group IS NULL OR a.grupo=@group)
               AND a.status IN ('PENDING','COMPLETED','REVIEW_REQUIRED')
               AND (@scoped=0 OR EXISTS(
                     SELECT 1 FROM dbo.admin_user_groups ug
                     WHERE ug.user_id=@userId AND ug.group_name=a.grupo
               ))
+            GROUP BY a.codigo,a.terminal,a.grupo,a.status
             ORDER BY a.terminal;
             """;
         await using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@group", group);
+        command.Parameters.Add("@group", SqlDbType.NVarChar, 120).Value = (object?)group ?? DBNull.Value;
         AddScope(command, userId, role);
         await using var reader = await command.ExecuteReaderAsync(ct);
         var agencies = new List<DashboardAgency>();
         while (await reader.ReadAsync(ct))
-            agencies.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetInt32(4), null));
+            agencies.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetInt32(4), reader.IsDBNull(5) ? null : DateTime.SpecifyKind(reader.GetDateTime(5), DateTimeKind.Utc), reader.GetInt32(6)));
         return agencies;
     }
 
@@ -1251,10 +1363,13 @@ sealed partial class Database
                      WHEN a.status='REVIEW_REQUIRED' THEN 75
                      ELSE 0
                    END AS percent,
-                   CAST(NULL AS datetime2) AS last_updated
+                   MAX(p.submitted_at) AS last_updated,
+                   COUNT(p.id) AS audit_count
             FROM dbo.agencies a
+            LEFT JOIN dbo.agency_profiles p ON p.agency_id=a.id
             WHERE a.status IN ('PENDING','COMPLETED','REVIEW_REQUIRED')
               {scopeSql}
+            GROUP BY a.codigo,a.terminal,a.grupo,a.status
             ORDER BY a.grupo,a.terminal;
             """;
         try
@@ -1263,7 +1378,7 @@ sealed partial class Database
             if (role == "GroupAdministrator") command.Parameters.AddWithValue("@userId", userId);
             await using var reader = await command.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
-                agencies.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetInt32(4), reader.IsDBNull(5) ? null : reader.GetDateTime(5)));
+                agencies.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetInt32(4), reader.IsDBNull(5) ? null : DateTime.SpecifyKind(reader.GetDateTime(5), DateTimeKind.Utc), reader.GetInt32(6)));
         }
         catch (SqlException error)
         {
@@ -1271,8 +1386,20 @@ sealed partial class Database
         }
         var administrators = new List<DashboardAdministrator>();
         var audits = new List<CompletedAudit>();
+        var auditsTotal = 0;
+        var auditsCountSql = $"""
+            SELECT COUNT(*)
+            FROM dbo.agency_profiles p INNER JOIN dbo.agencies a ON a.id=p.agency_id
+            WHERE 1=1
+              {scopeSql};
+            """;
+        await using (var countCommand = new SqlCommand(auditsCountSql, connection))
+        {
+            if (role == "GroupAdministrator") countCommand.Parameters.AddWithValue("@userId", userId);
+            auditsTotal = Convert.ToInt32(await countCommand.ExecuteScalarAsync(ct));
+        }
         var auditsSql = $"""
-            SELECT TOP (200) a.codigo,a.terminal,a.grupo,p.municipio,p.provincia,p.tipo_establecimiento,
+            SELECT a.codigo,a.terminal,a.grupo,p.municipio,p.provincia,p.tipo_establecimiento,
                    p.latitude,p.longitude,p.accuracy_meters,p.submitted_at,p.id,p.observations,p.employee_name,
                    COALESCE(NULLIF(JSON_VALUE(p.submitted_by_context,'$.login'),''),
                             (SELECT TOP (1) NULLIF(u.email,'') FROM dbo.admin_users u WHERE CONVERT(nvarchar(80),u.id)=JSON_VALUE(p.submitted_by_context,'$.userId')),
@@ -1298,7 +1425,7 @@ sealed partial class Database
             Console.Error.WriteLine($"Dashboard audits optional query: {error}");
         }
         var percent = total == 0 ? 0 : (int)Math.Round(completed * 100d / total);
-        return new(total, completed, pending, review, percent, groups.Count, groups.Count(group => group.Percent == 100), groups, agencies, administrators, audits);
+        return new(total, completed, pending, review, percent, groups.Count, groups.Count(group => group.Percent == 100), auditsTotal, groups, agencies, administrators, audits);
     }
 
     public async Task<AuditDetailRow?> AuditDetail(Guid id, string userId, string role, CancellationToken ct)
@@ -1390,8 +1517,8 @@ sealed partial class Database
             await using (var find = new SqlCommand("SELECT agency_id FROM dbo.agency_profiles WITH (UPDLOCK,ROWLOCK) WHERE id=@id;", connection, transaction)) { find.Parameters.AddWithValue("@id", id.ToString()); agencyId = (string?)await find.ExecuteScalarAsync(ct); }
             if (agencyId is null) { await transaction.RollbackAsync(ct); return false; }
             await using (var delete = new SqlCommand("DELETE FROM dbo.agency_profiles WHERE id=@id;", connection, transaction)) { delete.Parameters.AddWithValue("@id", id.ToString()); await delete.ExecuteNonQueryAsync(ct); }
-            await using (var reopen = new SqlCommand("UPDATE dbo.agencies SET status='PENDING',updated_at=SYSUTCDATETIME() WHERE id=@agency;", connection, transaction)) { reopen.Parameters.AddWithValue("@agency", agencyId); await reopen.ExecuteNonQueryAsync(ct); }
-            await using (var log = new SqlCommand("INSERT INTO dbo.audit_log(entity_type,entity_id,action,before_data,actor_email) VALUES('agency_profile',@id,'PROFILE_DELETED_AND_AGENCY_REOPENED',@before,@actor);", connection, transaction))
+            await using (var reopen = new SqlCommand("UPDATE dbo.agencies SET status=CASE WHEN EXISTS(SELECT 1 FROM dbo.agency_profiles WHERE agency_id=@agency) THEN 'COMPLETED' ELSE 'PENDING' END,updated_at=SYSUTCDATETIME() WHERE id=@agency;", connection, transaction)) { reopen.Parameters.AddWithValue("@agency", agencyId); await reopen.ExecuteNonQueryAsync(ct); }
+            await using (var log = new SqlCommand("INSERT INTO dbo.audit_log(entity_type,entity_id,action,before_data,actor_email) VALUES('agency_profile',@id,'PROFILE_DELETED_AND_AGENCY_STATUS_RECALCULATED',@before,@actor);", connection, transaction))
             { log.Parameters.AddWithValue("@id", id.ToString()); log.Parameters.AddWithValue("@before", System.Text.Json.JsonSerializer.Serialize(before)); log.Parameters.AddWithValue("@actor", actor); await log.ExecuteNonQueryAsync(ct); }
             await transaction.CommitAsync(ct); return true;
         }
@@ -1423,7 +1550,7 @@ sealed partial class Database
                 check.Parameters.AddWithValue("@id", agency.ToString()); await using var reader = await check.ExecuteReaderAsync(ct);
                 if (await reader.ReadAsync(ct)) { status = reader.GetString(0); expectedLatitude = reader.IsDBNull(1) ? null : reader.GetDouble(1); expectedLongitude = reader.IsDBNull(2) ? null : reader.GetDouble(2); }
             }
-            if (status != "PENDING") throw new AgencyConflict();
+            if (status is null || !new[] { "PENDING", "COMPLETED", "REVIEW_REQUIRED" }.Contains(status)) throw new AgencyConflict();
             var id = Guid.NewGuid(); var geo = body.Geolocation!; double? distance = expectedLatitude.HasValue && expectedLongitude.HasValue ? Haversine(geo.Latitude, geo.Longitude, expectedLatitude.Value, expectedLongitude.Value) : null;
             var after = System.Text.Json.JsonSerializer.Serialize(new { id, agencyId = agency, completionPercent = 100 });
             const string sql = """
@@ -1519,10 +1646,10 @@ sealed partial class Database
         });
     }
 
-    public async Task<bool> PhotoMatchesProfile(Guid id, double lat, double lng, double maximumMeters, CancellationToken ct)
+    public async Task<bool> PhotoMatchesProfile(Guid id, double lat, double lng, double accuracy, CancellationToken ct)
     {
-        await using var connection = await Open(ct); await using var command = new SqlCommand("SELECT latitude,longitude FROM dbo.agency_profiles WHERE id=@id;", connection); command.Parameters.AddWithValue("@id", id.ToString());
-        await using var reader = await command.ExecuteReaderAsync(ct); return await reader.ReadAsync(ct) && Haversine(lat, lng, reader.GetDouble(0), reader.GetDouble(1)) <= maximumMeters;
+        await using var connection = await Open(ct); await using var command = new SqlCommand("SELECT latitude,longitude,accuracy_meters FROM dbo.agency_profiles WHERE id=@id;", connection); command.Parameters.AddWithValue("@id", id.ToString());
+        await using var reader = await command.ExecuteReaderAsync(ct); return await reader.ReadAsync(ct) && FieldAuditGps.Matches(lat,lng,accuracy,reader.GetDouble(0),reader.GetDouble(1),reader.GetDouble(2));
     }
 
     public async Task AttachPhoto(Guid id, string type, byte[] data, string mime, double lat, double lng, double accuracy, DateTime captured, CancellationToken ct)
@@ -1536,19 +1663,19 @@ sealed partial class Database
                 VALUES(@photoId,@id,@type,@data,@mime,@lat,@lng,@accuracy,@captured);
             """;
         await using var command = new SqlCommand(sql, connection); command.Parameters.AddWithValue("@photoId", Guid.NewGuid().ToString()); command.Parameters.AddWithValue("@id", id.ToString()); command.Parameters.AddWithValue("@type", type);
-        command.Parameters.AddWithValue("@data", data); command.Parameters.AddWithValue("@mime", mime); command.Parameters.AddWithValue("@lat", lat); command.Parameters.AddWithValue("@lng", lng); command.Parameters.AddWithValue("@accuracy", accuracy); command.Parameters.AddWithValue("@captured", captured); await command.ExecuteNonQueryAsync(ct);
+        command.Parameters.AddWithValue("@data", await StorageFiles.Store(data,"photo",ct)); command.Parameters.AddWithValue("@mime", mime); command.Parameters.AddWithValue("@lat", lat); command.Parameters.AddWithValue("@lng", lng); command.Parameters.AddWithValue("@accuracy", accuracy); command.Parameters.AddWithValue("@captured", captured); await command.ExecuteNonQueryAsync(ct);
     }
 
     public async Task<(byte[] Data, string Mime)?> Photo(Guid id, CancellationToken ct)
     {
         await using var connection = await Open(ct); await using var command = new SqlCommand("SELECT TOP (1) photo_data,content_type FROM dbo.audit_photos WHERE profile_id=@id ORDER BY CASE photo_type WHEN 'frontal' THEN 1 WHEN 'operativa' THEN 2 WHEN 'entorno' THEN 3 WHEN 'inversor' THEN 4 WHEN 'bateria' THEN 5 ELSE 6 END;", connection); command.Parameters.AddWithValue("@id", id.ToString());
-        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, ct); if (!await reader.ReadAsync(ct)) return null; return ((byte[])reader[0], reader.GetString(1));
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, ct); if (!await reader.ReadAsync(ct)) return null; return (await StorageFiles.Read((byte[])reader[0],ct), reader.GetString(1));
     }
 
     public async Task<(byte[] Data, string Mime)?> Photo(Guid id, string type, CancellationToken ct)
     {
         await using var connection = await Open(ct); await using var command = new SqlCommand("SELECT TOP (1) photo_data,content_type FROM dbo.audit_photos WHERE profile_id=@id AND photo_type=@type;", connection); command.Parameters.AddWithValue("@id", id.ToString()); command.Parameters.AddWithValue("@type", type);
-        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, ct); if (!await reader.ReadAsync(ct)) return null; return ((byte[])reader[0], reader.GetString(1));
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, ct); if (!await reader.ReadAsync(ct)) return null; return (await StorageFiles.Read((byte[])reader[0],ct), reader.GetString(1));
     }
 
     public async Task<List<TicketAgencyRow>> TicketAgencies(string userId, string role, CancellationToken ct)
@@ -1560,7 +1687,7 @@ sealed partial class Database
             SELECT a.id,a.codigo,a.terminal,a.grupo,
                    COALESCE(p.direccion,a.directory_direccion),COALESCE(p.sector,a.directory_sector),
                    COALESCE(p.municipio,a.directory_municipio),COALESCE(p.provincia,a.directory_provincia),
-                   COALESCE(p.latitude,a.expected_latitude),COALESCE(p.longitude,a.expected_longitude)
+                   COALESCE(p.latitude,a.expected_latitude),COALESCE(p.longitude,a.expected_longitude),a.region
             FROM dbo.agencies a
             LEFT JOIN dbo.agency_profiles p ON p.agency_id=a.id
             WHERE a.is_active=1
@@ -1574,8 +1701,35 @@ sealed partial class Database
         AddScope(command, userId, role);
         await using var reader = await command.ExecuteReaderAsync(ct);
         var rows = new List<TicketAgencyRow>();
-        while (await reader.ReadAsync(ct)) rows.Add(new(Guid.Parse(reader.GetString(0)), reader.GetString(1), reader.GetString(2), reader.GetString(3),reader.IsDBNull(4)?null:reader.GetString(4),reader.IsDBNull(5)?null:reader.GetString(5),reader.IsDBNull(6)?null:reader.GetString(6),reader.IsDBNull(7)?null:reader.GetString(7),reader.IsDBNull(8)?null:reader.GetDouble(8),reader.IsDBNull(9)?null:reader.GetDouble(9)));
+        var seen = new HashSet<Guid>();
+        while (await reader.ReadAsync(ct))
+        {
+            // Legacy directory IDs cannot be used by the GUID-based ticket API.
+            if(!Guid.TryParse(reader.GetString(0),out var agencyId))continue;
+            if(!seen.Add(agencyId))continue;
+            rows.Add(new(agencyId,reader.IsDBNull(1)?"":reader.GetString(1),reader.IsDBNull(2)?"":reader.GetString(2),reader.IsDBNull(3)?"":reader.GetString(3),reader.IsDBNull(4)?null:reader.GetString(4),reader.IsDBNull(5)?null:reader.GetString(5),reader.IsDBNull(6)?null:reader.GetString(6),reader.IsDBNull(7)?null:reader.GetString(7),reader.IsDBNull(8)?null:Convert.ToDouble(reader.GetValue(8)),reader.IsDBNull(9)?null:Convert.ToDouble(reader.GetValue(9)),reader.IsDBNull(10)?null:reader.GetString(10)));
+        }
         return rows;
+    }
+
+    public async Task<TicketAgencyCatalogStats> TicketAgencyCatalogStats(string userId,string role,CancellationToken ct)
+    {
+        await using var connection=await Open(ct);
+        await EnsureTicketWorkflowSchema(connection,ct);
+        const string sql="""
+            SELECT COUNT_BIG(*),COALESCE(SUM(CASE WHEN TRY_CONVERT(uniqueidentifier,a.id) IS NULL THEN 1 ELSE 0 END),0)
+            FROM dbo.agencies a
+            WHERE a.is_active=1
+              AND (@scoped=0 OR EXISTS(
+                    SELECT 1 FROM dbo.admin_user_groups ug
+                    WHERE ug.user_id=@userId AND ug.group_name=a.grupo
+              ));
+            """;
+        await using var command=new SqlCommand(sql,connection);
+        AddScope(command,userId,role);
+        await using var reader=await command.ExecuteReaderAsync(ct);
+        await reader.ReadAsync(ct);
+        return new(Convert.ToInt64(reader.GetValue(0)),Convert.ToInt64(reader.GetValue(1)));
     }
 
     public async Task<bool> UpdateAgencyDirectory(Guid id,AgencyDirectoryUpdate body,string actor,CancellationToken ct)
@@ -1643,88 +1797,6 @@ sealed partial class Database
         catch{await transaction.RollbackAsync(ct);throw;}
     }
 
-    public async Task<AgencyDirectoryImportResult> ImportAgencyDirectory(IReadOnlyList<AgencyDirectoryImportRow> rows,string? fileName,string actor,CancellationToken ct)
-    {
-        await using var connection=await Open(ct);
-        await EnsureAgencyDirectorySchema(connection,ct);
-        await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable,ct);
-        var created=0;
-        var duplicates=new List<string>();
-        var batchId=Guid.NewGuid();
-        try
-        {
-            foreach(var row in rows)
-            {
-                var codigo=row.Codigo!.Trim();
-                var terminal=row.Terminal!.Trim();
-                var grupo=row.Grupo!.Trim();
-                const string duplicateSql="""
-                    SELECT TOP(1) CONCAT(codigo,N' · ',terminal)
-                    FROM dbo.agencies WITH(UPDLOCK,HOLDLOCK)
-                    WHERE UPPER(LTRIM(RTRIM(codigo)))=UPPER(@codigo)
-                       OR (UPPER(LTRIM(RTRIM(terminal)))=UPPER(@terminal) AND UPPER(LTRIM(RTRIM(grupo)))=UPPER(@grupo));
-                    """;
-                string? duplicate;
-                await using(var find=new SqlCommand(duplicateSql,connection,transaction))
-                {
-                    find.Parameters.AddWithValue("@codigo",codigo);
-                    find.Parameters.AddWithValue("@terminal",terminal);
-                    find.Parameters.AddWithValue("@grupo",grupo);
-                    duplicate=(string?)await find.ExecuteScalarAsync(ct);
-                }
-                if(duplicate is not null)
-                {
-                    duplicates.Add($"Fila {row.RowNumber}: {duplicate}");
-                    continue;
-                }
-
-                var id=Guid.NewGuid();
-                const string insertSql="""
-                    INSERT INTO dbo.agencies
-                        (id,source_key,codigo,terminal,grupo,region,directory_direccion,directory_sector,directory_municipio,directory_provincia,expected_latitude,expected_longitude,is_active,status,created_at,updated_at)
-                    VALUES
-                        (@id,@sourceKey,@codigo,@terminal,@grupo,@region,@direccion,@sector,@municipio,@provincia,@latitude,@longitude,1,'PENDING',SYSUTCDATETIME(),SYSUTCDATETIME());
-                    """;
-                await using(var insert=new SqlCommand(insertSql,connection,transaction))
-                {
-                    insert.Parameters.AddWithValue("@id",id.ToString());
-                    insert.Parameters.AddWithValue("@sourceKey",$"EXCEL:{id:N}");
-                    insert.Parameters.AddWithValue("@codigo",codigo);
-                    insert.Parameters.AddWithValue("@terminal",terminal);
-                    insert.Parameters.AddWithValue("@grupo",grupo);
-                    insert.Parameters.AddWithValue("@region",Db(string.IsNullOrWhiteSpace(row.Region)?null:row.Region.Trim()));
-                    insert.Parameters.AddWithValue("@direccion",Db(string.IsNullOrWhiteSpace(row.Direccion)?null:row.Direccion.Trim()));
-                    insert.Parameters.AddWithValue("@sector",Db(string.IsNullOrWhiteSpace(row.Sector)?null:row.Sector.Trim()));
-                    insert.Parameters.AddWithValue("@municipio",Db(string.IsNullOrWhiteSpace(row.Municipio)?null:row.Municipio.Trim()));
-                    insert.Parameters.AddWithValue("@provincia",Db(string.IsNullOrWhiteSpace(row.Provincia)?null:row.Provincia.Trim()));
-                    insert.Parameters.AddWithValue("@latitude",Db(row.Latitude));
-                    insert.Parameters.AddWithValue("@longitude",Db(row.Longitude));
-                    await insert.ExecuteNonQueryAsync(ct);
-                }
-                created++;
-            }
-
-            const string auditSql="""
-                INSERT INTO dbo.audit_log(entity_type,entity_id,action,after_data,actor_email)
-                VALUES('agency_import',@id,'AGENCY_DIRECTORY_EXCEL_IMPORTED',@after,@actor);
-                """;
-            await using(var audit=new SqlCommand(auditSql,connection,transaction))
-            {
-                audit.Parameters.AddWithValue("@id",batchId.ToString());
-                audit.Parameters.AddWithValue("@after",System.Text.Json.JsonSerializer.Serialize(new{fileName,total=rows.Count,created,skipped=duplicates.Count,duplicates=duplicates.Take(100)}));
-                audit.Parameters.AddWithValue("@actor",actor);
-                await audit.ExecuteNonQueryAsync(ct);
-            }
-            await transaction.CommitAsync(ct);
-            return new(rows.Count,created,duplicates.Count,duplicates.Take(100).ToList());
-        }
-        catch
-        {
-            await transaction.RollbackAsync(ct);
-            throw;
-        }
-    }
-
     public async Task<List<SupportTicketRow>> Tickets(string userId, string role, CancellationToken ct)
     {
         await using var connection = await Open(ct);
@@ -1746,7 +1818,7 @@ sealed partial class Database
                     WHERE ug.user_id=@userId AND ug.group_name=a.grupo
               ))
               AND (@department='' OR t.assigned_department=@department)
-              AND (@ownOnly=0 OR t.created_by_user_id=@userId OR t.assigned_technician_id=@userId)
+              AND (@ownOnly=0 OR t.assigned_technician_id=@userId)
             ORDER BY CASE t.status WHEN 'OPEN' THEN 1 WHEN 'IN_PROGRESS' THEN 2 WHEN 'PENDING' THEN 3 WHEN 'RESOLVED' THEN 4 ELSE 5 END,
                      CASE t.priority WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 ELSE 4 END,
                      t.created_at DESC;
@@ -1761,8 +1833,9 @@ sealed partial class Database
         return rows;
     }
 
-    public async Task<List<SupportTicketRow>> Tickets(string userId,string role,bool canAssignTickets,string? supportTeam,string? userEmail,CancellationToken ct)
+public async Task<List<SupportTicketRow>> Tickets(string userId,string role,bool canAssignTickets,string? supportTeam,string? userEmail,CancellationToken ct,bool areaManager=false,Guid? onlyTicketId=null)
     {
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
         await using var connection=await Open(ct);await EnsureTicketWorkflowSchema(connection,ct);
         const string sql="""
             DECLARE @visible TABLE(id uniqueidentifier NOT NULL PRIMARY KEY);
@@ -1774,32 +1847,39 @@ sealed partial class Database
                 t.assigned_technician_id=@userId
                 OR LTRIM(RTRIM(t.assigned_technician_id))=LTRIM(RTRIM(@userId))
                 OR LOWER(LTRIM(RTRIM(t.assigned_technician_id)))=LOWER(LTRIM(RTRIM(@userEmail)))
+                OR LOWER(LTRIM(RTRIM(t.assigned_technician_id)))=LOWER(LEFT(LTRIM(RTRIM(@userEmail)),CHARINDEX('@',LTRIM(RTRIM(@userEmail))+'@')-1))
                 OR EXISTS(SELECT 1 FROM dbo.admin_users assigned_user WHERE CONVERT(nvarchar(80),assigned_user.id)=LTRIM(RTRIM(t.assigned_technician_id)) AND LOWER(LTRIM(RTRIM(assigned_user.email)))=LOWER(LTRIM(RTRIM(@userEmail))))
                 THEN 1 ELSE 0 END AS is_current) assignment
             -- Las expresiones históricas se conservan como referencia de compatibilidad:
             -- @groupSupervisor=1 AND (t.assigned_technician_id=@userId OR LTRIM(RTRIM(t.assigned_technician_id))=LTRIM(RTRIM(@userId)))
             -- @supportTeam='TECHNICIANS' AND (t.assigned_technician_id=@userId OR LTRIM(RTRIM(t.assigned_technician_id))=LTRIM(RTRIM(@userId)))
-            WHERE
+            WHERE (@ticketId IS NULL OR t.id=@ticketId) AND (
               @administrator=1
-              OR (@groupSupervisor=1 AND (
-                    assignment.is_current=1
-                    OR EXISTS(SELECT 1 FROM dbo.admin_user_groups ug WHERE ug.user_id=@userId AND ug.group_name=a.grupo)
-                 ))
+              OR (@administrativeRequester=1 AND t.created_by_user_id=@userId)
+              OR (@supportTeam='WAREHOUSE' AND t.created_by_user_id=@userId)
+              OR (@areaManager=1 AND @supportTeam='WAREHOUSE' AND EXISTS(SELECT 1 FROM dbo.admin_users creator WHERE CONVERT(nvarchar(80),creator.id)=t.created_by_user_id AND (creator.role='WAREHOUSE' OR creator.support_team='WAREHOUSE')))
+              OR (@groupSupervisor=1 AND (assignment.is_current=1 OR t.created_by_user_id=@userId))
               OR (@supportDepartment<>'' AND (
-                    (@supportTeam='CALL_CENTER' AND t.assigned_department='TECHNOLOGY' AND t.assigned_team='CALL_CENTER')
-                    OR (@supportTeam='TECHNICIANS' AND assignment.is_current=1)
+                    (@supportTeam='CALL_CENTER' AND (
+                        (t.assigned_department='TECHNOLOGY' AND t.assigned_team='CALL_CENTER')
+                        OR (t.ticket_type='INTERNAL' AND EXISTS(SELECT 1 FROM dbo.support_ticket_history cc
+                            WHERE cc.ticket_id=t.id AND cc.from_team='CALL_CENTER' AND (
+                                (cc.action='ESCALATED' AND cc.to_team='TECHNICAL_FAILURE')
+                                OR (cc.action='ESCALATED_TO_SUPERVISOR' AND cc.to_team='TECHNICIANS'))))
+                    ))
+                    OR (@supportTeam='TECHNICIANS' AND assignment.is_current=1 AND t.assigned_department=@supportDepartment)
                     OR (@supportTeam='TECHNICAL_FAILURE' AND (
-                        assignment.is_current=1
+                        (assignment.is_current=1 AND t.assigned_department=@supportDepartment)
                         OR (@canAssign=1 AND t.assigned_department='TECHNOLOGY' AND t.assigned_team IN('TECHNICAL_FAILURE','TECHNICIANS'))
                     ))
                     OR (@supportTeam NOT IN('CALL_CENTER','TECHNICAL_FAILURE','TECHNICIANS') AND (
-                        assignment.is_current=1
+                        (assignment.is_current=1 AND t.assigned_department=@supportDepartment)
                         OR (@canAssign=1 AND (
                             (t.assigned_department=@supportDepartment AND (@supportTeam='' OR t.assigned_team=@supportTeam))
                             OR EXISTS(SELECT 1 FROM dbo.support_ticket_shares s WHERE s.ticket_id=t.id AND s.department_code=@supportDepartment)
                         ))
                     ))
-                 ));
+                 ))) OPTION(RECOMPILE);
 
             SELECT t.id,t.ticket_number,a.codigo,a.terminal,a.grupo,t.category,t.assigned_department,t.priority,t.status,
                    t.subject,t.description,t.resolution,t.created_by_name,t.created_by_username,
@@ -1809,7 +1889,14 @@ sealed partial class Database
                    COALESCE(p.latitude,a.expected_latitude),COALESCE(p.longitude,a.expected_longitude),
                    CASE WHEN t.assigned_department='TECHNOLOGY' AND COALESCE(ru.support_team,u.support_team) IN('CALL_CENTER','TECHNICAL_FAILURE','TECHNICIANS')
                         THEN COALESCE(ru.support_team,u.support_team) ELSE t.assigned_team END,
-                   COALESCE(t.resolved_by_name,ru.display_name,CASE WHEN t.status IN('RESOLVED','CLOSED') THEN u.display_name END)
+                    COALESCE(t.resolved_by_name,ru.display_name,CASE WHEN t.status IN('RESOLVED','CLOSED') THEN u.display_name END),
+                    CAST(CASE WHEN
+                        LTRIM(RTRIM(t.assigned_technician_id))=LTRIM(RTRIM(@userId))
+                        OR LOWER(LTRIM(RTRIM(t.assigned_technician_id)))=LOWER(LTRIM(RTRIM(@userEmail)))
+                        OR (NULLIF(LTRIM(RTRIM(@userEmail)),'') IS NOT NULL AND LOWER(LTRIM(RTRIM(t.assigned_technician_id)))=LOWER(LEFT(LTRIM(RTRIM(@userEmail)),CHARINDEX('@',LTRIM(RTRIM(@userEmail))+'@')-1)))
+                        OR EXISTS(SELECT 1 FROM dbo.admin_users assigned_user WHERE CONVERT(nvarchar(80),assigned_user.id)=LTRIM(RTRIM(t.assigned_technician_id)) AND LOWER(LTRIM(RTRIM(assigned_user.email)))=LOWER(LTRIM(RTRIM(@userEmail))))
+                    THEN 1 ELSE 0 END AS bit),
+                    CAST(CASE WHEN t.created_by_user_id=@userId THEN 1 ELSE 0 END AS bit)
             FROM @visible v
             INNER JOIN dbo.support_tickets t ON t.id=v.id
             INNER JOIN dbo.agencies a ON a.id=t.agency_id
@@ -1826,14 +1913,17 @@ sealed partial class Database
             """;
         await using var command=new SqlCommand(sql,connection);
         command.Parameters.AddWithValue("@administrator",role=="Administrator"?1:0);
+        command.Parameters.Add("@ticketId",SqlDbType.UniqueIdentifier).Value=(object?)onlyTicketId??DBNull.Value;
         command.Parameters.AddWithValue("@groupSupervisor",role=="GroupAdministrator"?1:0);
         command.Parameters.AddWithValue("@supportDepartment",DepartmentForRole(role));
-        command.Parameters.AddWithValue("@supportTeam",supportTeam??"");
+        command.Parameters.AddWithValue("@supportTeam",role=="Warehouse"?"WAREHOUSE":supportTeam??"");
         command.Parameters.AddWithValue("@userEmail",userEmail??"");
+        command.Parameters.AddWithValue("@administrativeRequester",DepartmentAccounts.IsSupportScope(role)||role=="Administrative"&&EmmaAdministrativeAccess.IsEmma(userEmail)?1:0);
+        command.Parameters.AddWithValue("@areaManager",areaManager?1:0);
         command.Parameters.AddWithValue("@canAssign",canAssignTickets?1:0);
         command.Parameters.AddWithValue("@userId",userId);
         await using var reader=await command.ExecuteReaderAsync(ct);var rows=new List<SupportTicketRow>();
-        while(await reader.ReadAsync(ct))rows.Add(new(reader.GetGuid(0),reader.GetInt64(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetString(5),reader.GetString(6),reader.GetString(7),reader.GetString(8),reader.GetString(9),reader.GetString(10),reader.IsDBNull(11)?null:reader.GetString(11),reader.GetString(12),reader.GetString(13),reader.GetDateTime(14),reader.GetDateTime(15),reader.IsDBNull(16)?null:reader.GetDateTime(16),ReadBooleanValue(reader,17),reader.GetString(18),reader.IsDBNull(19)?null:reader.GetString(19),reader.IsDBNull(20)?null:reader.GetString(20),reader.IsDBNull(21)?null:reader.GetString(21),reader.IsDBNull(22)?null:reader.GetString(22),reader.IsDBNull(23)?null:reader.GetString(23),reader.IsDBNull(24)?null:reader.GetString(24),reader.IsDBNull(25)?null:reader.GetDouble(25),reader.IsDBNull(26)?null:reader.GetDouble(26),reader.IsDBNull(27)?null:reader.GetString(27),[],[],[],reader.IsDBNull(28)?null:reader.GetString(28)));
+        while(await reader.ReadAsync(ct))rows.Add(new(reader.GetGuid(0),reader.GetInt64(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetString(5),reader.GetString(6),reader.GetString(7),reader.GetString(8),reader.GetString(9),reader.GetString(10),reader.IsDBNull(11)?null:reader.GetString(11),reader.GetString(12),reader.GetString(13),reader.GetDateTime(14),reader.GetDateTime(15),reader.IsDBNull(16)?null:reader.GetDateTime(16),ReadBooleanValue(reader,17),reader.GetString(18),reader.IsDBNull(19)?null:reader.GetString(19),reader.IsDBNull(20)?null:reader.GetString(20),reader.IsDBNull(21)?null:reader.GetString(21),reader.IsDBNull(22)?null:reader.GetString(22),reader.IsDBNull(23)?null:reader.GetString(23),reader.IsDBNull(24)?null:reader.GetString(24),reader.IsDBNull(25)?null:reader.GetDouble(25),reader.IsDBNull(26)?null:reader.GetDouble(26),reader.IsDBNull(27)?null:reader.GetString(27),[],[],[],reader.IsDBNull(28)?null:reader.GetString(28)){IsAssignedToCurrentUser=ReadBooleanValue(reader,29),IsCreatedByCurrentUser=ReadBooleanValue(reader,30)});
         var history=new Dictionary<Guid,List<TicketHistoryRow>>();var shares=new Dictionary<Guid,List<string>>();var evidence=new Dictionary<Guid,List<TicketEvidenceRow>>();
         if(await reader.NextResultAsync(ct))while(await reader.ReadAsync(ct))
         {
@@ -1846,7 +1936,7 @@ sealed partial class Database
             var ticketId=reader.GetGuid(0);if(!evidence.TryGetValue(ticketId,out var list))evidence[ticketId]=list=[];var evidenceId=reader.GetGuid(1);
             list.Add(new(evidenceId,reader.GetString(2),reader.GetString(3),reader.GetDateTime(4),$"/api/tickets/evidence/{evidenceId}",reader.IsDBNull(5)?null:reader.GetDouble(5),reader.IsDBNull(6)?null:reader.GetDouble(6),reader.IsDBNull(7)?null:reader.GetDouble(7),reader.IsDBNull(8)?null:reader.GetDateTime(8)));
         }
-        return rows.Select(row=>row with{History=history.GetValueOrDefault(row.Id)??[],SharedWithDepartments=shares.GetValueOrDefault(row.Id)??[],Evidence=evidence.GetValueOrDefault(row.Id)??[],IsAssignedToCurrentUser=string.Equals(row.AssignedTechnicianId?.Trim(),userId.Trim(),StringComparison.OrdinalIgnoreCase)||string.Equals(row.AssignedTechnicianId?.Trim(),userEmail?.Trim(),StringComparison.OrdinalIgnoreCase)}).ToList();
+        return rows.Select(row=>row with{History=history.GetValueOrDefault(row.Id)??[],SharedWithDepartments=shares.GetValueOrDefault(row.Id)??[],Evidence=evidence.GetValueOrDefault(row.Id)??[],IsAssignedToCurrentUser=row.IsAssignedToCurrentUser||string.Equals(row.AssignedTechnicianId?.Trim(),userId.Trim(),StringComparison.OrdinalIgnoreCase)||string.Equals(row.AssignedTechnicianId?.Trim(),userEmail?.Trim(),StringComparison.OrdinalIgnoreCase)}).ToList();
     }
 
     public async Task<SupportTicketRow?> CreateTicket(TicketCreate body, string userId, string role, string displayName, string username, CancellationToken ct)
@@ -1866,7 +1956,7 @@ sealed partial class Database
         var id = Guid.NewGuid();
         const string sql = """
             INSERT INTO dbo.support_tickets(id,agency_id,category,assigned_department,priority,subject,description,created_by_user_id,created_by_name,created_by_username,ticket_type,assigned_technician_id)
-            VALUES(@id,@agency,@category,@department,@priority,@subject,@description,@userId,@name,@username,@ticketType,@technician);
+            VALUES(@id,@agency,@category,@department,@priority,@subject,@description,@userId,@name,@username,@ticketType,@technician,SYSUTCDATETIME(),SYSUTCDATETIME());
             """;
         await using var command = new SqlCommand(sql, connection);
         command.Parameters.AddWithValue("@id", id); command.Parameters.AddWithValue("@agency", body.AgencyId.Value.ToString());
@@ -1878,7 +1968,7 @@ sealed partial class Database
         return (await Tickets(userId, role, ct)).FirstOrDefault(ticket => ticket.Id == id);
     }
 
-    static string DatabaseRoleForDepartment(string department)=>department switch{"TECHNOLOGY"=>"TECHNOLOGY","GENERAL_SERVICES"=>"GENERAL_SERVICES","HUMAN_RESOURCES"=>"HUMAN_RESOURCES",_=>""};
+    static string DatabaseRoleForDepartment(string department)=>DepartmentAccounts.LegacyStandalone(department)?"DEPARTMENT":department switch{"TECHNOLOGY"=>"TECHNOLOGY","GENERAL_SERVICES"=>"GENERAL_SERVICES","HUMAN_RESOURCES"=>"HUMAN_RESOURCES",_=>""};
 
     static async Task<bool> ValidTicketAssignee(SqlConnection connection,SqlTransaction transaction,string? technicianId,string department,string? team,string ticketType,string agencyGroup,CancellationToken ct)
     {
@@ -1886,14 +1976,15 @@ sealed partial class Database
         const string sql="""
             SELECT COUNT(*) FROM dbo.admin_users u
             WHERE CONVERT(nvarchar(80),u.id)=@technician AND u.is_active=1 AND (
-                (u.role=@departmentRole AND (
+                (u.role=@departmentRole AND (u.role<>'DEPARTMENT' OR u.support_team=@department) AND (
                     (@department='TECHNOLOGY' AND (
                         (@team='CALL_CENTER' AND u.support_team='CALL_CENTER')
                         OR (@team='TECHNICAL_FAILURE' AND u.support_team='TECHNICAL_FAILURE')
                         OR (@team='TECHNICAL_FAILURE' AND (u.support_team='TECHNICIANS' OR (ISNULL(u.support_team,'')='' AND JSON_VALUE(u.permissions_json,'$.canResolveTickets')='true' AND ISNULL(JSON_VALUE(u.permissions_json,'$.canAssignTickets'),'false')<>'true')))
                         OR (@team='TECHNICIANS' AND (u.support_team='TECHNICIANS' OR u.support_team IS NULL))
                     ))
-                    OR (@department<>'TECHNOLOGY' AND (u.support_team='TECHNICIANS' OR (
+                    OR (@department<>'TECHNOLOGY' AND (u.support_team='TECHNICIANS' OR
+                        (u.role='GENERAL_SERVICES' AND (u.support_team='WORKSHOP' OR JSON_VALUE(u.permissions_json,'$.canAssignTickets')='false')) OR (
                         JSON_VALUE(u.permissions_json,'$.canResolveTickets')='true'
                         AND ISNULL(JSON_VALUE(u.permissions_json,'$.canAssignTickets'),'false')<>'true'
                     )))
@@ -1906,7 +1997,7 @@ sealed partial class Database
 
     static async Task AddTicketHistory(SqlConnection connection,SqlTransaction transaction,Guid ticketId,string action,string? fromDepartment,string? toDepartment,string? fromTeam,string? toTeam,string userId,string actorName,string? comment,CancellationToken ct)
     {
-        const string sql="INSERT INTO dbo.support_ticket_history(ticket_id,action,from_department,to_department,from_team,to_team,actor_user_id,actor_name,comment) VALUES(@ticket,@action,@fromDepartment,@toDepartment,@fromTeam,@toTeam,@userId,@actor,@comment);";
+        const string sql="INSERT INTO dbo.support_ticket_history(ticket_id,action,from_department,to_department,from_team,to_team,actor_user_id,actor_name,comment,created_at) VALUES(@ticket,@action,@fromDepartment,@toDepartment,@fromTeam,@toTeam,@userId,@actor,@comment,SYSUTCDATETIME());";
         await using var command=new SqlCommand(sql,connection,transaction);command.Parameters.AddWithValue("@ticket",ticketId);command.Parameters.AddWithValue("@action",action);command.Parameters.AddWithValue("@fromDepartment",Db(fromDepartment));command.Parameters.AddWithValue("@toDepartment",Db(toDepartment));command.Parameters.AddWithValue("@fromTeam",Db(fromTeam));command.Parameters.AddWithValue("@toTeam",Db(toTeam));command.Parameters.AddWithValue("@userId",Db(string.IsNullOrWhiteSpace(userId)?null:userId));command.Parameters.AddWithValue("@actor",actorName);command.Parameters.AddWithValue("@comment",Db(string.IsNullOrWhiteSpace(comment)?null:comment.Trim()));await command.ExecuteNonQueryAsync(ct);
     }
 
@@ -1920,13 +2011,19 @@ sealed partial class Database
             IF @recipient<>''
                 INSERT INTO dbo.support_ticket_notifications(ticket_id,event_type,recipient_user_id,message,actor_user_id,actor_name,created_at)
                 VALUES(@ticket,@event,@recipient,@message,@userId,@actor,@occurredAt);
+            INSERT INTO dbo.support_ticket_notifications(ticket_id,event_type,recipient_user_id,message,actor_user_id,actor_name,created_at)
+            SELECT @ticket,@event,t.created_by_user_id,@message,@userId,@actor,@occurredAt
+            FROM dbo.support_tickets t INNER JOIN dbo.admin_users creator ON CONVERT(nvarchar(80),creator.id)=t.created_by_user_id
+            WHERE t.id=@ticket AND creator.is_active=1 AND creator.role='GROUP_ADMIN'
+              AND t.created_by_user_id<>@recipient;
             IF @notifySupervisors=1
                 INSERT INTO dbo.support_ticket_notifications(ticket_id,event_type,recipient_user_id,message,actor_user_id,actor_name,created_at)
                 SELECT @ticket,@event,CONVERT(nvarchar(80),u.id),@message,@userId,@actor,@occurredAt
                 FROM dbo.admin_users u
                 WHERE u.is_active=1 AND u.role='GROUP_ADMIN'
                   AND EXISTS(SELECT 1 FROM dbo.admin_user_groups ug WHERE ug.user_id=u.id AND ug.group_name=@agencyGroup)
-                  AND (@recipient='' OR CONVERT(nvarchar(80),u.id)<>@recipient);
+                  AND (@recipient='' OR CONVERT(nvarchar(80),u.id)<>@recipient)
+                  AND NOT EXISTS(SELECT 1 FROM dbo.support_tickets t WHERE t.id=@ticket AND t.created_by_user_id=CONVERT(nvarchar(80),u.id));
             """;
         await using var command=new SqlCommand(sql,connection,transaction);command.Parameters.AddWithValue("@ticket",ticketId);command.Parameters.AddWithValue("@event",eventType);command.Parameters.AddWithValue("@recipient",recipientUserId??"");command.Parameters.AddWithValue("@targetDepartment",targetDepartment??"");command.Parameters.AddWithValue("@agencyGroup",agencyGroup);command.Parameters.AddWithValue("@userId",Db(string.IsNullOrWhiteSpace(userId)?null:userId));command.Parameters.AddWithValue("@actor",actorName);command.Parameters.AddWithValue("@message",message);command.Parameters.AddWithValue("@notifySupervisors",notifySupervisors?1:0);await command.ExecuteNonQueryAsync(ct);
     }
@@ -1945,15 +2042,22 @@ sealed partial class Database
         await using var command=new SqlCommand(sql,connection,transaction);command.Parameters.AddWithValue("@ticket",ticketId);command.Parameters.AddWithValue("@event",eventType);command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@actor",actorName);command.Parameters.AddWithValue("@message",message);await command.ExecuteNonQueryAsync(ct);
     }
 
-    static async Task<bool> CanWorkTicket(SqlConnection connection,SqlTransaction transaction,Guid ticketId,string userId,string role,string? supportTeam,bool canAssignTickets,CancellationToken ct)
+static async Task<bool> CanWorkTicket(SqlConnection connection,SqlTransaction transaction,Guid ticketId,string userId,string role,string? supportTeam,bool canAssignTickets,CancellationToken ct)
     {
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
         const string sql="""
             SELECT COUNT(*)
             FROM dbo.support_tickets t INNER JOIN dbo.agencies a ON a.id=t.agency_id
             OUTER APPLY (SELECT CASE WHEN
                 t.assigned_technician_id=@userId
                 OR LTRIM(RTRIM(t.assigned_technician_id))=LTRIM(RTRIM(@userId))
-                OR EXISTS(SELECT 1 FROM dbo.admin_users actor_account WHERE CONVERT(nvarchar(80),actor_account.id)=@userId AND LOWER(LTRIM(RTRIM(t.assigned_technician_id)))=LOWER(LTRIM(RTRIM(actor_account.email))))
+                OR EXISTS(SELECT 1 FROM dbo.admin_users actor_account WHERE CONVERT(nvarchar(80),actor_account.id)=@userId AND (LOWER(LTRIM(RTRIM(t.assigned_technician_id)))=LOWER(LTRIM(RTRIM(actor_account.email))) OR LOWER(LTRIM(RTRIM(t.assigned_technician_id)))=LOWER(LEFT(LTRIM(RTRIM(actor_account.email)),CHARINDEX('@',LTRIM(RTRIM(actor_account.email))+'@')-1))))
+                OR EXISTS(
+                    SELECT 1 FROM dbo.admin_users assigned_account
+                    INNER JOIN dbo.admin_users actor_account ON CONVERT(nvarchar(80),actor_account.id)=@userId
+                    WHERE CONVERT(nvarchar(80),assigned_account.id)=LTRIM(RTRIM(t.assigned_technician_id))
+                      AND LOWER(LTRIM(RTRIM(assigned_account.email)))=LOWER(LTRIM(RTRIM(actor_account.email)))
+                )
                 THEN 1 ELSE 0 END AS is_current) assignment
             -- Compatibilidad con asignaciones históricas:
             -- t.assigned_technician_id=@userId OR LTRIM(RTRIM(t.assigned_technician_id))=LTRIM(RTRIM(@userId))
@@ -1963,11 +2067,11 @@ sealed partial class Database
                 OR (@supportDepartment<>'' AND (
                     (@supportTeam='CALL_CENTER' AND t.assigned_department='TECHNOLOGY' AND t.assigned_team='CALL_CENTER')
                     OR (@supportTeam='TECHNICAL_FAILURE' AND (
-                        assignment.is_current=1
+                        (assignment.is_current=1 AND t.assigned_department=@supportDepartment)
                         OR (@canAssign=1 AND t.assigned_department='TECHNOLOGY' AND t.assigned_team IN('TECHNICAL_FAILURE','TECHNICIANS'))
                     ))
                     OR (@supportTeam NOT IN('CALL_CENTER','TECHNICAL_FAILURE') AND (
-                        assignment.is_current=1
+                        (assignment.is_current=1 AND t.assigned_department=@supportDepartment)
                         OR (@canAssign=1 AND (
                             (t.assigned_department=@supportDepartment AND (@supportTeam='' OR t.assigned_team=@supportTeam))
                             OR EXISTS(SELECT 1 FROM dbo.support_ticket_shares s WHERE s.ticket_id=t.id AND s.department_code=@supportDepartment)
@@ -1976,11 +2080,12 @@ sealed partial class Database
                 ))
             );
             """;
-        await using var command=new SqlCommand(sql,connection,transaction);command.Parameters.AddWithValue("@ticket",ticketId);command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@administrator",role=="Administrator"?1:0);command.Parameters.AddWithValue("@groupSupervisor",role=="GroupAdministrator"?1:0);command.Parameters.AddWithValue("@supportDepartment",DepartmentForRole(role));command.Parameters.AddWithValue("@supportTeam",supportTeam??"");command.Parameters.AddWithValue("@canAssign",canAssignTickets?1:0);return Convert.ToInt32(await command.ExecuteScalarAsync(ct))>0;
+        await using var command=new SqlCommand(sql,connection,transaction);command.Parameters.AddWithValue("@ticket",ticketId);command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@administrator",role=="Administrator"?1:0);command.Parameters.AddWithValue("@groupSupervisor",role=="GroupAdministrator"?1:0);command.Parameters.AddWithValue("@supportDepartment",DepartmentForRole(role));command.Parameters.AddWithValue("@supportTeam",DepartmentAccounts.IsSupportScope(role)?"":supportTeam??"");command.Parameters.AddWithValue("@canAssign",canAssignTickets?1:0);return Convert.ToInt32(await command.ExecuteScalarAsync(ct))>0;
     }
 
-    static async Task<bool> CanAdministerTicket(SqlConnection connection,SqlTransaction transaction,Guid ticketId,string role,string? supportTeam,bool canAssignTickets,CancellationToken ct)
+static async Task<bool> CanAdministerTicket(SqlConnection connection,SqlTransaction transaction,Guid ticketId,string role,string? supportTeam,bool canAssignTickets,CancellationToken ct)
     {
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
         const string sql="""
             SELECT COUNT(*) FROM dbo.support_tickets t
             WHERE t.id=@ticket AND (
@@ -1994,18 +2099,34 @@ sealed partial class Database
         command.Parameters.AddWithValue("@administrator",role=="Administrator"?1:0);
         command.Parameters.AddWithValue("@canAssign",canAssignTickets?1:0);
         command.Parameters.AddWithValue("@department",DepartmentForRole(role));
-        command.Parameters.AddWithValue("@supportTeam",supportTeam??"");
+        command.Parameters.AddWithValue("@supportTeam",DepartmentAccounts.IsSupportScope(role)?"":supportTeam??"");
         return Convert.ToInt32(await command.ExecuteScalarAsync(ct))>0;
     }
 
-    public async Task<SupportTicketRow?> CreateTicket(TicketCreate body,string userId,string role,string displayName,string username,string? supportTeam,bool canAssignTickets,IReadOnlyList<TicketEvidenceUpload> creationEvidence,string? supervisorEscalationReason,CancellationToken ct)
+public async Task<SupportTicketRow?> CreateTicket(TicketCreate body,string userId,string role,string displayName,string username,string? supportTeam,bool canAssignTickets,IReadOnlyList<TicketEvidenceUpload> creationEvidence,string? supervisorEscalationReason,CancellationToken ct,Guid? workshopStockId=null)
     {
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
+        if(role=="GroupAdministrator"&&body.AssignedDepartment is not ("TECHNOLOGY" or "GENERAL_SERVICES" or "HUMAN_RESOURCES"))return null;
+        // Requesting another department never grants authority to assign its staff.
+        if(DepartmentAccounts.IsSupportScope(role)&&body.AssignedDepartment!=DepartmentForRole(role)&&!string.IsNullOrWhiteSpace(body.AssignedTechnicianId))return null;
+        if(workshopStockId is not null&&!new WorkshopActor(userId,role,supportTeam,displayName,username).CanOperate)return null;
+        if(role=="Administrative"){
+            if(body.TicketType!="INTERNAL"||body.AssignedDepartment is not ("TECHNOLOGY" or "GENERAL_SERVICES" or "HUMAN_RESOURCES")||!string.IsNullOrWhiteSpace(body.AssignedTechnicianId))return null;
+            canAssignTickets=false;
+        }
+        var warehouseRequester=role=="Warehouse"||supportTeam=="WAREHOUSE";
+        if(warehouseRequester){
+            if(body.TicketType!="INTERNAL"||body.AssignedDepartment is not ("TECHNOLOGY" or "GENERAL_SERVICES" or "HUMAN_RESOURCES")||!string.IsNullOrWhiteSpace(body.AssignedTechnicianId))return null;
+            canAssignTickets=false;
+        }
+        if(!warehouseRequester&&role=="GeneralServices"&&(!canAssignTickets||supportTeam=="WORKSHOP"))return null;
         await using var connection=await Open(ct);await EnsureTicketWorkflowSchema(connection,ct);await EnsureUserPermissionSchema(connection,ct);
         var ticketType=body.TicketType=="INTERNAL"?"INTERNAL":"SUPPORT";var department=body.AssignedDepartment!.Trim().ToUpperInvariant();var team=department=="TECHNOLOGY"?body.AssignedTeam?.Trim().ToUpperInvariant():null;var priority=department=="TECHNOLOGY"&&string.Equals(body.Category?.Trim(),"CPU_FAILURE",StringComparison.OrdinalIgnoreCase)?"CRITICAL":body.Priority!.Trim().ToUpperInvariant();if(department=="TECHNOLOGY"&&team is null)team="TECHNICAL_FAILURE";
         if(supportTeam=="CALL_CENTER"){if(ticketType!="INTERNAL"||department!="TECHNOLOGY")return null;team="CALL_CENTER";}
         else if(supportTeam=="TECHNICAL_FAILURE"&&department=="TECHNOLOGY")team="TECHNICAL_FAILURE";
-        else if(role is "Technology" or "GeneralServices" or "HumanResources"&&department!=DepartmentForRole(role))return null;
+        else if(workshopStockId is null&&!warehouseRequester&&role is "Technology" or "GeneralServices" or "HumanResources"&&department!=DepartmentForRole(role))return null;
         if(team is not (null or "CALL_CENTER" or "TECHNICAL_FAILURE" or "TECHNICIANS"))return null;
+        if(workshopStockId is not null){await EnsureWorkshopSchema(connection,ct);await EnsureWorkshopStockExitSchema(connection,ct);}
         await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable,ct);
         try
         {
@@ -2049,20 +2170,21 @@ sealed partial class Database
             if(!string.IsNullOrWhiteSpace(requestedTechnicianId)&&!canAssignTickets){await transaction.RollbackAsync(ct);return null;}
             if(!await ValidTicketAssignee(connection,transaction,requestedTechnicianId,department,team,ticketType,agencyGroup,ct)){await transaction.RollbackAsync(ct);return null;}
             var id=Guid.NewGuid();const string insert="""
-                INSERT INTO dbo.support_tickets(id,agency_id,category,assigned_department,assigned_team,priority,status,subject,description,created_by_user_id,created_by_name,created_by_username,ticket_type,assigned_technician_id)
-                VALUES(@id,@agency,@category,@department,@team,@priority,CASE WHEN @technician IS NULL THEN 'OPEN' ELSE 'IN_PROGRESS' END,@subject,@description,@userId,@name,@username,@ticketType,@technician);
+                INSERT INTO dbo.support_tickets(id,agency_id,category,assigned_department,assigned_team,priority,status,subject,description,created_by_user_id,created_by_name,created_by_username,ticket_type,assigned_technician_id,created_at,updated_at)
+                VALUES(@id,@agency,@category,@department,@team,@priority,CASE WHEN @technician IS NULL THEN 'OPEN' ELSE 'IN_PROGRESS' END,@subject,@description,@userId,@name,@username,@ticketType,@technician,SYSUTCDATETIME(),SYSUTCDATETIME());
                 """;
             await using(var command=new SqlCommand(insert,connection,transaction)){command.Parameters.AddWithValue("@id",id);command.Parameters.AddWithValue("@agency",body.AgencyId.Value.ToString());command.Parameters.AddWithValue("@category",body.Category!);command.Parameters.AddWithValue("@department",department);command.Parameters.AddWithValue("@team",Db(team));command.Parameters.AddWithValue("@priority",priority);command.Parameters.AddWithValue("@subject",body.Subject!.Trim());command.Parameters.AddWithValue("@description",body.Description!.Trim());command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@name",displayName);command.Parameters.AddWithValue("@username",username);command.Parameters.AddWithValue("@ticketType",ticketType);command.Parameters.AddWithValue("@technician",Db(string.IsNullOrWhiteSpace(requestedTechnicianId)?null:requestedTechnicianId));await command.ExecuteNonQueryAsync(ct);}
             await AddTicketHistory(connection,transaction,id,"CREATED",null,department,null,team,userId,displayName,null,ct);
             foreach(var item in creationEvidence)
             {
                 await using var evidenceCommand=new SqlCommand("INSERT INTO dbo.support_ticket_evidence(ticket_id,file_name,content_type,photo_data,uploaded_by_user_id,uploaded_by_name) VALUES(@ticket,@fileName,@contentType,@data,@userId,@actor);",connection,transaction);
-                evidenceCommand.Parameters.AddWithValue("@ticket",id);evidenceCommand.Parameters.AddWithValue("@fileName",item.FileName);evidenceCommand.Parameters.AddWithValue("@contentType",item.ContentType);evidenceCommand.Parameters.Add("@data",SqlDbType.VarBinary,-1).Value=item.Data;evidenceCommand.Parameters.AddWithValue("@userId",userId);evidenceCommand.Parameters.AddWithValue("@actor",displayName);await evidenceCommand.ExecuteNonQueryAsync(ct);
+                evidenceCommand.Parameters.AddWithValue("@ticket",id);evidenceCommand.Parameters.AddWithValue("@fileName",item.FileName);evidenceCommand.Parameters.AddWithValue("@contentType",item.ContentType);evidenceCommand.Parameters.Add("@data",SqlDbType.VarBinary,-1).Value=await StorageFiles.Store(item.Data,"ticket-evidence",ct);evidenceCommand.Parameters.AddWithValue("@userId",userId);evidenceCommand.Parameters.AddWithValue("@actor",displayName);await evidenceCommand.ExecuteNonQueryAsync(ct);
             }
             if(role=="GroupAdministrator"&&!string.IsNullOrWhiteSpace(supervisorEscalationReason))await AddTicketHistory(connection,transaction,id,"SUPERVISOR_ESCALATED",null,department,null,team,userId,displayName,supervisorEscalationReason.Trim(),ct);
             await AddTicketNotifications(connection,transaction,id,"CREATED",null,department,agencyGroup,userId,displayName,$"Se abrió un ticket {(ticketType=="INTERNAL"?"interno":"de soporte")} en {department}.",true,ct);
             if(!string.IsNullOrWhiteSpace(requestedTechnicianId))await AddTicketNotifications(connection,transaction,id,"ASSIGNED",requestedTechnicianId,null,agencyGroup,userId,displayName,"Se te asignó un nuevo ticket.",false,ct);
-            await transaction.CommitAsync(ct);return (await Tickets(userId,role,true,supportTeam,username,ct)).FirstOrDefault(ticket=>ticket.Id==id);
+            if(workshopStockId is not null)await RecordWorkshopStockExit(connection,transaction,workshopStockId.Value,id,userId,displayName,ct);
+            await transaction.CommitAsync(ct);return (await Tickets(userId,workshopStockId is null?role:"Administrator",true,supportTeam,username,ct,onlyTicketId:id)).FirstOrDefault();
         }
         catch{await transaction.RollbackAsync(ct);throw;}
     }
@@ -2099,8 +2221,9 @@ sealed partial class Database
         await using var command=new SqlCommand(sql,connection,transaction);command.Parameters.AddWithValue("@id",id);await using var reader=await command.ExecuteReaderAsync(ct);if(!await reader.ReadAsync(ct))return null;return new(reader.GetString(0),reader.GetString(1),reader.IsDBNull(2)?null:reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetString(5),reader.IsDBNull(6)?null:reader.GetString(6),reader.GetString(7),reader.IsDBNull(8)?null:reader.GetDouble(8),reader.IsDBNull(9)?null:reader.GetDouble(9));
     }
 
-    public async Task<TicketActionResult> UpdateTicket(Guid id,TicketUpdate body,string userId,string role,string actorName,string? supportTeam,bool canAssignTickets,CancellationToken ct)
+public async Task<TicketActionResult> UpdateTicket(Guid id,TicketUpdate body,string userId,string role,string actorName,string? supportTeam,bool canAssignTickets,CancellationToken ct)
     {
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
         if(body.Status is "RESOLVED" or "CLOSED")return new(false,"VALIDATION","Para resolver o cerrar el ticket debes adjuntar evidencia en la acción de resolución.");
         await using var connection=await Open(ct);await EnsureTicketWorkflowSchema(connection,ct);await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable,ct);
         try
@@ -2139,8 +2262,9 @@ sealed partial class Database
         catch{await transaction.RollbackAsync(ct);throw;}
     }
 
-    public async Task<TicketActionResult> RouteTicket(Guid id,TicketRoute body,string userId,string role,string actorName,string? supportTeam,CancellationToken ct)
+public async Task<TicketActionResult> RouteTicket(Guid id,TicketRoute body,string userId,string role,string actorName,string? supportTeam,CancellationToken ct)
     {
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
         await using var connection=await Open(ct);await EnsureTicketWorkflowSchema(connection,ct);await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable,ct);
         try
         {
@@ -2148,8 +2272,15 @@ sealed partial class Database
             if(state.Status is "RESOLVED" or "CLOSED" or "CANCELLED"){await transaction.RollbackAsync(ct);return new(false,"CONFLICT","No se puede reasignar un ticket finalizado.");}
             var department=body.AssignedDepartment!.Trim().ToUpperInvariant();await using(var catalog=new SqlCommand("SELECT COUNT(*) FROM dbo.support_departments WHERE code=@department AND is_active=1;",connection,transaction)){catalog.Parameters.AddWithValue("@department",department);if(Convert.ToInt32(await catalog.ExecuteScalarAsync(ct))==0){await transaction.RollbackAsync(ct);return new(false,"VALIDATION","El departamento de destino no está activo.");}}
             var team=department=="TECHNOLOGY"?(body.AssignedTeam?.Trim().ToUpperInvariant()??(department==state.Department?state.Team:"TECHNICAL_FAILURE")):null;if(team is not (null or "CALL_CENTER" or "TECHNICAL_FAILURE" or "TECHNICIANS")){await transaction.RollbackAsync(ct);return new(false,"VALIDATION","El equipo de Tecnología no es válido.");}
-            var callCenterEscalation=supportTeam=="CALL_CENTER"&&state.TicketType=="INTERNAL"&&state.Department=="TECHNOLOGY"&&department=="TECHNOLOGY"&&team=="TECHNICAL_FAILURE"&&string.IsNullOrWhiteSpace(body.AssignedTechnicianId);
-            if(supportTeam=="CALL_CENTER"&&!callCenterEscalation){await transaction.RollbackAsync(ct);return new(false,"FORBIDDEN","Call Center solo puede compartir tickets internos escalándolos a Avería Técnica.");}
+            var supervisorEscalation=supportTeam=="CALL_CENTER"&&team=="TECHNICIANS"&&!string.IsNullOrWhiteSpace(body.AssignedTechnicianId);
+            var callCenterEscalation=supportTeam=="CALL_CENTER"&&state.TicketType=="INTERNAL"&&state.Department=="TECHNOLOGY"&&state.Team=="CALL_CENTER"&&department=="TECHNOLOGY"&&
+                ((team=="TECHNICAL_FAILURE"&&string.IsNullOrWhiteSpace(body.AssignedTechnicianId))||supervisorEscalation);
+            if(supervisorEscalation){
+                await using var supervisor=new SqlCommand("SELECT COUNT(*) FROM dbo.admin_users WHERE CONVERT(nvarchar(80),id)=@id AND role='GROUP_ADMIN' AND is_active=1;",connection,transaction);
+                supervisor.Parameters.AddWithValue("@id",body.AssignedTechnicianId!);
+                if(Convert.ToInt32(await supervisor.ExecuteScalarAsync(ct))==0){await transaction.RollbackAsync(ct);return new(false,"VALIDATION","Selecciona un supervisor activo para recibir el ticket.");}
+            }
+            if(supportTeam=="CALL_CENTER"&&!callCenterEscalation){await transaction.RollbackAsync(ct);return new(false,"FORBIDDEN","Call Center solo puede escalar sus tickets internos a Avería Técnica o a un supervisor.");}
             if(role=="Technology"&&supportTeam is "TECHNICIANS" or "WAREHOUSE" or "WORKSHOP"){await transaction.RollbackAsync(ct);return new(false,"FORBIDDEN","Los técnicos no pueden asignar ni transferir tickets.");}
             var requestedTechnician=string.IsNullOrWhiteSpace(body.AssignedTechnicianId)?null:body.AssignedTechnicianId;
             var changesResponsible=!string.Equals(state.TechnicianId,requestedTechnician,StringComparison.OrdinalIgnoreCase);
@@ -2164,15 +2295,16 @@ sealed partial class Database
             if(!await ValidTicketAssignee(connection,transaction,body.AssignedTechnicianId,department,team,state.TicketType,state.AgencyGroup,ct)){await transaction.RollbackAsync(ct);return new(false,"VALIDATION","El técnico seleccionado no pertenece al destino o no supervisa esta agencia.");}
             const string update="UPDATE dbo.support_tickets SET assigned_department=@department,assigned_team=@team,assigned_technician_id=@technician,status=CASE WHEN @technician IS NULL THEN 'OPEN' ELSE 'IN_PROGRESS' END,updated_at=SYSUTCDATETIME() WHERE id=@id;";
             await using(var command=new SqlCommand(update,connection,transaction)){command.Parameters.AddWithValue("@id",id);command.Parameters.AddWithValue("@department",department);command.Parameters.AddWithValue("@team",Db(team));command.Parameters.AddWithValue("@technician",Db(string.IsNullOrWhiteSpace(body.AssignedTechnicianId)?null:body.AssignedTechnicianId));await command.ExecuteNonQueryAsync(ct);}
-            var assigned=requestedTechnician is not null;var escalated=!assigned&&(state.Department!=department||state.Team!=team);var action=escalated?"ESCALATED":changesResponsible?(assigned?(state.TechnicianId is null?"ASSIGNED":"REASSIGNED"):"UNASSIGNED"):"ROUTED";await AddTicketHistory(connection,transaction,id,action,state.Department,department,state.Team,team,userId,actorName,body.Comment,ct);
+            var assigned=requestedTechnician is not null;var escalated=!assigned&&(state.Department!=department||state.Team!=team);var action=supervisorEscalation?"ESCALATED_TO_SUPERVISOR":escalated?"ESCALATED":changesResponsible?(assigned?(state.TechnicianId is null?"ASSIGNED":"REASSIGNED"):"UNASSIGNED"):"ROUTED";await AddTicketHistory(connection,transaction,id,action,state.Department,department,state.Team,team,userId,actorName,body.Comment,ct);
             await AddTicketNotifications(connection,transaction,id,action,requestedTechnician,department,state.AgencyGroup,userId,actorName,assigned?(state.TechnicianId is null?"Se te asignó un ticket de soporte.":"Se te reasignó un ticket de soporte."):$"El ticket fue enviado a {department}{(team is null?"":$" / {team}")}.",!assigned,ct);
             await transaction.CommitAsync(ct);return new(true,"OK",null);
         }
         catch{await transaction.RollbackAsync(ct);throw;}
     }
 
-    public async Task<TicketActionResult> ShareTicket(Guid id,TicketShare body,string userId,string role,string actorName,string? supportTeam,CancellationToken ct)
+public async Task<TicketActionResult> ShareTicket(Guid id,TicketShare body,string userId,string role,string actorName,string? supportTeam,CancellationToken ct)
     {
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
         await using var connection=await Open(ct);await EnsureTicketWorkflowSchema(connection,ct);await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable,ct);
         try
         {
@@ -2189,15 +2321,19 @@ sealed partial class Database
         catch{await transaction.RollbackAsync(ct);throw;}
     }
 
-    public async Task<TicketActionResult> ResolveTicket(Guid id,string status,string resolution,List<TicketEvidenceUpload> evidence,string userId,string role,string actorName,string? supportTeam,bool canAssignTickets,bool canResolveTickets,CancellationToken ct)
+public async Task<TicketActionResult> ResolveTicket(Guid id,string status,string resolution,List<TicketEvidenceUpload> evidence,string userId,string role,string actorName,string? supportTeam,bool canAssignTickets,bool canResolveTickets,CancellationToken ct)
     {
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
         if(role!="GroupAdministrator"&&!canResolveTickets)return new(false,"FORBIDDEN","Tu perfil no tiene permiso para resolver tickets.");
         await using var connection=await Open(ct);await EnsureTicketWorkflowSchema(connection,ct);await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable,ct);
         try
         {
             var state=await LoadTicketState(connection,transaction,id,ct);if(state is null){await transaction.RollbackAsync(ct);return new(false,"NOT_FOUND","Ticket no encontrado.");}if(state.Status is "RESOLVED" or "CLOSED" or "CANCELLED"){await transaction.RollbackAsync(ct);return new(false,"CONFLICT","Este ticket ya fue finalizado.");}
-            if(state.TechnicianId==userId&&evidence.Any(item=>item.Latitude is null||item.Longitude is null||item.AccuracyMeters is null)){await transaction.RollbackAsync(ct);return new(false,"VALIDATION","La evidencia del técnico asignado debe incluir la ubicación GPS capturada en el lugar.");}
             if(!await CanWorkTicket(connection,transaction,id,userId,role,supportTeam,canAssignTickets,ct)){await transaction.RollbackAsync(ct);return new(false,"FORBIDDEN","El ticket no está asignado a tu usuario o departamento.");}
+            await using(var linkedRequest=new SqlCommand("IF OBJECT_ID(N'dbo.institutional_files',N'U') IS NOT NULL SELECT TOP(1) metadata FROM dbo.institutional_files WITH(UPDLOCK,HOLDLOCK) WHERE TRY_CONVERT(uniqueidentifier,JSON_VALUE(metadata,'$.warehouseRequest.ticketId'))=@ticket ORDER BY id DESC",connection,transaction))
+            {linkedRequest.Parameters.AddWithValue("@ticket",id);var linkedJson=await linkedRequest.ExecuteScalarAsync(ct) as string;if(linkedJson is not null){var linked=JsonSerializer.Deserialize<InstitutionalFile>(linkedJson,InstitutionalJson);if(linked is null||linked.WarehouseAssigned.Count<1||linked.Status!="approved"||linked.WarehouseDelivery is null){await transaction.RollbackAsync(ct);return new(false,"CONFLICT","El ticket tiene una solicitud de Almacén vinculada. Primero debe autorizarse, retirarse y entregarse el equipo antes de registrar la instalación.");}}}
+            var fieldTechnician=(role=="Technology"&&supportTeam=="TECHNICIANS")||((role is "GeneralServices" or "HumanResources")&&!canAssignTickets);
+            if(fieldTechnician&&evidence.Any(item=>item.Latitude is null||item.Longitude is null||item.AccuracyMeters is null||item.LocationCapturedAt is null)){await transaction.RollbackAsync(ct);return new(false,"VALIDATION","La evidencia del técnico asignado debe incluir GPS, coordenadas, precisión y hora de captura.");}
             if(role=="GroupAdministrator")
             {
                 if(!string.Equals(state.TechnicianId,userId,StringComparison.OrdinalIgnoreCase)){await transaction.RollbackAsync(ct);return new(false,"FORBIDDEN","El supervisor solo puede resolver tickets asignados directamente a su cuenta.");}
@@ -2207,21 +2343,14 @@ sealed partial class Database
                 var supervisorLocation=evidence[0];var distance=Haversine(supervisorLocation.Latitude!.Value,supervisorLocation.Longitude!.Value,state.AgencyLatitude.Value,state.AgencyLongitude.Value);
                 if(distance>75){await transaction.RollbackAsync(ct);return new(false,"VALIDATION",$"Debes resolver el ticket desde la agencia. La evidencia se capturó a {Math.Round(distance)} metros del punto verificado.");}
             }
-            var assignedTechnologyTechnician=false;
-            if(!string.IsNullOrWhiteSpace(state.TechnicianId))
-            {
-                await using var assignee=new SqlCommand("SELECT COUNT(*) FROM dbo.admin_users WHERE CONVERT(nvarchar(80),id)=@id AND role='TECHNOLOGY' AND ISNULL(support_team,'TECHNICIANS') NOT IN('CALL_CENTER','TECHNICAL_FAILURE');",connection,transaction);
-                assignee.Parameters.AddWithValue("@id",state.TechnicianId);
-                assignedTechnologyTechnician=Convert.ToInt32(await assignee.ExecuteScalarAsync(ct))>0;
-            }
-            if(assignedTechnologyTechnician&&evidence.Any(item=>item.Latitude is null||item.Longitude is null||item.AccuracyMeters is null||item.LocationCapturedAt is null)){await transaction.RollbackAsync(ct);return new(false,"VALIDATION","Los casos asignados a técnicos de Tecnología requieren fotografías tomadas con GPS, coordenadas y precisión.");}
             const string update="""
                 UPDATE dbo.support_tickets SET status=@status,resolution=@resolution,resolved_by_user_id=@userId,resolved_by_name=@actor,
                     resolved_at=SYSUTCDATETIME(),closed_at=CASE WHEN @status='CLOSED' THEN SYSUTCDATETIME() ELSE NULL END,updated_at=SYSUTCDATETIME()
                 WHERE id=@id;
                 """;
             await using(var command=new SqlCommand(update,connection,transaction)){command.Parameters.AddWithValue("@id",id);command.Parameters.AddWithValue("@status",status);command.Parameters.AddWithValue("@resolution",resolution);command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@actor",actorName);await command.ExecuteNonQueryAsync(ct);}
-            foreach(var item in evidence){await using var insert=new SqlCommand("INSERT INTO dbo.support_ticket_evidence(ticket_id,file_name,content_type,photo_data,uploaded_by_user_id,uploaded_by_name,latitude,longitude,accuracy_meters,location_captured_at,location_source) VALUES(@ticket,@fileName,@contentType,@data,@userId,@actor,@latitude,@longitude,@accuracy,@locationCapturedAt,@locationSource);",connection,transaction);insert.Parameters.AddWithValue("@ticket",id);insert.Parameters.AddWithValue("@fileName",item.FileName);insert.Parameters.AddWithValue("@contentType",item.ContentType);insert.Parameters.Add("@data",SqlDbType.VarBinary,-1).Value=item.Data;insert.Parameters.AddWithValue("@userId",userId);insert.Parameters.AddWithValue("@actor",actorName);insert.Parameters.AddWithValue("@latitude",Db(item.Latitude));insert.Parameters.AddWithValue("@longitude",Db(item.Longitude));insert.Parameters.AddWithValue("@accuracy",Db(item.AccuracyMeters));insert.Parameters.AddWithValue("@locationCapturedAt",Db(item.LocationCapturedAt));insert.Parameters.AddWithValue("@locationSource",Db(item.Latitude is null?null:"DEVICE_GPS"));await insert.ExecuteNonQueryAsync(ct);}
+            foreach(var item in evidence){await using var insert=new SqlCommand("INSERT INTO dbo.support_ticket_evidence(ticket_id,file_name,content_type,photo_data,uploaded_by_user_id,uploaded_by_name,latitude,longitude,accuracy_meters,location_captured_at,location_source) VALUES(@ticket,@fileName,@contentType,@data,@userId,@actor,@latitude,@longitude,@accuracy,@locationCapturedAt,@locationSource);",connection,transaction);insert.Parameters.AddWithValue("@ticket",id);insert.Parameters.AddWithValue("@fileName",item.FileName);insert.Parameters.AddWithValue("@contentType",item.ContentType);insert.Parameters.Add("@data",SqlDbType.VarBinary,-1).Value=await StorageFiles.Store(item.Data,"ticket-evidence",ct);insert.Parameters.AddWithValue("@userId",userId);insert.Parameters.AddWithValue("@actor",actorName);insert.Parameters.AddWithValue("@latitude",Db(item.Latitude));insert.Parameters.AddWithValue("@longitude",Db(item.Longitude));insert.Parameters.AddWithValue("@accuracy",Db(item.AccuracyMeters));insert.Parameters.AddWithValue("@locationCapturedAt",Db(item.LocationCapturedAt));insert.Parameters.AddWithValue("@locationSource",Db(item.Latitude is null?null:"DEVICE_GPS"));await insert.ExecuteNonQueryAsync(ct);}
+            await LinkWarehouseTicketResolution(connection,transaction,id,userId,actorName,ct);
             var resolutionMessage=$"El ticket fue {(status=="CLOSED"?"cerrado":"resuelto")} por {actorName}.";
             await AddTicketHistory(connection,transaction,id,status,state.Department,state.Department,state.Team,state.Team,userId,actorName,resolution,ct);await AddTicketNotifications(connection,transaction,id,status,null,state.Department,state.AgencyGroup,userId,actorName,resolutionMessage,true,ct);
             if(state.Department=="TECHNOLOGY")await AddTechnologyResolutionNotifications(connection,transaction,id,status,userId,actorName,resolutionMessage,ct);
@@ -2230,8 +2359,9 @@ sealed partial class Database
         catch{await transaction.RollbackAsync(ct);throw;}
     }
 
-    public async Task<(byte[] Data,string Mime,string FileName)?> TicketEvidencePhoto(Guid evidenceId,string userId,string role,bool canAssignTickets,string? supportTeam,CancellationToken ct)
+public async Task<(byte[] Data,string Mime,string FileName)?> TicketEvidencePhoto(Guid evidenceId,string userId,string role,bool canAssignTickets,string? supportTeam,CancellationToken ct)
     {
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
         await using var connection=await Open(ct);await EnsureTicketWorkflowSchema(connection,ct);const string sql="""
             SELECT TOP(1)e.photo_data,e.content_type,e.file_name
             FROM dbo.support_ticket_evidence e
@@ -2239,43 +2369,47 @@ sealed partial class Database
             OUTER APPLY (SELECT CASE WHEN
                 t.assigned_technician_id=@userId
                 OR LTRIM(RTRIM(t.assigned_technician_id))=LTRIM(RTRIM(@userId))
-                OR EXISTS(SELECT 1 FROM dbo.admin_users actor_account WHERE CONVERT(nvarchar(80),actor_account.id)=@userId AND LOWER(LTRIM(RTRIM(t.assigned_technician_id)))=LOWER(LTRIM(RTRIM(actor_account.email))))
+                OR EXISTS(SELECT 1 FROM dbo.admin_users actor_account WHERE CONVERT(nvarchar(80),actor_account.id)=@userId AND (LOWER(LTRIM(RTRIM(t.assigned_technician_id)))=LOWER(LTRIM(RTRIM(actor_account.email))) OR LOWER(LTRIM(RTRIM(t.assigned_technician_id)))=LOWER(LEFT(LTRIM(RTRIM(actor_account.email)),CHARINDEX('@',LTRIM(RTRIM(actor_account.email))+'@')-1))))
                 THEN 1 ELSE 0 END AS is_current) assignment
             WHERE e.id=@evidence AND (
                 @administrator=1
-                OR (@groupSupervisor=1 AND (
-                    assignment.is_current=1
-                    OR (t.created_by_user_id=@userId AND EXISTS(SELECT 1 FROM dbo.admin_user_groups ug WHERE ug.user_id=@userId AND ug.group_name=a.grupo))
-                ))
+                OR (@groupSupervisor=1 AND (assignment.is_current=1 OR t.created_by_user_id=@userId))
+                OR (t.created_by_user_id=@userId AND EXISTS(SELECT 1 FROM dbo.admin_users requester WHERE CONVERT(nvarchar(80),requester.id)=@userId AND requester.role='DEPARTMENT' AND requester.support_team=@department))
                 OR (@department<>'' AND (
-                    (@supportTeam='CALL_CENTER' AND t.assigned_department='TECHNOLOGY' AND t.assigned_team='CALL_CENTER')
+                    (@supportTeam='CALL_CENTER' AND (
+                        (t.assigned_department='TECHNOLOGY' AND t.assigned_team='CALL_CENTER')
+                        OR (t.ticket_type='INTERNAL' AND EXISTS(SELECT 1 FROM dbo.support_ticket_history cc
+                            WHERE cc.ticket_id=t.id AND cc.from_team='CALL_CENTER' AND (
+                                (cc.action='ESCALATED' AND cc.to_team='TECHNICAL_FAILURE')
+                                OR (cc.action='ESCALATED_TO_SUPERVISOR' AND cc.to_team='TECHNICIANS'))))
+                    ))
                     OR (@supportTeam<>'CALL_CENTER' AND (
-                        assignment.is_current=1
+                        (assignment.is_current=1 AND t.assigned_department=@department)
                         OR (@canAssign=1 AND (
-                            (t.assigned_department=@department AND (@supportTeam='' OR t.assigned_team IS NULL OR t.assigned_team=@supportTeam))
+                            (t.assigned_department=@department AND (@supportTeam='' OR t.assigned_team IS NULL OR t.assigned_team=@supportTeam OR (@supportTeam='TECHNICAL_FAILURE' AND t.assigned_team='TECHNICIANS')))
                             OR EXISTS(SELECT 1 FROM dbo.support_ticket_shares s WHERE s.ticket_id=t.id AND s.department_code=@department)
                         ))
                     ))
                 ))
             );
-            """;await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@evidence",evidenceId);command.Parameters.AddWithValue("@administrator",role=="Administrator"?1:0);command.Parameters.AddWithValue("@groupSupervisor",role=="GroupAdministrator"?1:0);command.Parameters.AddWithValue("@department",DepartmentForRole(role));command.Parameters.AddWithValue("@supportTeam",supportTeam??"");command.Parameters.AddWithValue("@canAssign",canAssignTickets?1:0);command.Parameters.AddWithValue("@userId",userId);await using var reader=await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess,ct);if(!await reader.ReadAsync(ct))return null;return((byte[])reader[0],reader.GetString(1),reader.GetString(2));
+            """;await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@evidence",evidenceId);command.Parameters.AddWithValue("@administrator",role=="Administrator"?1:0);command.Parameters.AddWithValue("@groupSupervisor",role=="GroupAdministrator"?1:0);command.Parameters.AddWithValue("@department",DepartmentForRole(role));command.Parameters.AddWithValue("@supportTeam",DepartmentAccounts.IsSupportScope(role)?"":supportTeam??"");command.Parameters.AddWithValue("@canAssign",canAssignTickets?1:0);command.Parameters.AddWithValue("@userId",userId);await using var reader=await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess,ct);if(!await reader.ReadAsync(ct))return null;return(await StorageFiles.Read((byte[])reader[0],ct),reader.GetString(1),reader.GetString(2));
     }
 
     public async Task<List<SupportTechnicianRow>> SupportTechnicians(CancellationToken ct)
     {
         await using var connection=await Open(ct);await EnsureUserPermissionSchema(connection,ct);const string sql="""
             SELECT CONVERT(nvarchar(80),u.id),u.display_name,
-                   CASE u.role WHEN 'TECHNOLOGY' THEN 'TECHNOLOGY' WHEN 'GENERAL_SERVICES' THEN 'GENERAL_SERVICES' WHEN 'HUMAN_RESOURCES' THEN 'HUMAN_RESOURCES' ELSE '' END,
+                   CASE u.role WHEN 'TECHNOLOGY' THEN 'TECHNOLOGY' WHEN 'GENERAL_SERVICES' THEN 'GENERAL_SERVICES' WHEN 'HUMAN_RESOURCES' THEN 'HUMAN_RESOURCES' WHEN 'DEPARTMENT' THEN COALESCE(u.support_team,'') ELSE '' END,
                    u.role,COALESCE(g.names,N''),u.support_team,
                    CASE WHEN u.role<>'GROUP_ADMIN' AND (
-                       u.support_team='TECHNICIANS' OR (ISNULL(u.support_team,'') NOT IN('WAREHOUSE','WORKSHOP') AND
+                       u.support_team='TECHNICIANS' OR (u.role='GENERAL_SERVICES' AND (u.support_team='WORKSHOP' OR JSON_VALUE(u.permissions_json,'$.canAssignTickets')='false')) OR (ISNULL(u.support_team,'') NOT IN('WAREHOUSE','WORKSHOP') AND
                            JSON_VALUE(u.permissions_json,'$.canResolveTickets')='true'
                            AND ISNULL(JSON_VALUE(u.permissions_json,'$.canAssignTickets'),'false')<>'true'
                        )
                    ) THEN 1 ELSE 0 END
             FROM dbo.admin_users u
             OUTER APPLY(SELECT STRING_AGG(ug.group_name,N'|') names FROM dbo.admin_user_groups ug WHERE ug.user_id=u.id)g
-            WHERE u.is_active=1 AND u.role IN('TECHNOLOGY','GENERAL_SERVICES','HUMAN_RESOURCES','GROUP_ADMIN')
+            WHERE u.is_active=1 AND u.role IN('TECHNOLOGY','GENERAL_SERVICES','HUMAN_RESOURCES','GROUP_ADMIN','DEPARTMENT')
             ORDER BY CASE WHEN u.role='GROUP_ADMIN' THEN 2 ELSE 1 END,u.display_name;
             """;
         await using var command=new SqlCommand(sql,connection);await using var reader=await command.ExecuteReaderAsync(ct);var rows=new List<SupportTechnicianRow>();
@@ -2342,8 +2476,9 @@ sealed partial class Database
     public async Task<int> TicketAlerts(string userId,string role,bool canAssignTickets,string? supportTeam,string? userEmail,CancellationToken ct)
         =>(await Tickets(userId,role,canAssignTickets,supportTeam,userEmail,ct)).Count(ticket=>ticket.Status is "OPEN" or "IN_PROGRESS" or "PENDING");
 
-    public async Task<List<TicketNotificationRow>> ResolvedTicketNotifications(string userId,string role,bool canAssignTickets,string? supportTeam,CancellationToken ct)
+public async Task<List<TicketNotificationRow>> ResolvedTicketNotifications(string userId,string role,bool canAssignTickets,string? supportTeam,CancellationToken ct)
     {
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
         if(role is not ("GroupAdministrator" or "Administrator" or "Viewer" or "Fiscalizador" or "Technology" or "GeneralServices" or "HumanResources"))return[];
         await using var connection=await Open(ct);await EnsureTicketWorkflowSchema(connection,ct);await EnsureNotificationReceiptSchema(connection,ct);const string sql="""
             DECLARE @firstNotificationLoad bit=CASE WHEN EXISTS(SELECT 1 FROM dbo.support_notification_receipts WHERE user_id=@userId AND notification_key=N'SYSTEM:TICKET_INITIALIZED') THEN 0 ELSE 1 END;
@@ -2365,7 +2500,15 @@ sealed partial class Database
                     ))
               )) AND receipt.dismissed_at IS NULL
             ORDER BY n.created_at DESC,n.id DESC;
-            """;await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@administrator",role=="Administrator"?1:0);command.Parameters.AddWithValue("@groupSupervisor",role=="GroupAdministrator"?1:0);command.Parameters.AddWithValue("@department",DepartmentForRole(role));command.Parameters.AddWithValue("@canAssign",canAssignTickets?1:0);command.Parameters.AddWithValue("@supportTeam",supportTeam??"");command.Parameters.AddWithValue("@userId",userId);await using var reader=await command.ExecuteReaderAsync(ct);var rows=new List<TicketNotificationRow>();while(await reader.ReadAsync(ct))rows.Add(new(reader.GetGuid(0),reader.GetInt64(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetString(5),reader.GetString(6),reader.IsDBNull(7)?null:reader.GetString(7),reader.GetString(8),reader.GetDateTime(9),reader.GetString(10),reader.IsDBNull(11)?null:reader.GetString(11),reader.IsDBNull(12)?null:reader.GetString(12),reader.GetGuid(13),reader.GetString(14),reader.GetBoolean(15)));return rows;
+            """;await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@administrator",role=="Administrator"?1:0);command.Parameters.AddWithValue("@groupSupervisor",role=="GroupAdministrator"?1:0);command.Parameters.AddWithValue("@department",DepartmentForRole(role));command.Parameters.AddWithValue("@canAssign",canAssignTickets?1:0);command.Parameters.AddWithValue("@supportTeam",DepartmentAccounts.IsSupportScope(role)?"":supportTeam??"");command.Parameters.AddWithValue("@userId",userId);await using var reader=await command.ExecuteReaderAsync(ct);var rows=new List<TicketNotificationRow>();while(await reader.ReadAsync(ct))rows.Add(new(reader.GetGuid(0),reader.GetInt64(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetString(5),reader.GetString(6),reader.IsDBNull(7)?null:reader.GetString(7),reader.GetString(8),reader.GetDateTime(9),reader.GetString(10),reader.IsDBNull(11)?null:reader.GetString(11),reader.IsDBNull(12)?null:reader.GetString(12),reader.GetGuid(13),reader.GetString(14),reader.GetBoolean(15)));return rows;
+    }
+
+    public async Task<List<TicketNotificationRow>> AutomaticFindingNotifications(string userId,string role,CancellationToken ct)
+    {
+        await using var connection=await Open(ct);await EnsureFindingEvidenceSchema(connection,ct);await EnsureNotificationReceiptSchema(connection,ct);
+        const string sql="""SELECT TOP(100) af.id,CONVERT(bigint,0),a.codigo,a.terminal,a.grupo,af.assigned_department,af.title,af.resolution,af.status,n.created_at,n.event_type,n.message,n.actor_name,n.id,CONVERT(varchar(20),'FINDING'),CONVERT(bit,CASE WHEN receipt.read_at IS NOT NULL THEN 1 ELSE 0 END) FROM dbo.automatic_finding_notifications n INNER JOIN dbo.automatic_findings af ON af.id=n.finding_id INNER JOIN dbo.agencies a ON a.id=af.agency_id LEFT JOIN dbo.support_notification_receipts receipt ON receipt.user_id=@userId AND receipt.notification_key=CONCAT(N'FINDING_EVENT:',CONVERT(nvarchar(36),n.id)) WHERE n.recipient_user_id=@userId AND receipt.dismissed_at IS NULL AND (@department='' OR af.assigned_department=@department) ORDER BY n.created_at DESC,n.id DESC;""";
+        await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@department",DepartmentForRole(role));await using var reader=await command.ExecuteReaderAsync(ct);
+        var rows=new List<TicketNotificationRow>();while(await reader.ReadAsync(ct))rows.Add(new(reader.GetGuid(0),reader.GetInt64(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetString(5),reader.GetString(6),reader.IsDBNull(7)?null:reader.GetString(7),reader.GetString(8),reader.GetDateTime(9),reader.GetString(10),reader.GetString(11),reader.GetString(12),reader.GetGuid(13),reader.GetString(14),reader.GetBoolean(15)));return rows;
     }
 
     public async Task SavePushSubscription(string userId,string endpoint,string p256dh,string auth,CancellationToken ct)
@@ -2391,7 +2534,7 @@ sealed partial class Database
         INNER JOIN dbo.pwa_push_subscriptions s ON 1=1
         INNER JOIN dbo.admin_users u ON CONVERT(nvarchar(80),u.id)=s.user_id AND u.is_active=1
         WHERE (n.recipient_user_id=s.user_id OR (n.recipient_user_id IS NULL AND n.target_department IS NOT NULL
-          AND u.role=CASE n.target_department WHEN 'TECHNOLOGY' THEN 'TECHNOLOGY' WHEN 'GENERAL_SERVICES' THEN 'GENERAL_SERVICES' WHEN 'HUMAN_RESOURCES' THEN 'HUMAN_RESOURCES' ELSE '' END
+          AND (u.role=CASE n.target_department WHEN 'TECHNOLOGY' THEN 'TECHNOLOGY' WHEN 'GENERAL_SERVICES' THEN 'GENERAL_SERVICES' WHEN 'HUMAN_RESOURCES' THEN 'HUMAN_RESOURCES' ELSE '' END OR (u.role='DEPARTMENT' AND u.support_team=n.target_department AND JSON_VALUE(u.permissions_json,'$.canViewTicketNotifications')='true'))
           AND (n.target_department<>'TECHNOLOGY' OR u.support_team IS NULL OR u.support_team=t.assigned_team)
           AND (ISNULL(u.support_team,'')<>'TECHNICIANS' OR t.assigned_technician_id=s.user_id)))
           AND NOT EXISTS(SELECT 1 FROM dbo.pwa_push_deliveries d WHERE d.notification_id=n.id AND d.endpoint=s.endpoint)
@@ -2424,7 +2567,8 @@ sealed partial class Database
             OR (ISNULL(c.category,'') NOT LIKE 'DIRECT:%' AND (u.role='ADMINISTRATOR' OR (u.role='GROUP_ADMIN' AND c.supervisor_user_id=s.user_id)
               OR (c.assigned_department='TECHNOLOGY' AND u.role='TECHNOLOGY')
               OR (c.assigned_department='GENERAL_SERVICES' AND u.role='GENERAL_SERVICES')
-              OR (c.assigned_department='HUMAN_RESOURCES' AND u.role='HUMAN_RESOURCES'))))
+              OR (c.assigned_department='HUMAN_RESOURCES' AND u.role='HUMAN_RESOURCES')
+              OR (u.role='DEPARTMENT' AND JSON_VALUE(u.permissions_json,'$.canUseSupportChat')='true' AND (u.support_team=c.assigned_department OR c.supervisor_user_id=s.user_id)))))
           AND NOT EXISTS(SELECT 1 FROM dbo.pwa_push_deliveries d WHERE d.notification_id=m.id AND d.endpoint=s.endpoint)
           AND m.created_at>=s.created_at
           AND NOT EXISTS(SELECT 1 FROM dbo.support_notification_receipts receipt WHERE receipt.user_id=s.user_id AND receipt.notification_key=CONCAT(N'CHAT_MESSAGE:',CONVERT(nvarchar(36),m.id)) AND (receipt.read_at IS NOT NULL OR receipt.dismissed_at IS NOT NULL))
@@ -2433,12 +2577,20 @@ sealed partial class Database
         await using var command=new SqlCommand(sql,connection);await using var reader=await command.ExecuteReaderAsync(ct);var rows=new List<ChatPushDeliveryRow>();while(await reader.ReadAsync(ct))rows.Add(new(reader.GetGuid(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.GetGuid(4),reader.GetString(5),reader.GetString(6),reader.GetString(7),reader.GetDateTime(8)));return rows;
     }
 
+    public async Task<List<PushDeliveryRow>> PendingFindingPushDeliveries(CancellationToken ct)
+    {
+        await using var connection=await Open(ct);await EnsureFindingEvidenceSchema(connection,ct);await EnsureNotificationReceiptSchema(connection,ct);
+        const string sql="""IF OBJECT_ID(N'dbo.pwa_push_subscriptions',N'U') IS NULL CREATE TABLE dbo.pwa_push_subscriptions(id uniqueidentifier NOT NULL DEFAULT NEWID() PRIMARY KEY,user_id nvarchar(80) NOT NULL,endpoint nvarchar(2048) NOT NULL UNIQUE,p256dh nvarchar(512) NOT NULL,auth_key nvarchar(512) NOT NULL,created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME()); IF OBJECT_ID(N'dbo.pwa_push_deliveries',N'U') IS NULL CREATE TABLE dbo.pwa_push_deliveries(notification_id uniqueidentifier NOT NULL,endpoint nvarchar(2048) NOT NULL,delivered_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),CONSTRAINT PK_pwa_push_deliveries PRIMARY KEY(notification_id,endpoint)); SELECT TOP(100)n.id,s.endpoint,s.p256dh,s.auth_key,CONVERT(bigint,0),af.title,n.message,af.id,af.assigned_department,CONVERT(varchar(20),'FINDING'),af.status,n.created_at FROM dbo.automatic_finding_notifications n INNER JOIN dbo.automatic_findings af ON af.id=n.finding_id INNER JOIN dbo.pwa_push_subscriptions s ON s.user_id=n.recipient_user_id INNER JOIN dbo.admin_users u ON CONVERT(nvarchar(80),u.id)=s.user_id AND u.is_active=1 WHERE n.created_at>=s.created_at AND NOT EXISTS(SELECT 1 FROM dbo.pwa_push_deliveries d WHERE d.notification_id=n.id AND d.endpoint=s.endpoint) AND NOT EXISTS(SELECT 1 FROM dbo.support_notification_receipts receipt WHERE receipt.user_id=s.user_id AND receipt.notification_key=CONCAT(N'FINDING_EVENT:',CONVERT(nvarchar(36),n.id)) AND (receipt.read_at IS NOT NULL OR receipt.dismissed_at IS NOT NULL)) ORDER BY n.created_at;""";
+        await using var command=new SqlCommand(sql,connection);await using var reader=await command.ExecuteReaderAsync(ct);var rows=new List<PushDeliveryRow>();while(await reader.ReadAsync(ct))rows.Add(new(reader.GetGuid(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.GetInt64(4),reader.GetString(5),reader.GetString(6),reader.GetGuid(7),reader.GetString(8),reader.GetString(9),reader.GetString(10),reader.GetDateTime(11)));return rows;
+    }
+
     public async Task MarkPushDelivered(Guid notificationId,string endpoint,CancellationToken ct){await using var connection=await Open(ct);await using var command=new SqlCommand("IF OBJECT_ID(N'dbo.pwa_push_deliveries',N'U') IS NULL CREATE TABLE dbo.pwa_push_deliveries(notification_id uniqueidentifier NOT NULL,endpoint nvarchar(2048) NOT NULL,delivered_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),CONSTRAINT PK_pwa_push_deliveries PRIMARY KEY(notification_id,endpoint)); IF NOT EXISTS(SELECT 1 FROM dbo.pwa_push_deliveries WHERE notification_id=@id AND endpoint=@endpoint) INSERT INTO dbo.pwa_push_deliveries(notification_id,endpoint) VALUES(@id,@endpoint);",connection);command.Parameters.AddWithValue("@id",notificationId);command.Parameters.AddWithValue("@endpoint",endpoint);await command.ExecuteNonQueryAsync(ct);}
 
     public async Task DeletePushSubscription(string endpoint,CancellationToken ct){await using var connection=await Open(ct);await using var command=new SqlCommand("DELETE FROM dbo.pwa_push_subscriptions WHERE endpoint=@endpoint; IF OBJECT_ID(N'dbo.pwa_push_chat_state',N'U') IS NOT NULL DELETE FROM dbo.pwa_push_chat_state WHERE endpoint=@endpoint;",connection);command.Parameters.AddWithValue("@endpoint",endpoint);await command.ExecuteNonQueryAsync(ct);}
 
-    public async Task<TicketStatisticsResult> TicketStatistics(string userId,string role,bool canAssignTickets,string? supportTeam,DateTime? from,DateTime? to,CancellationToken ct)
+public async Task<TicketStatisticsResult> TicketStatistics(string userId,string role,bool canAssignTickets,string? supportTeam,DateTime? from,DateTime? to,CancellationToken ct)
     {
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
         await using var connection=await Open(ct);await EnsureTicketWorkflowSchema(connection,ct);var fromDate=(from??DateTime.UtcNow.AddMonths(-12)).Date;var toDate=(to??DateTime.UtcNow).Date.AddDays(1);if(toDate<=fromDate)toDate=fromDate.AddDays(1);if((toDate-fromDate).TotalDays>1096)fromDate=toDate.AddYears(-3);
         const string sql="""
             DECLARE @visible TABLE(id uniqueidentifier NOT NULL PRIMARY KEY);
@@ -2480,7 +2632,7 @@ sealed partial class Database
             WHERE t.status IN('RESOLVED','CLOSED') AND COALESCE(t.resolved_at,t.closed_at,t.updated_at)>=@from AND COALESCE(t.resolved_at,t.closed_at,t.updated_at)<@to
             GROUP BY CONVERT(date,COALESCE(t.resolved_at,t.closed_at,t.updated_at)),t.assigned_department ORDER BY 1,2;
             """;
-        await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@administrator",role=="Administrator"?1:0);command.Parameters.AddWithValue("@groupSupervisor",role=="GroupAdministrator"?1:0);command.Parameters.AddWithValue("@department",DepartmentForRole(role));command.Parameters.AddWithValue("@canAssign",canAssignTickets?1:0);command.Parameters.AddWithValue("@supportTeam",supportTeam??"");command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@from",fromDate);command.Parameters.AddWithValue("@to",toDate);await using var reader=await command.ExecuteReaderAsync(ct);var active=0;var resolved=0;if(await reader.ReadAsync(ct)){active=reader.IsDBNull(0)?0:reader.GetInt32(0);resolved=reader.IsDBNull(1)?0:reader.GetInt32(1);}var technicians=new List<TicketTechnicianStatistic>();var categories=new List<TicketCategoryStatistic>();var departments=new List<TicketDepartmentStatistic>();var history=new List<TicketHistoryPoint>();
+        await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@administrator",role=="Administrator"?1:0);command.Parameters.AddWithValue("@groupSupervisor",role=="GroupAdministrator"?1:0);command.Parameters.AddWithValue("@department",DepartmentForRole(role));command.Parameters.AddWithValue("@canAssign",canAssignTickets?1:0);command.Parameters.AddWithValue("@supportTeam",DepartmentAccounts.IsSupportScope(role)?"":supportTeam??"");command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@from",fromDate);command.Parameters.AddWithValue("@to",toDate);await using var reader=await command.ExecuteReaderAsync(ct);var active=0;var resolved=0;if(await reader.ReadAsync(ct)){active=reader.IsDBNull(0)?0:reader.GetInt32(0);resolved=reader.IsDBNull(1)?0:reader.GetInt32(1);}var technicians=new List<TicketTechnicianStatistic>();var categories=new List<TicketCategoryStatistic>();var departments=new List<TicketDepartmentStatistic>();var history=new List<TicketHistoryPoint>();
         if(await reader.NextResultAsync(ct))while(await reader.ReadAsync(ct))technicians.Add(new(reader.IsDBNull(0)?null:reader.GetString(0),reader.GetString(1),reader.GetString(2),reader.GetInt32(3),reader.GetInt32(4),reader.GetInt32(5),reader.IsDBNull(6)?0:Convert.ToDouble(reader.GetValue(6),System.Globalization.CultureInfo.InvariantCulture)));
         if(await reader.NextResultAsync(ct))while(await reader.ReadAsync(ct))categories.Add(new(reader.GetString(0),reader.GetString(1),reader.GetInt32(2),reader.GetInt32(3),reader.GetInt32(4),reader.IsDBNull(5)?0:Convert.ToDouble(reader.GetValue(5),System.Globalization.CultureInfo.InvariantCulture)));
         if(await reader.NextResultAsync(ct))while(await reader.ReadAsync(ct))departments.Add(new(reader.GetString(0),reader.GetInt32(1),reader.GetInt32(2),reader.GetInt32(3),reader.GetInt32(4),reader.GetInt32(5),reader.IsDBNull(6)?0:Convert.ToDouble(reader.GetValue(6),System.Globalization.CultureInfo.InvariantCulture)));
@@ -2497,7 +2649,7 @@ sealed partial class Database
             FROM dbo.admin_users u
             OUTER APPLY(SELECT STRING_AGG(ug.group_name,N'|') names FROM dbo.admin_user_groups ug WHERE ug.user_id=u.id)g
             WHERE u.is_active=1 AND CONVERT(nvarchar(80),u.id)<>@userId
-              AND u.role IN('ADMINISTRATOR','GROUP_ADMIN','TECHNOLOGY','GENERAL_SERVICES','HUMAN_RESOURCES')
+              AND u.role IN('ADMINISTRATOR','GROUP_ADMIN','TECHNOLOGY','GENERAL_SERVICES','HUMAN_RESOURCES','DEPARTMENT')
             ORDER BY CASE u.role WHEN 'GROUP_ADMIN' THEN 1 ELSE 2 END,u.display_name;
             """;
         await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@userId",userId);
@@ -2530,7 +2682,7 @@ sealed partial class Database
             ORDER BY CASE c.status WHEN 'WAITING_SUPPORT' THEN 1 WHEN 'IN_PROGRESS' THEN 2 WHEN 'RESOLVED' THEN 3 ELSE 4 END,c.last_message_at DESC;
             """;
         await using var command=new SqlCommand(sql,connection);
-        command.Parameters.AddWithValue("@admin",role=="Administrator"?1:0);command.Parameters.AddWithValue("@all",role=="Administrator"?1:0);command.Parameters.AddWithValue("@own",role=="GroupAdministrator"?1:0);
+        command.Parameters.AddWithValue("@admin",role=="Administrator"?1:0);command.Parameters.AddWithValue("@all",role=="Administrator"?1:0);command.Parameters.AddWithValue("@own",role=="GroupAdministrator"||DepartmentAccounts.IsSupportScope(role)?1:0);
         command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@department",DepartmentForRole(role));
         await using var reader=await command.ExecuteReaderAsync(ct);var rows=new List<SupportConversationRow>();
         while(await reader.ReadAsync(ct)){var supervisorId=reader.GetString(1);rows.Add(new(reader.GetGuid(0),supervisorId,reader.GetString(2),reader.GetString(3),reader.IsDBNull(4)?null:reader.GetString(4),ReadBooleanValue(reader,5)?$"/api/account/avatar/{supervisorId}":null,reader.GetString(6).Split('|',StringSplitOptions.RemoveEmptyEntries).ToList(),reader.GetString(7),reader.IsDBNull(8)?null:reader.GetString(8),reader.GetString(9),ReadBooleanValue(reader,10),reader.GetDateTime(11),reader.GetDateTime(12),reader.GetDateTime(13),reader.GetString(14),ReadBooleanValue(reader,15),ReadBooleanValue(reader,16),ReadBooleanValue(reader,17)));}
@@ -2573,7 +2725,7 @@ sealed partial class Database
         command.Parameters.AddWithValue("@userId",userId);
         command.Parameters.AddWithValue("@admin",role=="Administrator"?1:0);
         command.Parameters.AddWithValue("@all",role=="Administrator"?1:0);
-        command.Parameters.AddWithValue("@own",role=="GroupAdministrator"?1:0);
+        command.Parameters.AddWithValue("@own",role=="GroupAdministrator"||DepartmentAccounts.IsSupportScope(role)?1:0);
         command.Parameters.AddWithValue("@department",DepartmentForRole(role));
         await using var reader=await command.ExecuteReaderAsync(ct);var rows=new List<SupportChatNotificationRow>();
         while(await reader.ReadAsync(ct))rows.Add(new(reader.GetGuid(0),reader.GetGuid(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetString(5),reader.GetString(6),reader.GetDateTime(7),reader.GetBoolean(8)));
@@ -2582,7 +2734,7 @@ sealed partial class Database
 
     public async Task SetNotificationState(string userId,IEnumerable<string> keys,bool dismiss,CancellationToken ct)
     {
-        var safeKeys=keys.Where(key=>!string.IsNullOrWhiteSpace(key)&&key.Length<=100&&(key.StartsWith("TICKET_EVENT:",StringComparison.Ordinal)||key.StartsWith("CHAT_MESSAGE:",StringComparison.Ordinal))).Distinct(StringComparer.Ordinal).Take(200).ToList();
+        var safeKeys=keys.Where(key=>!string.IsNullOrWhiteSpace(key)&&key.Length<=100&&(key.StartsWith("TICKET_EVENT:",StringComparison.Ordinal)||key.StartsWith("FINDING_EVENT:",StringComparison.Ordinal)||key.StartsWith("CHAT_MESSAGE:",StringComparison.Ordinal)||key.StartsWith("WAREHOUSE_REQUEST:",StringComparison.Ordinal))).Distinct(StringComparer.Ordinal).Take(200).ToList();
         if(safeKeys.Count==0)return;
         await using var connection=await Open(ct);await EnsureNotificationReceiptSchema(connection,ct);await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync(ct);
         try
@@ -2602,7 +2754,7 @@ sealed partial class Database
 
     public async Task<SupportConversationRow?> CreateSupportConversation(SupportConversationCreate body,string userId,string role,string displayName,string username,CancellationToken ct)
     {
-        if(role!="GroupAdministrator")return null;
+        if(role!="GroupAdministrator"&&!DepartmentAccounts.IsSupportScope(role))return null;
         await using var connection=await Open(ct);await EnsureSupportChatSchema(connection,ct);
         string? departmentName=null,categoryName=null;
         const string catalogSql="""
@@ -2625,7 +2777,7 @@ sealed partial class Database
     {
         await using var connection=await Open(ct);await EnsureSupportChatSchema(connection,ct);
         string targetId,targetName,targetUsername,targetRole;
-        await using(var target=new SqlCommand("SELECT id,display_name,email,role FROM dbo.admin_users WHERE CONVERT(nvarchar(80),id)=@target AND is_active=1 AND role IN('ADMINISTRATOR','GROUP_ADMIN','TECHNOLOGY','GENERAL_SERVICES','HUMAN_RESOURCES');",connection))
+        await using(var target=new SqlCommand("SELECT id,display_name,email,role FROM dbo.admin_users WHERE CONVERT(nvarchar(80),id)=@target AND is_active=1 AND role IN('ADMINISTRATOR','GROUP_ADMIN','TECHNOLOGY','GENERAL_SERVICES','HUMAN_RESOURCES','DEPARTMENT');",connection))
         {
             target.Parameters.AddWithValue("@target",targetUserId.Trim());await using var reader=await target.ExecuteReaderAsync(ct);if(!await reader.ReadAsync(ct))return null;
             targetId=reader.GetString(0);targetName=reader.GetString(1);targetUsername=reader.GetString(2);targetRole=ClaimRole(reader.GetString(3));
@@ -2654,7 +2806,7 @@ sealed partial class Database
         await using(var state=new SqlCommand("SELECT COUNT(*) FROM dbo.support_conversations WHERE id=@id AND deleted_at IS NULL AND is_blocked=0 AND (@supervisor=0 OR is_restricted=0);",connection)){state.Parameters.AddWithValue("@id",conversationId);state.Parameters.AddWithValue("@supervisor",role=="GroupAdministrator"?1:0);if(Convert.ToInt32(await state.ExecuteScalarAsync(ct))==0)return false;}
         await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync(ct);
         try{
-            await using(var insert=new SqlCommand("INSERT INTO dbo.support_messages(conversation_id,sender_user_id,sender_name,sender_role,message,is_bot) VALUES(@id,@userId,@name,@role,@message,0);",connection,transaction)){insert.Parameters.AddWithValue("@id",conversationId);insert.Parameters.AddWithValue("@userId",userId);insert.Parameters.AddWithValue("@name",displayName);insert.Parameters.AddWithValue("@role",role);insert.Parameters.AddWithValue("@message",message);await insert.ExecuteNonQueryAsync(ct);}
+            await using(var insert=new SqlCommand("INSERT INTO dbo.support_messages(conversation_id,sender_user_id,sender_name,sender_role,message,is_bot) VALUES(@id,@userId,@name,@role,@message,0);",connection,transaction)){insert.Parameters.AddWithValue("@id",conversationId);insert.Parameters.AddWithValue("@userId",userId);insert.Parameters.AddWithValue("@name",displayName);insert.Parameters.AddWithValue("@role",DepartmentAccounts.IsSupportScope(role)?"Department":role);insert.Parameters.AddWithValue("@message",message);await insert.ExecuteNonQueryAsync(ct);}
             var status=role=="GroupAdministrator"?"WAITING_SUPPORT":"IN_PROGRESS";
             await using(var update=new SqlCommand("UPDATE dbo.support_conversations SET status=CASE WHEN status IN('RESOLVED','CLOSED') THEN status ELSE @status END,updated_at=SYSUTCDATETIME(),last_message_at=SYSUTCDATETIME() WHERE id=@id;",connection,transaction)){update.Parameters.AddWithValue("@id",conversationId);update.Parameters.AddWithValue("@status",status);await update.ExecuteNonQueryAsync(ct);}
             await transaction.CommitAsync(ct);return true;
@@ -2668,7 +2820,7 @@ sealed partial class Database
         await using(var state=new SqlCommand("SELECT COUNT(*) FROM dbo.support_conversations WHERE id=@id AND deleted_at IS NULL AND is_blocked=0 AND (@supervisor=0 OR is_restricted=0);",connection)){state.Parameters.AddWithValue("@id",conversationId);state.Parameters.AddWithValue("@supervisor",role=="GroupAdministrator"?1:0);if(Convert.ToInt32(await state.ExecuteScalarAsync(ct))==0)return false;}
         var messageId=Guid.NewGuid();await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync(ct);
         try{
-            await using(var message=new SqlCommand("INSERT INTO dbo.support_messages(id,conversation_id,sender_user_id,sender_name,sender_role,message,is_bot) VALUES(@messageId,@id,@userId,@name,@role,N'Nota de voz',0);",connection,transaction)){message.Parameters.AddWithValue("@messageId",messageId);message.Parameters.AddWithValue("@id",conversationId);message.Parameters.AddWithValue("@userId",userId);message.Parameters.AddWithValue("@name",displayName);message.Parameters.AddWithValue("@role",role);await message.ExecuteNonQueryAsync(ct);}
+            await using(var message=new SqlCommand("INSERT INTO dbo.support_messages(id,conversation_id,sender_user_id,sender_name,sender_role,message,is_bot) VALUES(@messageId,@id,@userId,@name,@role,N'Nota de voz',0);",connection,transaction)){message.Parameters.AddWithValue("@messageId",messageId);message.Parameters.AddWithValue("@id",conversationId);message.Parameters.AddWithValue("@userId",userId);message.Parameters.AddWithValue("@name",displayName);message.Parameters.AddWithValue("@role",DepartmentAccounts.IsSupportScope(role)?"Department":role);await message.ExecuteNonQueryAsync(ct);}
             await using(var voice=new SqlCommand("INSERT INTO dbo.support_voice_notes(message_id,audio_data,content_type,file_name,duration_seconds) VALUES(@messageId,@audio,@contentType,@fileName,@duration);",connection,transaction)){voice.Parameters.AddWithValue("@messageId",messageId);voice.Parameters.Add("@audio",System.Data.SqlDbType.VarBinary,-1).Value=audio;voice.Parameters.AddWithValue("@contentType",contentType);voice.Parameters.AddWithValue("@fileName",Db(fileName));voice.Parameters.AddWithValue("@duration",Db(durationSeconds));await voice.ExecuteNonQueryAsync(ct);}
             await using(var update=new SqlCommand("UPDATE dbo.support_conversations SET updated_at=SYSUTCDATETIME(),last_message_at=SYSUTCDATETIME() WHERE id=@id;",connection,transaction)){update.Parameters.AddWithValue("@id",conversationId);await update.ExecuteNonQueryAsync(ct);}
             await transaction.CommitAsync(ct);return true;
@@ -2700,7 +2852,7 @@ sealed partial class Database
         await using var connection=await Open(ct);await EnsureSupportChatSchema(connection,ct);
         Guid conversationId;await using(var find=new SqlCommand("SELECT m.conversation_id FROM dbo.support_messages m INNER JOIN dbo.support_voice_notes v ON v.message_id=m.id WHERE m.id=@id AND m.deleted_at IS NULL;",connection)){find.Parameters.AddWithValue("@id",messageId);var value=await find.ExecuteScalarAsync(ct);if(value is not Guid id)return null;conversationId=id;}
         if(!await CanAccessSupportConversation(connection,conversationId,userId,role,ct))return null;
-        await using var command=new SqlCommand("SELECT audio_data,content_type,COALESCE(file_name,N'nota-de-voz.webm') FROM dbo.support_voice_notes WHERE message_id=@id;",connection);command.Parameters.AddWithValue("@id",messageId);await using var reader=await command.ExecuteReaderAsync(ct);if(!await reader.ReadAsync(ct))return null;return ((byte[])reader[0],reader.GetString(1),reader.GetString(2));
+        await using var command=new SqlCommand("SELECT audio_data,content_type,COALESCE(file_name,N'nota-de-voz.webm') FROM dbo.support_voice_notes WHERE message_id=@id;",connection);command.Parameters.AddWithValue("@id",messageId);await using var reader=await command.ExecuteReaderAsync(ct);if(!await reader.ReadAsync(ct))return null;return (await StorageFiles.Read((byte[])reader[0],ct),reader.GetString(1),reader.GetString(2));
     }
 
     public async Task<bool> CanDeleteDirectConversation(Guid conversationId,string userId,string role,CancellationToken ct)
@@ -2710,11 +2862,21 @@ sealed partial class Database
         await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@id",conversationId);command.Parameters.AddWithValue("@admin",role=="Administrator"?1:0);command.Parameters.AddWithValue("@userId",userId);return Convert.ToInt32(await command.ExecuteScalarAsync(ct))>0;
     }
 
+    // Reading an outgoing request does not grant control over the receiving department.
+    static async Task<bool> CanManageDepartmentConversation(SqlConnection connection,Guid conversationId,string role,CancellationToken ct)
+    {
+        if(!DepartmentAccounts.IsSupportScope(role))return true;
+        const string sql="SELECT COUNT(*) FROM dbo.support_conversations WHERE id=@id AND deleted_at IS NULL AND (assigned_department=@department OR category LIKE 'DIRECT:%');";
+        await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@id",conversationId);command.Parameters.AddWithValue("@department",DepartmentForRole(role));
+        return Convert.ToInt32(await command.ExecuteScalarAsync(ct))>0;
+    }
+
     public async Task<bool> UpdateSupportConversationStatus(Guid conversationId,string status,string userId,string role,CancellationToken ct)
     {
-        if(role is not ("Administrator" or "Technology" or "GeneralServices" or "HumanResources"))return false;
+        if(role is not ("Administrator" or "Technology" or "GeneralServices" or "HumanResources")&&!DepartmentAccounts.IsSupportScope(role))return false;
         await using var connection=await Open(ct);await EnsureSupportChatSchema(connection,ct);
         if(!await CanAccessSupportConversation(connection,conversationId,userId,role,ct))return false;
+        if(!await CanManageDepartmentConversation(connection,conversationId,role,ct))return false;
         await using var command=new SqlCommand("UPDATE dbo.support_conversations SET status=@status,updated_at=SYSUTCDATETIME() WHERE id=@id;",connection);command.Parameters.AddWithValue("@id",conversationId);command.Parameters.AddWithValue("@status",status);return await command.ExecuteNonQueryAsync(ct)==1;
     }
 
@@ -2722,6 +2884,7 @@ sealed partial class Database
     {
         await using var connection=await Open(ct);await EnsureSupportChatSchema(connection,ct);
         if(!await CanAccessSupportConversation(connection,conversationId,userId,role,ct))return false;
+        if(action is not ("MUTE" or "UNMUTE")&&!await CanManageDepartmentConversation(connection,conversationId,role,ct))return false;
         var sql=action switch{
             "MUTE"=>"IF NOT EXISTS(SELECT 1 FROM dbo.support_conversation_mutes WHERE conversation_id=@id AND user_id=@userId) INSERT INTO dbo.support_conversation_mutes(conversation_id,user_id) VALUES(@id,@userId); UPDATE dbo.support_conversations SET updated_at=SYSUTCDATETIME() WHERE id=@id AND deleted_at IS NULL;",
             "UNMUTE"=>"DELETE FROM dbo.support_conversation_mutes WHERE conversation_id=@id AND user_id=@userId; UPDATE dbo.support_conversations SET updated_at=SYSUTCDATETIME() WHERE id=@id AND deleted_at IS NULL;",
@@ -2735,7 +2898,7 @@ sealed partial class Database
         await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync(ct);
         try{
             await using(var update=new SqlCommand(sql,connection,transaction)){update.Parameters.AddWithValue("@id",conversationId);update.Parameters.AddWithValue("@userId",userId);if(await update.ExecuteNonQueryAsync(ct)<1){await transaction.RollbackAsync(ct);return false;}}
-            await using(var audit=new SqlCommand("INSERT INTO dbo.support_conversation_controls(conversation_id,action,actor_user_id,actor_role) VALUES(@id,@action,@userId,@role);",connection,transaction)){audit.Parameters.AddWithValue("@id",conversationId);audit.Parameters.AddWithValue("@action",action);audit.Parameters.AddWithValue("@userId",userId);audit.Parameters.AddWithValue("@role",role);await audit.ExecuteNonQueryAsync(ct);}
+            await using(var audit=new SqlCommand("INSERT INTO dbo.support_conversation_controls(conversation_id,action,actor_user_id,actor_role) VALUES(@id,@action,@userId,@role);",connection,transaction)){audit.Parameters.AddWithValue("@id",conversationId);audit.Parameters.AddWithValue("@action",action);audit.Parameters.AddWithValue("@userId",userId);audit.Parameters.AddWithValue("@role",DepartmentAccounts.IsSupportScope(role)?"Department":role);await audit.ExecuteNonQueryAsync(ct);}
             await transaction.CommitAsync(ct);return true;
         }catch{await transaction.RollbackAsync(ct);throw;}
     }
@@ -2755,11 +2918,12 @@ sealed partial class Database
     static async Task<bool> CanAccessSupportConversation(SqlConnection connection,Guid conversationId,string userId,string role,CancellationToken ct)
     {
         const string sql="SELECT COUNT(*) FROM dbo.support_conversations WHERE id=@id AND deleted_at IS NULL AND ((category LIKE 'DIRECT:%' AND (@admin=1 OR supervisor_user_id=@userId OR SUBSTRING(category,8,80)=@userId)) OR (ISNULL(category,'') NOT LIKE 'DIRECT:%' AND (@all=1 OR (@own=1 AND supervisor_user_id=@userId) OR (@department<>'' AND assigned_department=@department))));";
-        await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@id",conversationId);command.Parameters.AddWithValue("@admin",role=="Administrator"?1:0);command.Parameters.AddWithValue("@all",role=="Administrator"?1:0);command.Parameters.AddWithValue("@own",role=="GroupAdministrator"?1:0);command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@department",DepartmentForRole(role));return Convert.ToInt32(await command.ExecuteScalarAsync(ct))>0;
+        await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@id",conversationId);command.Parameters.AddWithValue("@admin",role=="Administrator"?1:0);command.Parameters.AddWithValue("@all",role=="Administrator"?1:0);command.Parameters.AddWithValue("@own",role=="GroupAdministrator"||DepartmentAccounts.IsSupportScope(role)?1:0);command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@department",DepartmentForRole(role));return Convert.ToInt32(await command.ExecuteScalarAsync(ct))>0;
     }
 
-    public async Task<List<AutomaticFindingRow>> AutomaticFindings(string userId, string role,string? supportTeam, CancellationToken ct)
+public async Task<List<AutomaticFindingRow>> AutomaticFindings(string userId, string role,string? supportTeam,bool canAssignTickets, CancellationToken ct)
     {
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
         await using var connection = await Open(ct);
         await EnsureFindingEvidenceSchema(connection,ct);
         const string sql = """
@@ -2767,11 +2931,27 @@ sealed partial class Database
                    af.diagnosis,af.resolution,af.verification,af.recommendations,af.resolved_at,af.resolution_minutes,af.resolved_by_name,
                    (SELECT e.id AS [id],e.file_name AS [fileName],e.content_type AS [contentType],e.captured_at AS [capturedAt],e.latitude AS [latitude],e.longitude AS [longitude],e.accuracy_meters AS [accuracyMeters]
                     FROM dbo.finding_resolution_evidence e WHERE e.finding_id=af.id ORDER BY e.captured_at,e.id FOR JSON PATH) AS evidence_json,
-                   af.assigned_technician_id,u.display_name,p.direccion,p.sector,p.municipio,p.provincia,p.latitude,p.longitude
+                   af.assigned_technician_id,u.display_name,p.direccion,p.sector,p.municipio,p.provincia,p.latitude,p.longitude,
+                   COALESCE(NULLIF(JSON_VALUE(p.submitted_by_context,'$.displayName'),''),submitter.display_name,auditAuthor.display_name,groupAuthor.display_name,NULLIF(JSON_VALUE(p.submitted_by_context,'$.login'),''),auditAuthor.actor_email,groupAuthor.email,N'Autor no identificado'),
+                   COALESCE(NULLIF(JSON_VALUE(p.submitted_by_context,'$.userId'),''),CONVERT(nvarchar(80),submitter.id),CONVERT(nvarchar(80),auditAuthor.id),CONVERT(nvarchar(80),groupAuthor.id),N''),
+                   COALESCE(NULLIF(JSON_VALUE(p.submitted_by_context,'$.login'),''),submitter.email,auditAuthor.actor_email,groupAuthor.email,N'')
+                   ,p.observations,JSON_VALUE(p.structural_answers,'$.damageFound')
             FROM dbo.automatic_findings af
             INNER JOIN dbo.agency_profiles p ON p.id=af.profile_id
             INNER JOIN dbo.agencies a ON a.id=af.agency_id
             LEFT JOIN dbo.admin_users u ON CONVERT(nvarchar(80),u.id)=af.assigned_technician_id
+            OUTER APPLY (SELECT TOP(1) source.id,source.display_name,source.email FROM dbo.admin_users source
+                         WHERE CONVERT(nvarchar(80),source.id)=JSON_VALUE(p.submitted_by_context,'$.userId')
+                            OR LOWER(source.email)=LOWER(JSON_VALUE(p.submitted_by_context,'$.login'))
+                         ORDER BY CASE WHEN CONVERT(nvarchar(80),source.id)=JSON_VALUE(p.submitted_by_context,'$.userId') THEN 0 ELSE 1 END) submitter
+            OUTER APPLY (SELECT TOP(1) source.id,source.display_name,l.actor_email
+                         FROM dbo.audit_log l LEFT JOIN dbo.admin_users source ON LOWER(source.email)=LOWER(l.actor_email)
+                         WHERE l.entity_type='agency_profile' AND l.entity_id=p.id AND l.action='PROFILE_CREATED'
+                         ORDER BY l.created_at) auditAuthor
+            OUTER APPLY (SELECT TOP(1) source.id,source.display_name,source.email
+                         FROM dbo.admin_user_groups ug INNER JOIN dbo.admin_users source ON source.id=ug.user_id
+                         WHERE ug.group_name=a.grupo AND source.role='GROUP_ADMIN' AND source.is_active=1
+                         ORDER BY source.display_name,source.email) groupAuthor
             WHERE (@department='' OR af.assigned_department=@department)
               AND (@technicianOnly=0 OR af.assigned_technician_id=@userId)
               AND (@scoped=0 OR EXISTS(SELECT 1 FROM dbo.admin_user_groups ug WHERE ug.user_id=@userId AND ug.group_name=a.grupo))
@@ -2779,42 +2959,65 @@ sealed partial class Database
             """;
         await using var command = new SqlCommand(sql, connection); AddScope(command,userId,role);
         command.Parameters.AddWithValue("@department",DepartmentForRole(role));
-        command.Parameters.AddWithValue("@technicianOnly",role=="Technology"&&supportTeam is "TECHNICIANS" or "WAREHOUSE" or "WORKSHOP"?1:0);
+        command.Parameters.AddWithValue("@technicianOnly",role=="GroupAdministrator"||((role is "Technology" or "GeneralServices" or "HumanResources")||DepartmentAccounts.IsSupportScope(role))&&!canAssignTickets?1:0);
+        if(role=="GroupAdministrator")command.Parameters["@scoped"].Value=0;
         await using var reader = await command.ExecuteReaderAsync(ct); var rows = new List<AutomaticFindingRow>();
-        while(await reader.ReadAsync(ct)) rows.Add(new(reader.GetGuid(0),Guid.Parse(reader.GetString(1)),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetDateTime(5),reader.GetString(6),reader.GetString(7),reader.GetString(8),reader.GetString(9),reader.GetString(10),reader.GetString(11),reader.IsDBNull(12)?null:reader.GetString(12),reader.IsDBNull(13)?null:reader.GetString(13),reader.IsDBNull(14)?null:reader.GetString(14),reader.IsDBNull(15)?null:reader.GetString(15),reader.IsDBNull(16)?null:reader.GetDateTime(16),reader.IsDBNull(17)?null:reader.GetInt32(17),reader.IsDBNull(18)?null:reader.GetString(18),System.Text.Json.JsonSerializer.Deserialize<List<FindingEvidenceRow>>(reader.IsDBNull(19)?"[]":reader.GetString(19),StorageJson)??[],reader.IsDBNull(20)?null:reader.GetString(20),reader.IsDBNull(21)?null:reader.GetString(21),reader.IsDBNull(22)?null:reader.GetString(22),reader.IsDBNull(23)?null:reader.GetString(23),reader.IsDBNull(24)?null:reader.GetString(24),reader.IsDBNull(25)?null:reader.GetString(25),reader.IsDBNull(26)?null:reader.GetDouble(26),reader.IsDBNull(27)?null:reader.GetDouble(27)));
+        while(await reader.ReadAsync(ct)) rows.Add(new(reader.GetGuid(0),Guid.Parse(reader.GetString(1)),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetDateTime(5),reader.GetString(6),reader.GetString(7),reader.GetString(8),reader.GetString(9),reader.GetString(10),reader.GetString(11),reader.IsDBNull(12)?null:reader.GetString(12),reader.IsDBNull(13)?null:reader.GetString(13),reader.IsDBNull(14)?null:reader.GetString(14),reader.IsDBNull(15)?null:reader.GetString(15),reader.IsDBNull(16)?null:reader.GetDateTime(16),reader.IsDBNull(17)?null:reader.GetInt32(17),reader.IsDBNull(18)?null:reader.GetString(18),System.Text.Json.JsonSerializer.Deserialize<List<FindingEvidenceRow>>(reader.IsDBNull(19)?"[]":reader.GetString(19),StorageJson)??[],reader.IsDBNull(20)?null:reader.GetString(20),reader.IsDBNull(21)?null:reader.GetString(21),reader.IsDBNull(22)?null:reader.GetString(22),reader.IsDBNull(23)?null:reader.GetString(23),reader.IsDBNull(24)?null:reader.GetString(24),reader.IsDBNull(25)?null:reader.GetString(25),reader.IsDBNull(26)?null:reader.GetDouble(26),reader.IsDBNull(27)?null:reader.GetDouble(27),reader.GetString(28),reader.GetString(29),reader.GetString(30),reader.IsDBNull(31)?null:reader.GetString(31),reader.IsDBNull(32)?null:reader.GetString(32)));
         return rows;
     }
 
-    public async Task<bool> AssignAutomaticFinding(Guid id,string? technicianId,string role,string? supportTeam,CancellationToken ct)
+    public async Task<bool> AssignAutomaticFinding(Guid id,string? technicianId,string userId,string role,bool canAssignTickets,string actorName,CancellationToken ct)
     {
-        if(role=="Technology"&&supportTeam is "TECHNICIANS" or "WAREHOUSE" or "WORKSHOP")return false;
-        await using var connection=await Open(ct);await EnsureFindingEvidenceSchema(connection,ct);const string sql="UPDATE dbo.automatic_findings SET assigned_technician_id=@technician,updated_at=SYSUTCDATETIME() WHERE id=@id AND (@department='' OR assigned_department=@department);";await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@id",id);command.Parameters.AddWithValue("@technician",Db(technicianId));command.Parameters.AddWithValue("@department",DepartmentForRole(role));return await command.ExecuteNonQueryAsync(ct)==1;
+        if(!canAssignTickets)return false;
+        technicianId=string.IsNullOrWhiteSpace(technicianId)?null:technicianId.Trim();
+        await using var connection=await Open(ct);await EnsureFindingEvidenceSchema(connection,ct);
+        await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable,ct);
+        try
+        {
+            const string sql="""UPDATE af SET assigned_technician_id=@technician,status=CASE WHEN @technician IS NOT NULL AND af.status='OPEN' THEN 'IN_PROGRESS' ELSE af.status END,updated_at=SYSUTCDATETIME() OUTPUT deleted.assigned_technician_id,inserted.title,inserted.assigned_department FROM dbo.automatic_findings af INNER JOIN dbo.agencies a ON a.id=af.agency_id WHERE af.id=@id AND af.status IN('OPEN','IN_PROGRESS') AND (@department='' OR af.assigned_department=@department) AND (@scoped=0 OR EXISTS(SELECT 1 FROM dbo.admin_user_groups ug WHERE ug.user_id=@userId AND ug.group_name=a.grupo)) AND (@technician IS NULL OR EXISTS(SELECT 1 FROM dbo.admin_users u WHERE CONVERT(nvarchar(80),u.id)=@technician AND u.is_active=1 AND (u.role=CASE af.assigned_department WHEN 'TECHNOLOGY' THEN 'TECHNOLOGY' WHEN 'GENERAL_SERVICES' THEN 'GENERAL_SERVICES' WHEN 'HUMAN_RESOURCES' THEN 'HUMAN_RESOURCES' ELSE '' END OR (u.role='DEPARTMENT' AND u.support_team=af.assigned_department) OR u.role='GROUP_ADMIN')));""";
+            string? previous=null;string title="";string department="";
+            await using(var command=new SqlCommand(sql,connection,transaction))
+            {
+                command.Parameters.AddWithValue("@id",id);command.Parameters.AddWithValue("@technician",Db(technicianId));command.Parameters.AddWithValue("@department",DepartmentForRole(role));AddScope(command,userId,role);
+                await using var reader=await command.ExecuteReaderAsync(ct);if(!await reader.ReadAsync(ct)){await transaction.RollbackAsync(ct);return false;}
+                previous=reader.IsDBNull(0)?null:reader.GetString(0);title=reader.GetString(1);department=reader.GetString(2);
+            }
+            if(!string.IsNullOrWhiteSpace(technicianId)&&!string.Equals(previous,technicianId,StringComparison.OrdinalIgnoreCase))
+            {
+                await using var notification=new SqlCommand("INSERT INTO dbo.automatic_finding_notifications(finding_id,recipient_user_id,event_type,message,actor_name) VALUES(@id,@recipient,@event,@message,@actor);",connection,transaction);
+                notification.Parameters.AddWithValue("@id",id);notification.Parameters.AddWithValue("@recipient",technicianId);notification.Parameters.AddWithValue("@event",previous is null?"ASSIGNED":"REASSIGNED");notification.Parameters.AddWithValue("@message",$"Se te asignó el hallazgo automático «{title}» de {department}.");notification.Parameters.AddWithValue("@actor",actorName);await notification.ExecuteNonQueryAsync(ct);
+            }
+            await transaction.CommitAsync(ct);return true;
+        }
+        catch{await transaction.RollbackAsync(ct);throw;}
     }
 
-    public async Task<bool> ResolveAutomaticFinding(Guid id,string diagnosis,string resolution,string verification,string recommendations,string userId,string role,string? supportTeam,string resolvedByName,string resolvedByUsername,List<FindingEvidenceUpload> evidence,CancellationToken ct)
+public async Task<bool> ResolveAutomaticFinding(Guid id,string diagnosis,string resolution,string verification,string recommendations,string userId,string role,string? supportTeam,bool canAssignTickets,string resolvedByName,string resolvedByUsername,List<FindingEvidenceUpload> evidence,CancellationToken ct)
     {
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
         await using var connection=await Open(ct);
         await EnsureFindingEvidenceSchema(connection,ct);
         await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync(ct);
-        await using(var gpsRequired=new SqlCommand("SELECT COUNT(*) FROM dbo.automatic_findings af INNER JOIN dbo.admin_users u ON CONVERT(nvarchar(80),u.id)=af.assigned_technician_id WHERE af.id=@id AND u.role='TECHNOLOGY' AND ISNULL(u.support_team,'TECHNICIANS') NOT IN('CALL_CENTER','TECHNICAL_FAILURE');",connection,transaction))
+        await using(var gpsRequired=new SqlCommand("SELECT COUNT(*) FROM dbo.automatic_findings af INNER JOIN dbo.admin_users u ON CONVERT(nvarchar(80),u.id)=af.assigned_technician_id WHERE af.id=@id AND ((u.role='TECHNOLOGY' AND ISNULL(u.support_team,'TECHNICIANS') NOT IN('CALL_CENTER','TECHNICAL_FAILURE')) OR (u.role IN('GENERAL_SERVICES','HUMAN_RESOURCES') AND (u.support_team='WORKSHOP' OR JSON_VALUE(u.permissions_json,'$.canAssignTickets')='false')));",connection,transaction))
         {
             gpsRequired.Parameters.AddWithValue("@id",id);
             if(Convert.ToInt32(await gpsRequired.ExecuteScalarAsync(ct))>0&&evidence.Any(photo=>photo.Latitude is null||photo.Longitude is null||photo.AccuracyMeters is null||photo.LocationCapturedAt is null)){await transaction.RollbackAsync(ct);return false;}
         }
         const string sql="""
-            UPDATE dbo.automatic_findings SET status='RESOLVED',diagnosis=@diagnosis,resolution=@resolution,verification=@verification,recommendations=@recommendations,
-              resolved_at=COALESCE(resolved_at,SYSUTCDATETIME()),
-              resolution_minutes=COALESCE(resolution_minutes,DATEDIFF(MINUTE,created_at,SYSUTCDATETIME())),
+            UPDATE af SET status='RESOLVED',diagnosis=@diagnosis,resolution=@resolution,verification=@verification,recommendations=@recommendations,
+              resolved_at=COALESCE(af.resolved_at,SYSUTCDATETIME()),
+              resolution_minutes=COALESCE(af.resolution_minutes,DATEDIFF(MINUTE,af.created_at,SYSUTCDATETIME())),
               resolved_by_name=@resolvedByName,resolved_by_username=@resolvedByUsername,
-              updated_at=SYSUTCDATETIME(),closed_at=COALESCE(closed_at,SYSUTCDATETIME())
-            WHERE id=@id AND (@department='' OR assigned_department=@department) AND (@technicianOnly=0 OR assigned_technician_id=@userId) AND status NOT IN ('RESOLVED','CLOSED');
+              updated_at=SYSUTCDATETIME(),closed_at=COALESCE(af.closed_at,SYSUTCDATETIME())
+            FROM dbo.automatic_findings af INNER JOIN dbo.agencies a ON a.id=af.agency_id
+            WHERE af.id=@id AND (@department='' OR af.assigned_department=@department) AND (@technicianOnly=0 OR af.assigned_technician_id=@userId) AND (@scoped=0 OR EXISTS(SELECT 1 FROM dbo.admin_user_groups ug WHERE ug.user_id=@userId AND ug.group_name=a.grupo)) AND af.status NOT IN ('RESOLVED','CLOSED','CANCELLED');
             """;
         await using var command=new SqlCommand(sql,connection,transaction);command.Parameters.AddWithValue("@id",id);command.Parameters.AddWithValue("@diagnosis",diagnosis);command.Parameters.AddWithValue("@resolution",resolution);command.Parameters.AddWithValue("@verification",verification);command.Parameters.AddWithValue("@recommendations",Db(string.IsNullOrWhiteSpace(recommendations)?null:recommendations));
         command.Parameters.AddWithValue("@department",DepartmentForRole(role));
-        command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@technicianOnly",role=="Technology"&&supportTeam is "TECHNICIANS" or "WAREHOUSE" or "WORKSHOP"?1:0);
+        command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@technicianOnly",(((role is "Technology" or "GeneralServices" or "HumanResources")||DepartmentAccounts.IsSupportScope(role))&&!canAssignTickets)||role=="GroupAdministrator"?1:0);command.Parameters.AddWithValue("@scoped",0);
         command.Parameters.AddWithValue("@resolvedByName",resolvedByName);command.Parameters.AddWithValue("@resolvedByUsername",resolvedByUsername);
         if(await command.ExecuteNonQueryAsync(ct)!=1){await transaction.RollbackAsync(ct);return false;}
-        foreach(var photo in evidence){await using var insertPhoto=new SqlCommand("INSERT INTO dbo.finding_resolution_evidence(id,finding_id,file_name,content_type,photo_data,uploaded_by_name,latitude,longitude,accuracy_meters,location_captured_at) VALUES(NEWID(),@finding,@fileName,@contentType,@data,@actor,@latitude,@longitude,@accuracy,@locationCapturedAt);",connection,transaction);insertPhoto.Parameters.AddWithValue("@finding",id);insertPhoto.Parameters.AddWithValue("@fileName",photo.FileName);insertPhoto.Parameters.AddWithValue("@contentType",photo.ContentType);insertPhoto.Parameters.AddWithValue("@data",photo.Data);insertPhoto.Parameters.AddWithValue("@actor",resolvedByName);insertPhoto.Parameters.AddWithValue("@latitude",Db(photo.Latitude));insertPhoto.Parameters.AddWithValue("@longitude",Db(photo.Longitude));insertPhoto.Parameters.AddWithValue("@accuracy",Db(photo.AccuracyMeters));insertPhoto.Parameters.AddWithValue("@locationCapturedAt",Db(photo.LocationCapturedAt));await insertPhoto.ExecuteNonQueryAsync(ct);}
+        foreach(var photo in evidence){await using var insertPhoto=new SqlCommand("INSERT INTO dbo.finding_resolution_evidence(id,finding_id,file_name,content_type,photo_data,uploaded_by_name,latitude,longitude,accuracy_meters,location_captured_at) VALUES(NEWID(),@finding,@fileName,@contentType,@data,@actor,@latitude,@longitude,@accuracy,@locationCapturedAt);",connection,transaction);insertPhoto.Parameters.AddWithValue("@finding",id);insertPhoto.Parameters.AddWithValue("@fileName",photo.FileName);insertPhoto.Parameters.AddWithValue("@contentType",photo.ContentType);insertPhoto.Parameters.AddWithValue("@data",await StorageFiles.Store(photo.Data,"finding-evidence",ct));insertPhoto.Parameters.AddWithValue("@actor",resolvedByName);insertPhoto.Parameters.AddWithValue("@latitude",Db(photo.Latitude));insertPhoto.Parameters.AddWithValue("@longitude",Db(photo.Longitude));insertPhoto.Parameters.AddWithValue("@accuracy",Db(photo.AccuracyMeters));insertPhoto.Parameters.AddWithValue("@locationCapturedAt",Db(photo.LocationCapturedAt));await insertPhoto.ExecuteNonQueryAsync(ct);}
         const string answersSql="""
             UPDATE p SET structural_answers=CASE af.finding_key
               WHEN 'NO_INVERTER' THEN JSON_MODIFY(p.structural_answers,'$.inverterPresent','yes')
@@ -2844,16 +3047,104 @@ sealed partial class Database
         await answersCommand.ExecuteNonQueryAsync(ct);await transaction.CommitAsync(ct);return true;
     }
 
+public async Task<TicketActionResult> CancelAutomaticFinding(Guid id,string reason,string userId,string role,string? supportTeam,bool canAssignTickets,string actorName,string actorLogin,List<FindingEvidenceUpload> evidence,bool withEvidence,bool withoutEvidence,bool withReason,bool withoutReason,CancellationToken ct)
+    {
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
+        if(evidence.Count>6||reason.Length>2000||reason.Length>0&&reason.Length<10)return new(false,"VALIDATION","Revisa el motivo y las imágenes de la anulación.");
+        if(evidence.Count>0&&!withEvidence||evidence.Count==0&&!withoutEvidence||reason.Length>0&&!withReason||reason.Length==0&&!withoutReason)return new(false,"FORBIDDEN","Tu perfil no permite esta combinación de motivo y evidencia.");
+        await using var connection=await Open(ct);await EnsureFindingEvidenceSchema(connection,ct);
+        await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable,ct);
+        try
+        {
+            const string update="""UPDATE af SET status='CANCELLED',resolution=@reason,resolved_at=SYSUTCDATETIME(),resolution_minutes=DATEDIFF(MINUTE,af.created_at,SYSUTCDATETIME()),resolved_by_name=@actor,resolved_by_username=@login,updated_at=SYSUTCDATETIME(),closed_at=SYSUTCDATETIME() FROM dbo.automatic_findings af INNER JOIN dbo.agencies a ON a.id=af.agency_id WHERE af.id=@id AND af.status IN('OPEN','IN_PROGRESS') AND (@department='' OR af.assigned_department=@department) AND (@technicianOnly=0 OR af.assigned_technician_id=@userId) AND (@scoped=0 OR EXISTS(SELECT 1 FROM dbo.admin_user_groups ug WHERE ug.user_id=@userId AND ug.group_name=a.grupo));""";
+            await using(var command=new SqlCommand(update,connection,transaction))
+            {
+                command.Parameters.AddWithValue("@id",id);command.Parameters.AddWithValue("@reason",reason);command.Parameters.AddWithValue("@actor",actorName);command.Parameters.AddWithValue("@login",actorLogin);command.Parameters.AddWithValue("@department",DepartmentForRole(role));command.Parameters.AddWithValue("@technicianOnly",(((role is "Technology" or "GeneralServices" or "HumanResources")||DepartmentAccounts.IsSupportScope(role))&&!canAssignTickets)||role=="GroupAdministrator"?1:0);AddScope(command,userId,role);
+                if(await command.ExecuteNonQueryAsync(ct)!=1){await transaction.RollbackAsync(ct);return new(false,"CONFLICT","El hallazgo ya fue finalizado o no pertenece a tu ámbito.");}
+            }
+            foreach(var photo in evidence)
+            {
+                await using var command=new SqlCommand("INSERT INTO dbo.finding_resolution_evidence(id,finding_id,file_name,content_type,photo_data,uploaded_by_name,latitude,longitude,accuracy_meters,location_captured_at) VALUES(NEWID(),@id,@name,@mime,@data,@actor,@latitude,@longitude,@accuracy,@captured);",connection,transaction);
+                command.Parameters.AddWithValue("@id",id);command.Parameters.AddWithValue("@name",photo.FileName);command.Parameters.AddWithValue("@mime",photo.ContentType);command.Parameters.AddWithValue("@data",await StorageFiles.Store(photo.Data,"finding-evidence",ct));command.Parameters.AddWithValue("@actor",actorName);command.Parameters.AddWithValue("@latitude",Db(photo.Latitude));command.Parameters.AddWithValue("@longitude",Db(photo.Longitude));command.Parameters.AddWithValue("@accuracy",Db(photo.AccuracyMeters));command.Parameters.AddWithValue("@captured",Db(photo.LocationCapturedAt));await command.ExecuteNonQueryAsync(ct);
+            }
+            await using(var audit=new SqlCommand("INSERT INTO dbo.audit_log(entity_type,entity_id,action,after_data) VALUES('automatic_finding',CONVERT(nvarchar(80),@id),'FINDING_CANCELLED',@data);",connection,transaction))
+            {
+                audit.Parameters.AddWithValue("@id",id);audit.Parameters.AddWithValue("@data",System.Text.Json.JsonSerializer.Serialize(new{reason,actorName,actorLogin,evidenceCount=evidence.Count}));await audit.ExecuteNonQueryAsync(ct);
+            }
+            await transaction.CommitAsync(ct);return new(true,"OK",null);
+        }
+        catch{await transaction.RollbackAsync(ct);throw;}
+    }
+
     public async Task<(byte[] Data,string Mime)?> FindingEvidencePhoto(Guid evidenceId,string role,CancellationToken ct)
     {
         await using var connection=await Open(ct);await EnsureFindingEvidenceSchema(connection,ct);
         const string sql="""SELECT e.photo_data,e.content_type FROM dbo.finding_resolution_evidence e INNER JOIN dbo.automatic_findings af ON af.id=e.finding_id WHERE e.id=@id AND (@department='' OR af.assigned_department=@department);""";
-        await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@id",evidenceId);command.Parameters.AddWithValue("@department",DepartmentForRole(role));await using var reader=await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess,ct);return await reader.ReadAsync(ct)?((byte[])reader[0],reader.GetString(1)):null;
+        await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@id",evidenceId);command.Parameters.AddWithValue("@department",DepartmentForRole(role));await using var reader=await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess,ct);return await reader.ReadAsync(ct)?(await StorageFiles.Read((byte[])reader[0],ct),reader.GetString(1)):null;
     }
 
-    public async Task<List<SupportDepartmentRow>> SupportCatalog(CancellationToken ct)
+public async Task<List<SupportDepartmentMetricRow>> SupportDepartmentMetrics(string userId, string role, bool canAssignTickets, bool includeFindings, string? supportTeam, string? userEmail, CancellationToken ct, bool areaManager = false)
+{
+    if (DepartmentAccounts.IsSupportScope(role)) supportTeam = null;
+    await using var connection = await Open(ct);
+    await EnsureTicketWorkflowSchema(connection, ct);
+    await EnsureFindingEvidenceSchema(connection, ct);
+    await using var command = new SqlCommand("""
+DECLARE @visible TABLE(id uniqueidentifier NOT NULL PRIMARY KEY,is_current bit NOT NULL);
+INSERT INTO @visible(id,is_current)
+SELECT t.id,assignment.is_current FROM dbo.support_tickets t INNER JOIN dbo.agencies a ON a.id=t.agency_id
+OUTER APPLY (SELECT CAST(CASE WHEN t.assigned_technician_id=@userId OR LTRIM(RTRIM(t.assigned_technician_id))=LTRIM(RTRIM(@userId)) OR LOWER(LTRIM(RTRIM(t.assigned_technician_id)))=LOWER(LTRIM(RTRIM(@userEmail))) OR LOWER(LTRIM(RTRIM(t.assigned_technician_id)))=LOWER(LEFT(LTRIM(RTRIM(@userEmail)),CHARINDEX('@',LTRIM(RTRIM(@userEmail))+'@')-1)) OR EXISTS(SELECT 1 FROM dbo.admin_users assigned_user WHERE CONVERT(nvarchar(80),assigned_user.id)=LTRIM(RTRIM(t.assigned_technician_id)) AND LOWER(LTRIM(RTRIM(assigned_user.email)))=LOWER(LTRIM(RTRIM(@userEmail)))) THEN 1 ELSE 0 END AS bit) AS is_current) assignment
+WHERE @administrator=1 OR (@administrativeRequester=1 AND t.created_by_user_id=@userId) OR (@supportTeam='WAREHOUSE' AND t.created_by_user_id=@userId) OR (@areaManager=1 AND @supportTeam='WAREHOUSE' AND EXISTS(SELECT 1 FROM dbo.admin_users creator WHERE CONVERT(nvarchar(80),creator.id)=t.created_by_user_id AND (creator.role='WAREHOUSE' OR creator.support_team='WAREHOUSE'))) OR (@groupSupervisor=1 AND (assignment.is_current=1 OR t.created_by_user_id=@userId)) OR (@supportDepartment<>'' AND ((@supportTeam='CALL_CENTER' AND ((t.assigned_department='TECHNOLOGY' AND t.assigned_team='CALL_CENTER') OR (t.ticket_type='INTERNAL' AND EXISTS(SELECT 1 FROM dbo.support_ticket_history cc WHERE cc.ticket_id=t.id AND cc.from_team='CALL_CENTER' AND ((cc.action='ESCALATED' AND cc.to_team='TECHNICAL_FAILURE') OR (cc.action='ESCALATED_TO_SUPERVISOR' AND cc.to_team='TECHNICIANS')))))) OR (@supportTeam='TECHNICIANS' AND assignment.is_current=1 AND t.assigned_department=@supportDepartment) OR (@supportTeam='TECHNICAL_FAILURE' AND ((assignment.is_current=1 AND t.assigned_department=@supportDepartment) OR (@canAssign=1 AND t.assigned_department='TECHNOLOGY' AND t.assigned_team IN('TECHNICAL_FAILURE','TECHNICIANS')))) OR (@supportTeam NOT IN('CALL_CENTER','TECHNICAL_FAILURE','TECHNICIANS') AND ((assignment.is_current=1 AND t.assigned_department=@supportDepartment) OR (@canAssign=1 AND ((t.assigned_department=@supportDepartment AND (@supportTeam='' OR t.assigned_team=@supportTeam)) OR EXISTS(SELECT 1 FROM dbo.support_ticket_shares s WHERE s.ticket_id=t.id AND s.department_code=@supportDepartment))))))) OPTION(RECOMPILE);
+SELECT t.assigned_department,SUM(CASE WHEN t.status IN('OPEN','PENDING','IN_PROGRESS') THEN 1 ELSE 0 END),SUM(CASE WHEN t.status IN('RESOLVED','CLOSED') THEN 1 ELSE 0 END),SUM(CASE WHEN ISNULL(t.ticket_type,'SUPPORT')='SUPPORT' AND v.is_current=1 THEN 1 ELSE 0 END),SUM(CASE WHEN ISNULL(t.ticket_type,'SUPPORT')='SUPPORT' AND v.is_current=1 AND t.status NOT IN('RESOLVED','CLOSED') THEN 1 ELSE 0 END),SUM(CASE WHEN ISNULL(t.ticket_type,'SUPPORT')='SUPPORT' AND v.is_current=1 AND t.status IN('RESOLVED','CLOSED') THEN 1 ELSE 0 END) FROM @visible v INNER JOIN dbo.support_tickets t ON t.id=v.id GROUP BY t.assigned_department;
+SELECT af.assigned_department,SUM(CASE WHEN af.status IN('OPEN','PENDING','IN_PROGRESS') THEN 1 ELSE 0 END),SUM(CASE WHEN af.status IN('RESOLVED','CLOSED') THEN 1 ELSE 0 END) FROM dbo.automatic_findings af INNER JOIN dbo.agencies a ON a.id=af.agency_id WHERE @includeFindings=1 AND (@findingDepartment='' OR af.assigned_department=@findingDepartment) AND (@findingTechnicianOnly=0 OR af.assigned_technician_id=@userId) AND (@findingScoped=0 OR EXISTS(SELECT 1 FROM dbo.admin_user_groups ug WHERE ug.user_id=@userId AND ug.group_name=a.grupo)) GROUP BY af.assigned_department;
+""", connection);
+    command.Parameters.AddWithValue("@administrator", role == "Administrator" ? 1 : 0); command.Parameters.AddWithValue("@groupSupervisor", role == "GroupAdministrator" ? 1 : 0); command.Parameters.AddWithValue("@supportDepartment", DepartmentForRole(role)); command.Parameters.AddWithValue("@supportTeam", role == "Warehouse" ? "WAREHOUSE" : supportTeam ?? ""); command.Parameters.AddWithValue("@userEmail", userEmail ?? ""); command.Parameters.AddWithValue("@administrativeRequester", DepartmentAccounts.IsSupportScope(role) || role == "Administrative" && EmmaAdministrativeAccess.IsEmma(userEmail) ? 1 : 0); command.Parameters.AddWithValue("@areaManager", areaManager ? 1 : 0); command.Parameters.AddWithValue("@canAssign", canAssignTickets ? 1 : 0); command.Parameters.AddWithValue("@userId", userId); command.Parameters.AddWithValue("@findingDepartment", DepartmentForRole(role)); command.Parameters.AddWithValue("@includeFindings", includeFindings ? 1 : 0);
+    bool findingTechnicianOnly = role == "GroupAdministrator" || ((role is "Technology" or "GeneralServices" or "HumanResources" || DepartmentAccounts.IsSupportScope(role)) && !canAssignTickets); command.Parameters.AddWithValue("@findingTechnicianOnly", findingTechnicianOnly ? 1 : 0); command.Parameters.AddWithValue("@findingScoped", 0);
+    var metrics = new Dictionary<string, SupportDepartmentMetricRow>(StringComparer.OrdinalIgnoreCase); await using var reader = await command.ExecuteReaderAsync(ct);
+    while (await reader.ReadAsync(ct)) { var department = reader.GetString(0); metrics[department] = new(department, reader.GetInt32(1), 0, reader.GetInt32(2), reader.GetInt32(3), reader.GetInt32(4), reader.GetInt32(5)); }
+    if (await reader.NextResultAsync(ct)) while (await reader.ReadAsync(ct)) { var department = reader.GetString(0); var current = metrics.GetValueOrDefault(department) ?? new(department, 0, 0, 0, 0, 0, 0); metrics[department] = current with { Findings = reader.GetInt32(1), Solutions = current.Solutions + reader.GetInt32(2) }; }
+    return metrics.Values.OrderBy(item => item.Department).ToList();
+}
+
+public async Task<List<SupportDepartmentRow>> SupportCatalog(CancellationToken ct)
     {
         await using var connection=await Open(ct);var departments=new List<SupportDepartmentRow>();
+        const string administrativeCatalogSql="""
+            IF NOT EXISTS(SELECT 1 FROM dbo.support_departments WITH (UPDLOCK, HOLDLOCK) WHERE code='TREASURY')
+                INSERT INTO dbo.support_departments(code,name,description,accent_color,display_order,is_active)
+                VALUES('TREASURY',N'Tesorería',N'Archivos, comunicaciones y solicitudes del departamento.','#0F766E',60,1);
+            IF NOT EXISTS(SELECT 1 FROM dbo.support_departments WITH (UPDLOCK, HOLDLOCK) WHERE code='ACCOUNTING')
+                INSERT INTO dbo.support_departments(code,name,description,accent_color,display_order,is_active)
+                VALUES('ACCOUNTING',N'Contabilidad',N'Archivos, comunicaciones y solicitudes del departamento.','#2563EB',70,1);
+            IF NOT EXISTS(SELECT 1 FROM dbo.support_departments WITH (UPDLOCK, HOLDLOCK) WHERE code='COMMERCIALIZATION')
+                INSERT INTO dbo.support_departments(code,name,description,accent_color,display_order,is_active)
+                VALUES('COMMERCIALIZATION',N'Comercialización',N'Archivos, comunicaciones y solicitudes del departamento.','#0E7490',50,1);
+            IF NOT EXISTS(SELECT 1 FROM dbo.support_departments WITH (UPDLOCK, HOLDLOCK) WHERE code='ADMINISTRATIVE')
+                INSERT INTO dbo.support_departments(code,name,description,accent_color,display_order,is_active)
+                VALUES('ADMINISTRATIVE',N'Departamento Administrativo',N'Solicitudes y gestiones administrativas.','#0F766E',40,1);
+            IF NOT EXISTS(SELECT 1 FROM dbo.support_categories WITH (UPDLOCK, HOLDLOCK) WHERE department_code='ADMINISTRATIVE' AND code='ADMINISTRATIVE_REQUEST')
+                INSERT INTO dbo.support_categories(department_code,code,name,description,default_priority,requires_detail,detail_label,display_order,is_active)
+                VALUES('ADMINISTRATIVE','ADMINISTRATIVE_REQUEST',N'Solicitud administrativa',N'Gestión o requerimiento dirigido al Departamento Administrativo.','MEDIUM',1,N'Describe la gestión administrativa requerida',10,1);
+            """;
+        await using(var administrativeCatalogCommand=new SqlCommand(administrativeCatalogSql,connection))await administrativeCatalogCommand.ExecuteNonQueryAsync(ct);
+        const string departmentalSupportCatalog="""
+            INSERT INTO dbo.support_departments(code,name,description,accent_color,display_order,is_active)
+            SELECT v.code,v.name,N'Soporte del departamento.','#0E7490',80,1
+            FROM (VALUES('GENERAL_AUDIT',N'Auditoría General'),('VAULT',N'Bóveda'),('CASHIER',N'Caja'),('COMMUNICATION',N'Comunicación'),('SUPERVISION',N'Supervisión'),('WAREHOUSE',N'Almacén'),('WORKSHOP',N'Taller'),('HUMAN_RESOURCES',N'Recursos Humanos')) v(code,name)
+            WHERE NOT EXISTS(SELECT 1 FROM dbo.support_departments d WITH(UPDLOCK,HOLDLOCK) WHERE d.code=v.code);
+            INSERT INTO dbo.support_categories(department_code,code,name,description,default_priority,requires_detail,detail_label,display_order,is_active)
+            SELECT d.code,'DEPARTMENT_REQUEST',N'Solicitud al departamento',N'Incidencia o requerimiento del departamento.','MEDIUM',1,N'Describe la incidencia o solicitud',100,1
+            FROM dbo.support_departments d WHERE d.code IN('TREASURY','ACCOUNTING','GENERAL_AUDIT','VAULT','CASHIER','COMMERCIALIZATION','COMMUNICATION','SUPERVISION','WAREHOUSE','WORKSHOP','HUMAN_RESOURCES')
+            AND NOT EXISTS(SELECT 1 FROM dbo.support_categories c WITH(UPDLOCK,HOLDLOCK) WHERE c.department_code=d.code AND c.code='DEPARTMENT_REQUEST');
+            """;
+        await using(var departmentSupportCommand=new SqlCommand(departmentalSupportCatalog,connection))await departmentSupportCommand.ExecuteNonQueryAsync(ct);
+        const string newAgencyCategorySql="""
+            INSERT INTO dbo.support_categories(department_code,code,name,description,default_priority,requires_detail,detail_label,display_order,is_active)
+            SELECT d.code,'NEW_AGENCY',N'Agencia nueva',N'Instalación o atención de una agencia nueva.','MEDIUM',1,N'Describe lo requerido para la agencia nueva',95,1
+            FROM dbo.support_departments d WHERE d.code IN('TECHNOLOGY','GENERAL_SERVICES')
+              AND NOT EXISTS(SELECT 1 FROM dbo.support_categories c WITH(UPDLOCK,HOLDLOCK) WHERE c.department_code=d.code AND c.code='NEW_AGENCY');
+            """;
+        await using(var newAgencyCategoryCommand=new SqlCommand(newAgencyCategorySql,connection))await newAgencyCategoryCommand.ExecuteNonQueryAsync(ct);
         const string cpuCategorySql="""IF OBJECT_ID(N'dbo.support_categories',N'U') IS NOT NULL AND EXISTS(SELECT 1 FROM dbo.support_departments WHERE code='TECHNOLOGY') MERGE dbo.support_categories AS target USING(SELECT 'TECHNOLOGY' department_code,'CPU_FAILURE' code,N'Falla CPU' name,N'CPU sin encender, lenta o con avería de hardware.' description,'CRITICAL' default_priority,CAST(1 AS bit) requires_detail,N'Describe la falla de la CPU' detail_label,CAST(NULL AS nvarchar(max)) options_json,65 display_order,CAST(1 AS bit) is_active) AS source ON target.department_code=source.department_code AND target.code=source.code WHEN MATCHED THEN UPDATE SET name=source.name,description=source.description,default_priority=source.default_priority,requires_detail=source.requires_detail,detail_label=source.detail_label,options_json=source.options_json,display_order=source.display_order,is_active=source.is_active,updated_at=SYSUTCDATETIME() WHEN NOT MATCHED THEN INSERT(department_code,code,name,description,default_priority,requires_detail,detail_label,options_json,display_order,is_active) VALUES(source.department_code,source.code,source.name,source.description,source.default_priority,source.requires_detail,source.detail_label,source.options_json,source.display_order,source.is_active);""";
         await using(var cpuCategoryCommand=new SqlCommand(cpuCategorySql,connection))await cpuCategoryCommand.ExecuteNonQueryAsync(ct);
         const string cpuTicketPrioritySql="""IF OBJECT_ID(N'dbo.support_tickets',N'U') IS NOT NULL UPDATE dbo.support_tickets SET priority='CRITICAL',updated_at=SYSUTCDATETIME() WHERE assigned_department='TECHNOLOGY' AND category='CPU_FAILURE' AND ISNULL(priority,'')<>'CRITICAL';""";
@@ -2994,7 +3285,7 @@ sealed partial class Database
         if(files.Count is <1 or >4)return new(false,"VALIDATION","Selecciona entre 1 y 4 fotografías.");var department=DepartmentForRole(role);await using var connection=await Open(ct);await EnsureAgencyTransitionEvidenceSchema(connection,ct);var capabilities=await AgencyTransitionProgressCapabilities(connection,ct);var typeFilter=capabilities.EntryType?"AND h.entry_type='ADVANCE'":"";var visibleFilter=capabilities.DeletedAt?"AND h.deleted_at IS NULL":"";await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable,ct);
         var targetSql=$"SELECT h.progress_status FROM dbo.agency_transition_progress h WITH(UPDLOCK,HOLDLOCK) INNER JOIN dbo.agency_transition_stages s ON s.id=h.stage_id INNER JOIN dbo.agency_transition_projects p ON p.id=h.project_id WHERE h.id=@progressId AND h.project_id=@projectId AND h.stage_id=@stageId AND p.status<>'CANCELLED' {typeFilter} {visibleFilter} AND (@admin=1 OR s.department=@department);";string? status;await using(var target=new SqlCommand(targetSql,connection,transaction)){target.Parameters.AddWithValue("@progressId",progressId);target.Parameters.AddWithValue("@projectId",projectId);target.Parameters.AddWithValue("@stageId",stageId);target.Parameters.AddWithValue("@admin",role=="Administrator"?1:0);target.Parameters.AddWithValue("@department",department);status=(string?)await target.ExecuteScalarAsync(ct);}if(status is null){await transaction.RollbackAsync(ct);return new(false,"FORBIDDEN","Solo el departamento propietario puede agregar evidencias a este registro.");}if(status=="COMPLETED"){await transaction.RollbackAsync(ct);return new(false,"CONFLICT","El registro está completado y sus evidencias ya no pueden modificarse.");}
         await using(var countCommand=new SqlCommand("SELECT COUNT(*) FROM dbo.agency_transition_progress_evidence WITH(UPDLOCK,HOLDLOCK) WHERE progress_id=@progressId;",connection,transaction)){countCommand.Parameters.AddWithValue("@progressId",progressId);var existing=Convert.ToInt32(await countCommand.ExecuteScalarAsync(ct));if(existing+files.Count>4){await transaction.RollbackAsync(ct);return new(false,"CONFLICT",$"Este registro admite un máximo de 4 fotografías. Puedes agregar {Math.Max(0,4-existing)} más.");}}
-        const string insert="INSERT INTO dbo.agency_transition_progress_evidence(id,project_id,stage_id,progress_id,file_name,content_type,photo_data,uploaded_by_user_id,uploaded_by_name,latitude,longitude,accuracy_meters,location_captured_at) VALUES(@id,@projectId,@stageId,@progressId,@fileName,@contentType,@data,@userId,@actor,@latitude,@longitude,@accuracy,@locationCapturedAt);";foreach(var file in files){await using var command=new SqlCommand(insert,connection,transaction);command.Parameters.AddWithValue("@id",Guid.NewGuid());command.Parameters.AddWithValue("@projectId",projectId);command.Parameters.AddWithValue("@stageId",stageId);command.Parameters.AddWithValue("@progressId",progressId);command.Parameters.AddWithValue("@fileName",file.FileName);command.Parameters.AddWithValue("@contentType",file.ContentType);command.Parameters.Add("@data",SqlDbType.VarBinary,-1).Value=file.Data;command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@actor",actorName);command.Parameters.AddWithValue("@latitude",Db(file.Latitude));command.Parameters.AddWithValue("@longitude",Db(file.Longitude));command.Parameters.AddWithValue("@accuracy",Db(file.AccuracyMeters));command.Parameters.AddWithValue("@locationCapturedAt",Db(file.LocationCapturedAt));await command.ExecuteNonQueryAsync(ct);}await using(var projectCommand=new SqlCommand("UPDATE dbo.agency_transition_projects SET updated_at=SYSUTCDATETIME() WHERE id=@projectId;",connection,transaction)){projectCommand.Parameters.AddWithValue("@projectId",projectId);await projectCommand.ExecuteNonQueryAsync(ct);}await transaction.CommitAsync(ct);return new(true,"OK",null);
+        const string insert="INSERT INTO dbo.agency_transition_progress_evidence(id,project_id,stage_id,progress_id,file_name,content_type,photo_data,uploaded_by_user_id,uploaded_by_name,latitude,longitude,accuracy_meters,location_captured_at) VALUES(@id,@projectId,@stageId,@progressId,@fileName,@contentType,@data,@userId,@actor,@latitude,@longitude,@accuracy,@locationCapturedAt);";foreach(var file in files){await using var command=new SqlCommand(insert,connection,transaction);command.Parameters.AddWithValue("@id",Guid.NewGuid());command.Parameters.AddWithValue("@projectId",projectId);command.Parameters.AddWithValue("@stageId",stageId);command.Parameters.AddWithValue("@progressId",progressId);command.Parameters.AddWithValue("@fileName",file.FileName);command.Parameters.AddWithValue("@contentType",file.ContentType);command.Parameters.Add("@data",SqlDbType.VarBinary,-1).Value=await StorageFiles.Store(file.Data,"transition-evidence",ct);command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@actor",actorName);command.Parameters.AddWithValue("@latitude",Db(file.Latitude));command.Parameters.AddWithValue("@longitude",Db(file.Longitude));command.Parameters.AddWithValue("@accuracy",Db(file.AccuracyMeters));command.Parameters.AddWithValue("@locationCapturedAt",Db(file.LocationCapturedAt));await command.ExecuteNonQueryAsync(ct);}await using(var projectCommand=new SqlCommand("UPDATE dbo.agency_transition_projects SET updated_at=SYSUTCDATETIME() WHERE id=@projectId;",connection,transaction)){projectCommand.Parameters.AddWithValue("@projectId",projectId);await projectCommand.ExecuteNonQueryAsync(ct);}await transaction.CommitAsync(ct);return new(true,"OK",null);
     }
 
     public async Task<TicketActionResult> DeleteAgencyTransitionEvidence(Guid projectId,Guid stageId,Guid progressId,Guid evidenceId,string role,CancellationToken ct)
@@ -3004,7 +3295,7 @@ sealed partial class Database
 
     public async Task<(byte[] Data,string Mime)?> AgencyTransitionEvidencePhoto(Guid evidenceId,string role,CancellationToken ct)
     {
-        if(role is not ("Administrator" or "Technology" or "GeneralServices" or "HumanResources"))return null;await using var connection=await Open(ct);await EnsureAgencyTransitionEvidenceSchema(connection,ct);const string sql="SELECT photo_data,content_type FROM dbo.agency_transition_progress_evidence WHERE id=@id;";await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@id",evidenceId);await using var reader=await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess,ct);return await reader.ReadAsync(ct)?((byte[])reader[0],reader.GetString(1)):null;
+        if(role is not ("Administrator" or "Technology" or "GeneralServices" or "HumanResources"))return null;await using var connection=await Open(ct);await EnsureAgencyTransitionEvidenceSchema(connection,ct);const string sql="SELECT photo_data,content_type FROM dbo.agency_transition_progress_evidence WHERE id=@id;";await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@id",evidenceId);await using var reader=await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess,ct);return await reader.ReadAsync(ct)?(await StorageFiles.Read((byte[])reader[0],ct),reader.GetString(1)):null;
     }
 
     public async Task<TicketActionResult> DeleteAgencyTransitionProgress(Guid projectId,Guid stageId,Guid progressId,string userId,string role,string actorName,CancellationToken ct)
@@ -3023,46 +3314,73 @@ sealed partial class Database
         await using var connection=await Open(ct);await using var command=new SqlCommand("UPDATE dbo.agency_transition_projects SET status='CANCELLED',updated_at=SYSUTCDATETIME() WHERE id=@id AND status<>'CANCELLED';",connection);command.Parameters.AddWithValue("@id",id);return await command.ExecuteNonQueryAsync(ct)==1?new(true,"OK",null):new(false,"NOT_FOUND","Proceso no encontrado.");
     }
 
-    public async Task<List<MaintenanceMovementRow>?> MaintenanceMovements(string userId,string role,string? supportTeam,CancellationToken ct)
+public async Task<List<MaintenanceMovementRow>?> MaintenanceMovements(string userId,string role,string? supportTeam,CancellationToken ct)
     {
-        var department=DepartmentForRole(role);if(role!="Administrator"&&department is not ("TECHNOLOGY" or "GENERAL_SERVICES" or "HUMAN_RESOURCES"))return null;
-        await using var connection=await Open(ct);await EnsureMaintenanceSchema(connection,ct);const string sql="""SELECT m.id,m.agency_id,COALESCE(a.codigo,'ALMACEN'),COALESCE(a.terminal,'Inventario central'),COALESCE(a.grupo,'Oficina principal'),m.ticket_id,m.department,m.technician_user_id,m.technician_name,m.movement_type,m.equipment_type,m.component_type,m.failure_cause,m.serial_number,m.quantity,m.notes,m.created_by_name,m.created_at,m.operational_area,m.document_number,m.qr_token,m.delivered_by_name,m.received_by_name,m.destination_name,m.signature_data,m.occurred_at,CAST(NULL AS nvarchar(256)) received_by_login FROM dbo.maintenance_movements m LEFT JOIN dbo.agencies a ON a.id=m.agency_id WHERE (@department='' OR m.department=@department) AND (@area='' OR m.operational_area=@area OR (@area='WORKSHOP' AND m.movement_type='TRANSFER_TO_WORKSHOP')) AND (@technicianOnly=0 OR m.technician_user_id=@userId) ORDER BY m.occurred_at DESC,m.created_at DESC;""";
-        await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@department",role=="Administrator"?"":supportTeam=="WAREHOUSE"?"TECHNOLOGY":department);command.Parameters.AddWithValue("@area",supportTeam=="WAREHOUSE"?"WAREHOUSE":supportTeam=="WORKSHOP"?"WORKSHOP":"");command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@technicianOnly",role=="Technology"&&supportTeam=="TECHNICIANS"?1:0);await using var reader=await command.ExecuteReaderAsync(ct);var rows=new List<MaintenanceMovementRow>();while(await reader.ReadAsync(ct))rows.Add(new(reader.GetGuid(0),reader.IsDBNull(1)?null:Guid.Parse(reader.GetString(1)),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.IsDBNull(5)?null:reader.GetGuid(5),reader.GetString(6),reader.IsDBNull(7)?null:reader.GetString(7),reader.GetString(8),reader.GetString(9),reader.GetString(10),reader.IsDBNull(11)?null:reader.GetString(11),reader.GetString(12),reader.IsDBNull(13)?null:reader.GetString(13),reader.GetInt32(14),reader.IsDBNull(15)?null:reader.GetString(15),reader.GetString(16),reader.GetDateTime(17),reader.GetString(18),reader.GetString(19),reader.GetString(20),reader.IsDBNull(21)?null:reader.GetString(21),reader.IsDBNull(22)?null:reader.GetString(22),reader.IsDBNull(23)?null:reader.GetString(23),reader.IsDBNull(24)?null:reader.GetString(24),reader.GetDateTime(25),reader.IsDBNull(26)?null:reader.GetString(26)));return rows;
+        // Lists must not download a signature from storage for every movement.
+        // MaintenanceDocument resolves the selected document's legacy signature.
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
+        var department=DepartmentForRole(role);if(role!="Administrator"&&supportTeam is not ("WAREHOUSE" or "WORKSHOP")&&department is not ("TECHNOLOGY" or "GENERAL_SERVICES" or "HUMAN_RESOURCES"))return null;
+        await using var connection=await Open(ct);await EnsureMaintenanceSchema(connection,ct);await EnsureRepairedInventorySchema(connection,ct);const string sql="""SELECT m.id,m.agency_id,COALESCE(a.codigo,'ALMACEN'),COALESCE(a.terminal,'Inventario central'),COALESCE(a.grupo,'Oficina principal'),m.ticket_id,m.department,m.technician_user_id,m.technician_name,m.movement_type,m.equipment_type,m.component_type,m.failure_cause,m.serial_number,m.quantity,m.notes,m.created_by_name,m.created_at,m.operational_area,m.document_number,m.qr_token,m.delivered_by_name,m.received_by_name,m.destination_name,CAST(NULL AS nvarchar(max)) signature_data,m.occurred_at,CAST(NULL AS nvarchar(256)) received_by_login,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.warehouse_repaired_receipts rr JOIN dbo.maintenance_movements repaired ON repaired.id=rr.movement_id WHERE m.operational_area='WAREHOUSE' AND repaired.department=m.department AND UPPER(LTRIM(RTRIM(repaired.serial_number)))=UPPER(LTRIM(RTRIM(m.serial_number))) AND repaired.occurred_at<=m.occurred_at) THEN 1 ELSE 0 END AS bit) is_repaired FROM dbo.maintenance_movements m LEFT JOIN dbo.agencies a ON a.id=m.agency_id WHERE (@department='' OR m.department=@department) AND (@area='' OR m.operational_area=@area OR (@area='WORKSHOP' AND m.movement_type='TRANSFER_TO_WORKSHOP')) AND (@technicianOnly=0 OR m.technician_user_id=@userId) ORDER BY m.occurred_at DESC,m.created_at DESC;""";
+        await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@department",role=="Administrator"||supportTeam=="WAREHOUSE"?"":department);command.Parameters.AddWithValue("@area",supportTeam=="WAREHOUSE"?"WAREHOUSE":supportTeam=="WORKSHOP"?"WORKSHOP":"");command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@technicianOnly",role=="Technology"&&supportTeam=="TECHNICIANS"?1:0);await using var reader=await command.ExecuteReaderAsync(ct);var rows=new List<MaintenanceMovementRow>();while(await reader.ReadAsync(ct))rows.Add(new(reader.GetGuid(0),reader.IsDBNull(1)?null:Guid.Parse(reader.GetString(1)),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.IsDBNull(5)?null:reader.GetGuid(5),reader.GetString(6),reader.IsDBNull(7)?null:reader.GetString(7),reader.GetString(8),reader.GetString(9),reader.GetString(10),reader.IsDBNull(11)?null:reader.GetString(11),reader.GetString(12),reader.IsDBNull(13)?null:reader.GetString(13),reader.GetInt32(14),reader.IsDBNull(15)?null:reader.GetString(15),reader.GetString(16),reader.GetDateTime(17),reader.GetString(18),reader.GetString(19),reader.GetString(20),reader.IsDBNull(21)?null:reader.GetString(21),reader.IsDBNull(22)?null:reader.GetString(22),reader.IsDBNull(23)?null:reader.GetString(23),null,reader.GetDateTime(25),reader.IsDBNull(26)?null:reader.GetString(26),reader.GetBoolean(27)));return rows;
     }
 
-    public async Task<List<MaintenanceProductRow>> MaintenanceProducts(string role,string? supportTeam,CancellationToken ct)
+public async Task<List<MaintenanceProductRow>> MaintenanceProducts(string role,string? supportTeam,CancellationToken ct)
     {
-        var department=DepartmentForRole(role);await using var connection=await Open(ct);await EnsureMaintenanceSchema(connection,ct);const string sql="""SELECT id,department,scan_code,product_name,component_type,updated_at FROM dbo.maintenance_products WHERE (@department='' OR department=@department) ORDER BY product_name,scan_code;""";await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@department",role=="Administrator"?"":supportTeam=="WAREHOUSE"?"TECHNOLOGY":department);await using var reader=await command.ExecuteReaderAsync(ct);var rows=new List<MaintenanceProductRow>();while(await reader.ReadAsync(ct))rows.Add(new(reader.GetGuid(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.IsDBNull(4)?null:reader.GetString(4),reader.GetDateTime(5)));return rows;
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
+        var department=DepartmentForRole(role);await using var connection=await Open(ct);await EnsureMaintenanceSchema(connection,ct);const string sql="""SELECT id,department,scan_code,product_name,component_type,updated_at FROM dbo.maintenance_products WHERE (@department='' OR department=@department) ORDER BY product_name,scan_code;""";await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@department",role=="Administrator"||supportTeam=="WAREHOUSE"?"":department);await using var reader=await command.ExecuteReaderAsync(ct);var rows=new List<MaintenanceProductRow>();while(await reader.ReadAsync(ct))rows.Add(new(reader.GetGuid(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.IsDBNull(4)?null:reader.GetString(4),reader.GetDateTime(5)));return rows;
     }
 
-    public async Task<TicketActionResult> CreateMaintenanceMovement(MaintenanceMovementCreate body,string userId,string role,string? supportTeam,string actorName,CancellationToken ct)
+public async Task<TicketActionResult> CreateMaintenanceMovement(MaintenanceMovementCreate body,string userId,string role,string? supportTeam,string actorName,CancellationToken ct)
     {
-        var ownDepartment=DepartmentForRole(role);var requestedDepartment=(body.Department??"").Trim().ToUpperInvariant();var warehouse=supportTeam=="WAREHOUSE";if(warehouse&&requestedDepartment!="TECHNOLOGY")return new(false,"FORBIDDEN","El Almacén gestiona únicamente inventario tecnológico.");var department=role=="Administrator"?requestedDepartment:warehouse?"TECHNOLOGY":ownDepartment;if(department is not ("TECHNOLOGY" or "GENERAL_SERVICES" or "HUMAN_RESOURCES"))return new(false,"FORBIDDEN","Selecciona Tecnología, Servicios Generales o Recursos Humanos para registrar el mantenimiento.");if(role!="Administrator"&&!warehouse&&!string.IsNullOrWhiteSpace(body.Department)&&!string.Equals(body.Department,ownDepartment,StringComparison.OrdinalIgnoreCase))return new(false,"FORBIDDEN","Solo puedes registrar mantenimientos de tu departamento.");var requestedArea=(body.OperationalArea??"").Trim().ToUpperInvariant();if(warehouse&&requestedArea!="WAREHOUSE")return new(false,"FORBIDDEN","La cuenta de Almacén solo puede registrar operaciones de Almacén.");if(supportTeam=="WORKSHOP"&&requestedArea!="WORKSHOP")return new(false,"FORBIDDEN","La cuenta de Taller solo puede registrar operaciones de Taller.");
-        var movementType=body.MovementType!.Trim().ToUpperInvariant();var entersWorkshop=requestedArea=="WORKSHOP"||movementType=="TRANSFER_TO_WORKSHOP";var equipment=body.EquipmentType!.Trim();var serialNumber=string.IsNullOrWhiteSpace(body.SerialNumber)?null:body.SerialNumber.Trim().ToUpperInvariant();
-        if(entersWorkshop&&department=="HUMAN_RESOURCES")return new(false,"VALIDATION","Recursos Humanos no forma parte de Taller; registra sus movimientos en Almacén.");
-        if(entersWorkshop&&department=="GENERAL_SERVICES"&&!equipment.Contains("INVERSOR",StringComparison.OrdinalIgnoreCase)&&!equipment.Contains("INVERTER",StringComparison.OrdinalIgnoreCase))return new(false,"VALIDATION","El Taller de Servicios Generales recibe únicamente inversores.");
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
+        var ownDepartment=DepartmentForRole(role);var requestedDepartment=(body.Department??"").Trim().ToUpperInvariant();var warehouse=supportTeam=="WAREHOUSE"||role=="Warehouse";var centralEntry=(role=="Administrator"||warehouse)&&string.Equals(body.OperationalArea?.Trim(),"WAREHOUSE",StringComparison.OrdinalIgnoreCase)&&string.Equals(body.MovementType?.Trim(),"ENTRY",StringComparison.OrdinalIgnoreCase)&&requestedDepartment is "" or "WAREHOUSE";if(centralEntry)requestedDepartment="WAREHOUSE";if(warehouse&&!centralEntry&&requestedDepartment is not ("TECHNOLOGY" or "GENERAL_SERVICES" or "HUMAN_RESOURCES"))return new(false,"FORBIDDEN","El Almacén gestiona inventario de Tecnología, Servicios Generales y Recursos Humanos.");var department=role=="Administrator"||warehouse?requestedDepartment:ownDepartment;if(!centralEntry&&department is not ("TECHNOLOGY" or "GENERAL_SERVICES" or "HUMAN_RESOURCES"))return new(false,"FORBIDDEN","Selecciona Tecnología, Servicios Generales o Recursos Humanos para registrar el mantenimiento.");if(role!="Administrator"&&!warehouse&&!string.IsNullOrWhiteSpace(body.Department)&&!string.Equals(body.Department,ownDepartment,StringComparison.OrdinalIgnoreCase))return new(false,"FORBIDDEN","Solo puedes registrar mantenimientos de tu departamento.");var requestedArea=(body.OperationalArea??"").Trim().ToUpperInvariant();if(warehouse&&requestedArea!="WAREHOUSE")return new(false,"FORBIDDEN","La cuenta de Almacén solo puede registrar operaciones de Almacén.");if(supportTeam=="WORKSHOP"&&requestedArea!="WORKSHOP")return new(false,"FORBIDDEN","La cuenta de Taller solo puede registrar operaciones de Taller.");
+        var movementType=body.MovementType!.Trim().ToUpperInvariant();if(requestedArea=="WORKSHOP"&&movementType!="TRANSFER_TO_WORKSHOP")return new(false,"FORBIDDEN","Registra y gestiona equipos desde el nuevo formulario de Taller.");var equipment=body.EquipmentType!.Trim();var serialNumber=string.IsNullOrWhiteSpace(body.SerialNumber)?null:body.SerialNumber.Trim().ToUpperInvariant();
         var technicianOnly=role=="Technology"&&supportTeam=="TECHNICIANS";
-        await using var connection=await Open(ct);await EnsureMaintenanceSchema(connection,ct);
-        if(movementType is ("REQUEST" or "EXIT" or "NEW_DELIVERY"))
+        await using var connection=await Open(ct);await EnsureMaintenanceSchema(connection,ct);await EnsureInstitutionalSchema(connection,ct);await EnsureWarehouseFulfillmentSchema(connection,ct);
+        if(warehouse&&movementType=="ENTRY")
         {
-            await using var recipientCheck=new SqlCommand("SELECT COUNT(*) FROM dbo.admin_users WHERE CONVERT(nvarchar(80),id)=@recipient AND is_active=1 AND ((role='TECHNOLOGY' AND (support_team IS NULL OR support_team IN('CALL_CENTER','TECHNICAL_FAILURE','TECHNICIANS'))) OR role='GROUP_ADMIN');",connection);recipientCheck.Parameters.AddWithValue("@recipient",body.TechnicianUserId??"");if(Convert.ToInt32(await recipientCheck.ExecuteScalarAsync(ct))!=1)return new(false,"FORBIDDEN","El destinatario debe pertenecer a Tecnología o ser supervisor activo.");
+            await using var permission=new SqlCommand("SELECT COUNT(*) FROM dbo.admin_users WHERE CONVERT(nvarchar(80),id)=@userId AND COALESCE(JSON_VALUE(CASE WHEN ISJSON(permissions_json)=1 THEN permissions_json ELSE N'{}' END,'$.canLoadWarehouseInventory'),'true')='true';",connection);
+            permission.Parameters.AddWithValue("@userId",userId);
+            if(Convert.ToInt32(await permission.ExecuteScalarAsync(ct))!=1)return new(false,"FORBIDDEN","Tu cuenta no tiene permiso para cargar inventario.");
+            await using var existingProduct=new SqlCommand("SELECT COUNT(*) FROM dbo.warehouse_products WHERE is_active=1 AND LOWER(LTRIM(RTRIM(description)))=LOWER(LTRIM(RTRIM(@equipment)));",connection);
+            existingProduct.Parameters.AddWithValue("@equipment",equipment);
+            if(Convert.ToInt32(await existingProduct.ExecuteScalarAsync(ct))==0)
+            {
+                await using var createPermission=new SqlCommand("SELECT COUNT(*) FROM dbo.admin_users WHERE CONVERT(nvarchar(80),id)=@userId AND (role='ADMINISTRATOR' OR COALESCE(JSON_VALUE(CASE WHEN ISJSON(permissions_json)=1 THEN permissions_json ELSE N'{}' END,'$.canCreateWarehouseArticles'),CASE WHEN LOWER(LTRIM(RTRIM(email))) IN(N'diorly.abreu',N'diorly.abreu@grupotejeda.local',N'ana.rodriguez',N'ana.rodriguez@grupotejeda.local') THEN 'true' ELSE 'false' END)='true');",connection);
+                createPermission.Parameters.AddWithValue("@userId",userId);
+                if(Convert.ToInt32(await createPermission.ExecuteScalarAsync(ct))!=1)return new(false,"FORBIDDEN","Tu cuenta puede registrar entradas de artículos existentes, pero no crear artículos nuevos.");
+            }
+        }
+        if(movementType is ("EXIT" or "NEW_DELIVERY"))
+        {
+            await using var recipientCheck=new SqlCommand("SELECT COUNT(*) FROM dbo.admin_users WHERE CONVERT(nvarchar(80),id)=@recipient AND is_active=1 AND ((role='TECHNOLOGY' AND (support_team IS NULL OR support_team IN('CALL_CENTER','TECHNICAL_FAILURE','TECHNICIANS'))) OR role='GENERAL_SERVICES' OR role='GROUP_ADMIN');",connection);recipientCheck.Parameters.AddWithValue("@recipient",body.TechnicianUserId??"");if(Convert.ToInt32(await recipientCheck.ExecuteScalarAsync(ct))!=1)return new(false,"FORBIDDEN","El destinatario debe pertenecer a Tecnología, Servicios Generales o ser supervisor activo.");
+        }
+        if(requestedArea=="WAREHOUSE"&&movementType is ("ENTRY" or "REQUEST" or "TRANSFER_TO_WORKSHOP"))await EnsureWarehouseWithdrawalSchema(connection,ct);
+        await using var movementTransaction=(SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable,ct);
+        if(requestedArea=="WAREHOUSE"&&movementType=="ENTRY")await EnsureWarehouseEntryProduct(connection,movementTransaction,equipment,body.Quantity,body.OccurredAt??DateTime.UtcNow,ct,serialNumber is not null);
+        if(requestedArea=="WAREHOUSE"&&movementType is ("EXIT" or "NEW_DELIVERY" or "TRANSFER_TO_WORKSHOP" or "DISCHARGE"))
+        {
+            var reservedError=await WarehouseProtectReservedStock(connection,movementTransaction,department,equipment,serialNumber,body.Quantity,ct);
+            if(reservedError is not null)return new(false,"CONFLICT",reservedError);
         }
         const string sql="""INSERT INTO dbo.maintenance_movements(id,agency_id,ticket_id,department,technician_user_id,technician_name,movement_type,equipment_type,component_type,failure_cause,serial_number,quantity,notes,created_by_user_id,created_by_name,operational_area,document_number,qr_token,delivered_by_name,received_by_name,destination_name,signature_data,occurred_at) SELECT @id,@agency,@ticket,@department,@technicianId,@technicianName,@movement,@equipment,@component,@cause,@serial,@quantity,@notes,@userId,@actor,@area,@document,@qr,@delivered,@received,@destination,@signature,@occurred WHERE @agency IS NULL OR EXISTS(SELECT 1 FROM dbo.agencies WHERE id=@agency);""";
-        await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@id",Guid.NewGuid());command.Parameters.Add("@agency",SqlDbType.Char,36).Value=body.AgencyId is null?DBNull.Value:body.AgencyId.Value.ToString();command.Parameters.AddWithValue("@ticket",body.TicketId is null?DBNull.Value:body.TicketId.Value);command.Parameters.AddWithValue("@department",department);command.Parameters.AddWithValue("@technicianId",Db(technicianOnly?userId:body.TechnicianUserId));command.Parameters.AddWithValue("@technicianName",technicianOnly?actorName:string.IsNullOrWhiteSpace(body.TechnicianName)?actorName:body.TechnicianName.Trim());command.Parameters.AddWithValue("@movement",body.MovementType!.Trim().ToUpperInvariant());command.Parameters.AddWithValue("@equipment",body.EquipmentType!.Trim());command.Parameters.AddWithValue("@component",Db(string.IsNullOrWhiteSpace(body.ComponentType)?null:body.ComponentType.Trim()));command.Parameters.AddWithValue("@cause",body.FailureCause!.Trim());command.Parameters.AddWithValue("@serial",Db(serialNumber));command.Parameters.AddWithValue("@quantity",body.Quantity);command.Parameters.AddWithValue("@notes",Db(string.IsNullOrWhiteSpace(body.Notes)?null:body.Notes.Trim()));command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@actor",actorName);command.Parameters.AddWithValue("@area",body.OperationalArea!.Trim().ToUpperInvariant());command.Parameters.AddWithValue("@document",body.DocumentNumber!.Trim().ToUpperInvariant());command.Parameters.AddWithValue("@qr",string.IsNullOrWhiteSpace(body.QrToken)?$"REAL-MNT|{body.DocumentNumber!.Trim().ToUpperInvariant()}":body.QrToken.Trim());command.Parameters.AddWithValue("@delivered",Db(string.IsNullOrWhiteSpace(body.DeliveredByName)?null:body.DeliveredByName.Trim()));command.Parameters.AddWithValue("@received",Db(string.IsNullOrWhiteSpace(body.ReceivedByName)?null:body.ReceivedByName.Trim()));command.Parameters.AddWithValue("@destination",Db(string.IsNullOrWhiteSpace(body.DestinationName)?null:body.DestinationName.Trim()));command.Parameters.AddWithValue("@signature",Db(string.IsNullOrWhiteSpace(body.SignatureData)?null:body.SignatureData));command.Parameters.AddWithValue("@occurred",body.OccurredAt??DateTime.UtcNow);int changed;try{changed=await command.ExecuteNonQueryAsync(ct);}catch(SqlException error) when(error.Number is 2601 or 2627){return new(false,"CONFLICT","Ese número de formulario o código QR ya fue registrado.");}if(changed!=1)return new(false,"NOT_FOUND","Agencia no encontrada.");
+        await using var command=new SqlCommand(sql,connection,movementTransaction);command.Parameters.AddWithValue("@id",Guid.NewGuid());command.Parameters.Add("@agency",SqlDbType.Char,36).Value=body.AgencyId is null?DBNull.Value:body.AgencyId.Value.ToString();command.Parameters.AddWithValue("@ticket",body.TicketId is null?DBNull.Value:body.TicketId.Value);command.Parameters.AddWithValue("@department",department);command.Parameters.AddWithValue("@technicianId",Db(technicianOnly?userId:body.TechnicianUserId));command.Parameters.AddWithValue("@technicianName",technicianOnly?actorName:string.IsNullOrWhiteSpace(body.TechnicianName)?actorName:body.TechnicianName.Trim());command.Parameters.AddWithValue("@movement",body.MovementType!.Trim().ToUpperInvariant());command.Parameters.AddWithValue("@equipment",body.EquipmentType!.Trim());command.Parameters.AddWithValue("@component",Db(string.IsNullOrWhiteSpace(body.ComponentType)?null:body.ComponentType.Trim()));command.Parameters.AddWithValue("@cause",body.FailureCause!.Trim());command.Parameters.AddWithValue("@serial",Db(serialNumber));command.Parameters.AddWithValue("@quantity",body.Quantity);command.Parameters.AddWithValue("@notes",Db(string.IsNullOrWhiteSpace(body.Notes)?null:body.Notes.Trim()));command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@actor",actorName);command.Parameters.AddWithValue("@area",body.OperationalArea!.Trim().ToUpperInvariant());command.Parameters.AddWithValue("@document",body.DocumentNumber!.Trim().ToUpperInvariant());command.Parameters.AddWithValue("@qr",string.IsNullOrWhiteSpace(body.QrToken)?$"REAL-MNT|{body.DocumentNumber!.Trim().ToUpperInvariant()}":body.QrToken.Trim());command.Parameters.AddWithValue("@delivered",Db(string.IsNullOrWhiteSpace(body.DeliveredByName)?null:body.DeliveredByName.Trim()));command.Parameters.AddWithValue("@received",Db(string.IsNullOrWhiteSpace(body.ReceivedByName)?null:body.ReceivedByName.Trim()));command.Parameters.AddWithValue("@destination",Db(string.IsNullOrWhiteSpace(body.DestinationName)?null:body.DestinationName.Trim()));command.Parameters.AddWithValue("@signature",Db(await StorageFiles.StoreDataUrl(string.IsNullOrWhiteSpace(body.SignatureData)?null:body.SignatureData,ct)));command.Parameters.AddWithValue("@occurred",body.OccurredAt??DateTime.UtcNow);int changed;try{changed=await command.ExecuteNonQueryAsync(ct);}catch(SqlException error) when(error.Number is 2601 or 2627){return new(false,"CONFLICT","Ese número de formulario o código QR ya fue registrado.");}if(changed!=1)return new(false,"NOT_FOUND","Agencia no encontrada.");
+        await movementTransaction.CommitAsync(ct);
         const string catalogSql="""MERGE dbo.maintenance_products AS target USING(SELECT @department department,@scan scan_code,@product product_name,@component component_type,@actor created_by_name) AS source ON target.department=source.department AND target.scan_code=source.scan_code WHEN MATCHED THEN UPDATE SET product_name=source.product_name,component_type=source.component_type,updated_at=SYSUTCDATETIME() WHEN NOT MATCHED THEN INSERT(department,scan_code,product_name,component_type,created_by_name) VALUES(source.department,source.scan_code,source.product_name,source.component_type,source.created_by_name);""";
         if(serialNumber is not null)try{await using var catalogCommand=new SqlCommand(catalogSql,connection);catalogCommand.Parameters.AddWithValue("@department",department);catalogCommand.Parameters.AddWithValue("@scan",serialNumber);catalogCommand.Parameters.AddWithValue("@product",body.EquipmentType!.Trim());catalogCommand.Parameters.AddWithValue("@component",Db(string.IsNullOrWhiteSpace(body.ComponentType)?null:body.ComponentType.Trim()));catalogCommand.Parameters.AddWithValue("@actor",actorName);await catalogCommand.ExecuteNonQueryAsync(ct);}catch(SqlException error){Console.Error.WriteLine($"Maintenance product catalog: {error.Message}");}
         return new(true,"OK",null);
     }
 
-    public async Task<MaintenanceProcurementSnapshot?> MaintenanceProcurement(string role,string? supportTeam,CancellationToken ct)
+public async Task<MaintenanceProcurementSnapshot?> MaintenanceProcurement(string role,string? supportTeam,CancellationToken ct)
     {
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
         var department=DepartmentForRole(role);if(role!="Administrator"&&supportTeam is not ("WAREHOUSE" or "WORKSHOP")&&department is not ("TECHNOLOGY" or "GENERAL_SERVICES" or "HUMAN_RESOURCES"))return null;
         await using var connection=await Open(ct);await EnsureMaintenanceSchema(connection,ct);var all=role=="Administrator"||supportTeam=="WORKSHOP";var warehouse=supportTeam=="WAREHOUSE";
         const string sql="""
         SELECT id,name,tax_id,contact_name,phone,email,is_active,created_at FROM dbo.maintenance_suppliers WHERE is_active=1 ORDER BY name;
-        SELECT id,requisition_number,department,product_name,quantity_requested,quantity_fulfilled,priority,status,requested_by_name,created_at,updated_at,notes FROM dbo.maintenance_requisitions WHERE (@all=1 OR (@warehouse=1 AND department IN('TECHNOLOGY','GENERAL_SERVICES')) OR department=@department) ORDER BY CASE priority WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 ELSE 4 END,created_at DESC;
-        SELECT p.id,p.order_number,p.supplier_id,s.name,p.requisition_id,p.department,p.product_name,p.quantity_ordered,p.quantity_received,p.unit_cost,p.status,p.expected_at,p.created_by_name,p.created_at,p.updated_at,p.notes FROM dbo.maintenance_purchase_orders p JOIN dbo.maintenance_suppliers s ON s.id=p.supplier_id WHERE (@all=1 OR (@warehouse=1 AND p.department IN('TECHNOLOGY','GENERAL_SERVICES')) OR p.department=@department) ORDER BY p.created_at DESC;
-        SELECT r.id,r.return_number,r.supplier_id,s.name,r.purchase_order_id,r.department,r.product_name,r.serial_number,r.quantity,r.reason,r.status,r.created_by_name,r.created_at,r.notes FROM dbo.maintenance_returns r LEFT JOIN dbo.maintenance_suppliers s ON s.id=r.supplier_id WHERE (@all=1 OR (@warehouse=1 AND r.department IN('TECHNOLOGY','GENERAL_SERVICES')) OR r.department=@department) ORDER BY r.created_at DESC;
+        SELECT id,requisition_number,department,product_name,quantity_requested,quantity_fulfilled,priority,status,requested_by_name,created_at,updated_at,notes FROM dbo.maintenance_requisitions WHERE (@all=1 OR (@warehouse=1 AND department IN('TECHNOLOGY','GENERAL_SERVICES','HUMAN_RESOURCES')) OR department=@department) ORDER BY CASE priority WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 ELSE 4 END,created_at DESC;
+        SELECT p.id,p.order_number,p.supplier_id,s.name,p.requisition_id,p.department,p.product_name,p.quantity_ordered,p.quantity_received,p.unit_cost,p.status,p.expected_at,p.created_by_name,p.created_at,p.updated_at,p.notes FROM dbo.maintenance_purchase_orders p JOIN dbo.maintenance_suppliers s ON s.id=p.supplier_id WHERE (@all=1 OR (@warehouse=1 AND p.department IN('TECHNOLOGY','GENERAL_SERVICES','HUMAN_RESOURCES')) OR p.department=@department) ORDER BY p.created_at DESC;
+        SELECT r.id,r.return_number,r.supplier_id,s.name,r.purchase_order_id,r.department,r.product_name,r.serial_number,r.quantity,r.reason,r.status,r.created_by_name,r.created_at,r.notes FROM dbo.maintenance_returns r LEFT JOIN dbo.maintenance_suppliers s ON s.id=r.supplier_id WHERE (@all=1 OR (@warehouse=1 AND r.department IN('TECHNOLOGY','GENERAL_SERVICES','HUMAN_RESOURCES')) OR r.department=@department) ORDER BY r.created_at DESC;
         """;
         await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@all",all?1:0);command.Parameters.AddWithValue("@warehouse",warehouse?1:0);command.Parameters.AddWithValue("@department",department);await using var reader=await command.ExecuteReaderAsync(ct);
         var suppliers=new List<MaintenanceSupplierRow>();while(await reader.ReadAsync(ct))suppliers.Add(new(reader.GetGuid(0),reader.GetString(1),reader.IsDBNull(2)?null:reader.GetString(2),reader.IsDBNull(3)?null:reader.GetString(3),reader.IsDBNull(4)?null:reader.GetString(4),reader.IsDBNull(5)?null:reader.GetString(5),reader.GetBoolean(6),reader.GetDateTime(7)));
@@ -3072,22 +3390,25 @@ sealed partial class Database
         return new(suppliers,requisitions,orders,returns);
     }
 
-    public async Task<TicketActionResult> CreateMaintenanceSupplier(MaintenanceSupplierCreate body,string role,string? supportTeam,string actorName,CancellationToken ct)
+public async Task<TicketActionResult> CreateMaintenanceSupplier(MaintenanceSupplierCreate body,string role,string? supportTeam,string actorName,CancellationToken ct)
     {
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
         if(role!="Administrator"&&supportTeam!="WAREHOUSE"&&!(role=="Technology"&&supportTeam is null))return new(false,"FORBIDDEN","Solo Almacén o Administración de Tecnología puede registrar proveedores.");await using var connection=await Open(ct);await EnsureMaintenanceSchema(connection,ct);
         const string sql="""MERGE dbo.maintenance_suppliers AS target USING(SELECT @name name) AS source ON target.name=source.name WHEN MATCHED THEN UPDATE SET tax_id=@tax,contact_name=@contact,phone=@phone,email=@email,is_active=1,updated_at=SYSUTCDATETIME() WHEN NOT MATCHED THEN INSERT(name,tax_id,contact_name,phone,email,created_by_name) VALUES(@name,@tax,@contact,@phone,@email,@actor);""";
         await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@name",body.Name!.Trim());command.Parameters.AddWithValue("@tax",Db(body.TaxId?.Trim()));command.Parameters.AddWithValue("@contact",Db(body.ContactName?.Trim()));command.Parameters.AddWithValue("@phone",Db(body.Phone?.Trim()));command.Parameters.AddWithValue("@email",Db(body.Email?.Trim()));command.Parameters.AddWithValue("@actor",actorName);await command.ExecuteNonQueryAsync(ct);return new(true,"OK",null);
     }
 
-    public async Task<TicketActionResult> CreateMaintenanceRequisition(MaintenanceRequisitionCreate body,string userId,string role,string? supportTeam,string actorName,CancellationToken ct)
+public async Task<TicketActionResult> CreateMaintenanceRequisition(MaintenanceRequisitionCreate body,string userId,string role,string? supportTeam,string actorName,CancellationToken ct)
     {
-        var ownDepartment=DepartmentForRole(role);var requested=body.Department!.Trim().ToUpperInvariant();var warehouse=supportTeam=="WAREHOUSE";if(warehouse&&requested is not ("TECHNOLOGY" or "GENERAL_SERVICES"))return new(false,"FORBIDDEN","El almacén solo organiza requerimientos de Tecnología y Servicios Generales.");var department=role=="Administrator"||warehouse?requested:ownDepartment;if(department is not ("TECHNOLOGY" or "GENERAL_SERVICES" or "HUMAN_RESOURCES"))return new(false,"FORBIDDEN","Selecciona un departamento válido.");if(role!="Administrator"&&!warehouse&&requested!=ownDepartment)return new(false,"FORBIDDEN","Solo puedes solicitar artículos para tu departamento.");await using var connection=await Open(ct);await EnsureDocumentSchema(connection,ct);var number=$"REQ-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..25].ToUpperInvariant();
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
+        var ownDepartment=DepartmentForRole(role);var requested=body.Department!.Trim().ToUpperInvariant();var warehouse=supportTeam=="WAREHOUSE";if(warehouse&&requested is not ("TECHNOLOGY" or "GENERAL_SERVICES" or "HUMAN_RESOURCES"))return new(false,"FORBIDDEN","El almacén organiza requerimientos de Tecnología, Servicios Generales y Recursos Humanos.");var department=role=="Administrator"||warehouse?requested:ownDepartment;if(department is not ("TECHNOLOGY" or "GENERAL_SERVICES" or "HUMAN_RESOURCES"))return new(false,"FORBIDDEN","Selecciona un departamento válido.");if(role!="Administrator"&&!warehouse&&requested!=ownDepartment)return new(false,"FORBIDDEN","Solo puedes solicitar artículos para tu departamento.");await using var connection=await Open(ct);await EnsureDocumentSchema(connection,ct);var number=$"REQ-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..25].ToUpperInvariant();
         const string sql="""INSERT INTO dbo.maintenance_requisitions(id,requisition_number,department,product_name,quantity_requested,priority,notes,requested_by_user_id,requested_by_name) VALUES(NEWID(),@number,@department,@product,@quantity,@priority,@notes,@userId,@actor);""";await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@number",number);command.Parameters.AddWithValue("@department",department);command.Parameters.AddWithValue("@product",body.ProductName!.Trim());command.Parameters.AddWithValue("@quantity",body.Quantity);command.Parameters.AddWithValue("@priority",body.Priority!);command.Parameters.AddWithValue("@notes",Db(body.Notes?.Trim()));command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@actor",actorName);await command.ExecuteNonQueryAsync(ct);return new(true,"OK",null);
     }
 
-    public async Task<TicketActionResult> CreateMaintenancePurchaseOrder(MaintenancePurchaseOrderCreate body,string role,string? supportTeam,string actorName,CancellationToken ct)
+public async Task<TicketActionResult> CreateMaintenancePurchaseOrder(MaintenancePurchaseOrderCreate body,string role,string? supportTeam,string actorName,CancellationToken ct)
     {
-        var technologyManager=role=="Technology"&&supportTeam is null;var warehouse=supportTeam=="WAREHOUSE";if(role!="Administrator"&&!warehouse&&!technologyManager)return new(false,"FORBIDDEN","Solo Almacén o Administración de Tecnología puede emitir órdenes de compra.");var department=body.Department!.Trim().ToUpperInvariant();if(department is not ("TECHNOLOGY" or "GENERAL_SERVICES" or "HUMAN_RESOURCES")||(technologyManager&&department!="TECHNOLOGY")||(warehouse&&department is not ("TECHNOLOGY" or "GENERAL_SERVICES")))return new(false,"FORBIDDEN","Solo puedes gestionar órdenes de Tecnología o Servicios Generales desde Almacén.");await using var connection=await Open(ct);await EnsureDocumentSchema(connection,ct);var number=$"OC-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..24].ToUpperInvariant();await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync(ct);
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
+        var technologyManager=role=="Technology"&&supportTeam is null;var warehouse=supportTeam=="WAREHOUSE";if(role!="Administrator"&&!warehouse&&!technologyManager)return new(false,"FORBIDDEN","Solo Almacén o Administración de Tecnología puede emitir órdenes de compra.");var department=body.Department!.Trim().ToUpperInvariant();if(department is not ("TECHNOLOGY" or "GENERAL_SERVICES" or "HUMAN_RESOURCES")||(technologyManager&&department!="TECHNOLOGY")||(warehouse&&department is not ("TECHNOLOGY" or "GENERAL_SERVICES" or "HUMAN_RESOURCES")))return new(false,"FORBIDDEN","Solo puedes gestionar órdenes de Tecnología, Servicios Generales o Recursos Humanos desde Almacén.");await using var connection=await Open(ct);await EnsureDocumentSchema(connection,ct);var number=$"OC-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..24].ToUpperInvariant();await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync(ct);
         try
         {
             const string validationSql="""SELECT CASE WHEN EXISTS(SELECT 1 FROM dbo.maintenance_suppliers WHERE id=@supplier AND is_active=1) AND (@requisition IS NULL OR EXISTS(SELECT 1 FROM dbo.maintenance_requisitions WHERE id=@requisition AND department=@department AND status IN('APPROVED','ORDERED','PARTIAL'))) THEN 1 ELSE 0 END;""";
@@ -3109,16 +3430,20 @@ sealed partial class Database
         catch{await transaction.RollbackAsync(ct);throw;}
     }
 
-    public async Task<TicketActionResult> ReceiveMaintenancePurchaseOrder(Guid id,MaintenancePurchaseOrderReceive body,string userId,string role,string? supportTeam,string actorName,CancellationToken ct)
+public async Task<TicketActionResult> ReceiveMaintenancePurchaseOrder(Guid id,MaintenancePurchaseOrderReceive body,string userId,string role,string? supportTeam,string actorName,CancellationToken ct)
     {
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
         var technologyManager=role=="Technology"&&supportTeam is null;var warehouse=supportTeam=="WAREHOUSE";if(role!="Administrator"&&!warehouse&&!technologyManager)return new(false,"FORBIDDEN","Solo Almacén o Administración de Tecnología puede recibir mercancía.");await using var connection=await Open(ct);await EnsureMaintenanceSchema(connection,ct);await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync(ct);
-        try{string department,product,supplier;int ordered,received;Guid? requisition;await using(var select=new SqlCommand("SELECT p.department,p.product_name,p.quantity_ordered,p.quantity_received,p.requisition_id,s.name FROM dbo.maintenance_purchase_orders p JOIN dbo.maintenance_suppliers s ON s.id=p.supplier_id WHERE p.id=@id AND p.status IN('ISSUED','PARTIAL') AND (@technologyManager=0 OR p.department='TECHNOLOGY') AND (@warehouse=0 OR p.department IN('TECHNOLOGY','GENERAL_SERVICES'));",connection,transaction)){select.Parameters.AddWithValue("@id",id);select.Parameters.AddWithValue("@technologyManager",technologyManager?1:0);select.Parameters.AddWithValue("@warehouse",warehouse?1:0);await using var reader=await select.ExecuteReaderAsync(ct);if(!await reader.ReadAsync(ct)){await reader.DisposeAsync();await transaction.RollbackAsync(ct);return new(false,"NOT_FOUND","La orden no existe, ya fue recibida o no pertenece al alcance del almacén.");}department=reader.GetString(0);product=reader.GetString(1);ordered=reader.GetInt32(2);received=reader.GetInt32(3);requisition=reader.IsDBNull(4)?null:reader.GetGuid(4);supplier=reader.GetString(5);}if(body.Quantity>ordered-received){await transaction.RollbackAsync(ct);return new(false,"CONFLICT",$"Solo quedan {ordered-received} unidades pendientes en la orden.");}var newReceived=received+body.Quantity;var status=newReceived==ordered?"RECEIVED":"PARTIAL";var document=$"REC-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..25].ToUpperInvariant();
+        try{string department,product,supplier;int ordered,received;Guid? requisition;await using(var select=new SqlCommand("SELECT p.department,p.product_name,p.quantity_ordered,p.quantity_received,p.requisition_id,s.name FROM dbo.maintenance_purchase_orders p JOIN dbo.maintenance_suppliers s ON s.id=p.supplier_id WHERE p.id=@id AND p.status IN('ISSUED','PARTIAL') AND (@technologyManager=0 OR p.department='TECHNOLOGY') AND (@warehouse=0 OR p.department IN('TECHNOLOGY','GENERAL_SERVICES','HUMAN_RESOURCES'));",connection,transaction)){select.Parameters.AddWithValue("@id",id);select.Parameters.AddWithValue("@technologyManager",technologyManager?1:0);select.Parameters.AddWithValue("@warehouse",warehouse?1:0);await using var reader=await select.ExecuteReaderAsync(ct);if(!await reader.ReadAsync(ct)){await reader.DisposeAsync();await transaction.RollbackAsync(ct);return new(false,"NOT_FOUND","La orden no existe, ya fue recibida o no pertenece al alcance del almacén.");}department=reader.GetString(0);product=reader.GetString(1);ordered=reader.GetInt32(2);received=reader.GetInt32(3);requisition=reader.IsDBNull(4)?null:reader.GetGuid(4);supplier=reader.GetString(5);}if(body.Quantity>ordered-received){await transaction.RollbackAsync(ct);return new(false,"CONFLICT",$"Solo quedan {ordered-received} unidades pendientes en la orden.");}var newReceived=received+body.Quantity;var status=newReceived==ordered?"RECEIVED":"PARTIAL";var document=$"REC-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..25].ToUpperInvariant();
             const string sql="""UPDATE dbo.maintenance_purchase_orders SET quantity_received=@received,status=@status,updated_at=SYSUTCDATETIME() WHERE id=@id; UPDATE dbo.maintenance_requisitions SET quantity_fulfilled=CASE WHEN quantity_fulfilled+@quantity>quantity_requested THEN quantity_requested ELSE quantity_fulfilled+@quantity END,status=CASE WHEN quantity_fulfilled+@quantity>=quantity_requested THEN 'FULFILLED' ELSE 'PARTIAL' END,updated_at=SYSUTCDATETIME() WHERE id=@requisition; INSERT INTO dbo.maintenance_movements(id,agency_id,ticket_id,department,technician_user_id,technician_name,movement_type,equipment_type,component_type,failure_cause,serial_number,quantity,notes,created_by_user_id,created_by_name,operational_area,document_number,qr_token,delivered_by_name,received_by_name,destination_name,signature_data,occurred_at) VALUES(NEWID(),NULL,NULL,@department,NULL,@actor,'ENTRY',@product,NULL,'Recepción física contra orden de compra',@serial,@quantity,@notes,@userId,@actor,'WAREHOUSE',@document,CONCAT('REAL-MNT|',@document),@supplier,@receiver,'Almacén central',NULL,SYSUTCDATETIME());""";await using var command=new SqlCommand(sql,connection,transaction);command.Parameters.AddWithValue("@received",newReceived);command.Parameters.AddWithValue("@status",status);command.Parameters.AddWithValue("@id",id);command.Parameters.AddWithValue("@quantity",body.Quantity);command.Parameters.AddWithValue("@requisition",requisition is null?DBNull.Value:requisition.Value);command.Parameters.AddWithValue("@department",department);command.Parameters.AddWithValue("@actor",actorName);command.Parameters.AddWithValue("@product",product);command.Parameters.AddWithValue("@serial",body.SerialNumber!.Trim().ToUpperInvariant());command.Parameters.AddWithValue("@notes",Db(body.Notes?.Trim()));command.Parameters.AddWithValue("@userId",userId);command.Parameters.AddWithValue("@document",document);command.Parameters.AddWithValue("@supplier",supplier);command.Parameters.AddWithValue("@receiver",string.IsNullOrWhiteSpace(body.ReceivedByName)?actorName:body.ReceivedByName.Trim());await command.ExecuteNonQueryAsync(ct);await transaction.CommitAsync(ct);return new(true,"OK",null);}catch{await transaction.RollbackAsync(ct);throw;}
     }
 
-    public async Task<TicketActionResult> CreateMaintenanceReturn(MaintenanceReturnCreate body,string userId,string role,string? supportTeam,string actorName,CancellationToken ct)
+public async Task<TicketActionResult> CreateMaintenanceReturn(MaintenanceReturnCreate body,string userId,string role,string? supportTeam,string actorName,CancellationToken ct)
     {
-        var technologyManager=role=="Technology"&&supportTeam is null;var warehouse=supportTeam=="WAREHOUSE";if(role!="Administrator"&&!warehouse&&!technologyManager)return new(false,"FORBIDDEN","Solo Almacén o Administración de Tecnología puede registrar devoluciones.");var department=body.Department!.Trim().ToUpperInvariant();if(department is not ("TECHNOLOGY" or "GENERAL_SERVICES" or "HUMAN_RESOURCES")||(technologyManager&&department!="TECHNOLOGY")||(warehouse&&department is not ("TECHNOLOGY" or "GENERAL_SERVICES")))return new(false,"FORBIDDEN","Solo puedes gestionar devoluciones de Tecnología o Servicios Generales desde Almacén.");await using var connection=await Open(ct);await EnsureMaintenanceSchema(connection,ct);var number=$"DEV-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..25].ToUpperInvariant();await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync(ct);
+        if(DepartmentAccounts.IsSupportScope(role))supportTeam=null;
+        var technologyManager=role=="Technology"&&supportTeam is null;var warehouse=supportTeam=="WAREHOUSE";if(role!="Administrator"&&!warehouse&&!technologyManager)return new(false,"FORBIDDEN","Solo Almacén o Administración de Tecnología puede registrar devoluciones.");var department=body.Department!.Trim().ToUpperInvariant();if(department is not ("TECHNOLOGY" or "GENERAL_SERVICES" or "HUMAN_RESOURCES")||(technologyManager&&department!="TECHNOLOGY")||(warehouse&&department is not ("TECHNOLOGY" or "GENERAL_SERVICES" or "HUMAN_RESOURCES")))return new(false,"FORBIDDEN","Solo puedes gestionar devoluciones de Tecnología, Servicios Generales o Recursos Humanos desde Almacén.");await using var connection=await Open(ct);await EnsureMaintenanceSchema(connection,ct);var number=$"DEV-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..25].ToUpperInvariant();await EnsureInstitutionalSchema(connection,ct);await EnsureWarehouseFulfillmentSchema(connection,ct);await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync(ct);
+        var reservedError=await WarehouseProtectReservedStock(connection,transaction,department,body.ProductName!.Trim(),body.SerialNumber!.Trim().ToUpperInvariant(),body.Quantity,ct);
+        if(reservedError is not null)return new(false,"CONFLICT",reservedError);
         try{const string sql="""INSERT INTO dbo.maintenance_returns(id,return_number,supplier_id,purchase_order_id,department,product_name,serial_number,quantity,reason,notes,created_by_name) VALUES(NEWID(),@number,@supplier,@order,@department,@product,@serial,@quantity,@reason,@notes,@actor); INSERT INTO dbo.maintenance_movements(id,agency_id,ticket_id,department,technician_user_id,technician_name,movement_type,equipment_type,component_type,failure_cause,serial_number,quantity,notes,created_by_user_id,created_by_name,operational_area,document_number,qr_token,delivered_by_name,received_by_name,destination_name,signature_data,occurred_at) VALUES(NEWID(),NULL,NULL,@department,NULL,@actor,'EXIT',@product,NULL,@reason,@serial,@quantity,@notes,@userId,@actor,'WAREHOUSE',@number,CONCAT('REAL-MNT|',@number),@actor,COALESCE((SELECT name FROM dbo.maintenance_suppliers WHERE id=@supplier),'Proveedor / devolución'),'Devolución a proveedor',NULL,SYSUTCDATETIME());""";await using var command=new SqlCommand(sql,connection,transaction);command.Parameters.AddWithValue("@number",number);command.Parameters.AddWithValue("@supplier",body.SupplierId is null?DBNull.Value:body.SupplierId.Value);command.Parameters.AddWithValue("@order",body.PurchaseOrderId is null?DBNull.Value:body.PurchaseOrderId.Value);command.Parameters.AddWithValue("@department",department);command.Parameters.AddWithValue("@product",body.ProductName!.Trim());command.Parameters.AddWithValue("@serial",body.SerialNumber!.Trim().ToUpperInvariant());command.Parameters.AddWithValue("@quantity",body.Quantity);command.Parameters.AddWithValue("@reason",body.Reason!.Trim());command.Parameters.AddWithValue("@notes",Db(body.Notes?.Trim()));command.Parameters.AddWithValue("@actor",actorName);command.Parameters.AddWithValue("@userId",userId);await command.ExecuteNonQueryAsync(ct);await transaction.CommitAsync(ct);return new(true,"OK",null);}catch(SqlException error) when(error.Number==547){await transaction.RollbackAsync(ct);return new(false,"NOT_FOUND","La orden o el proveedor seleccionado ya no existe.");}catch{await transaction.RollbackAsync(ct);throw;}
     }
 }

@@ -1,0 +1,107 @@
+import {createRequire} from 'node:module';
+import assert from 'node:assert/strict';
+process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY='1';
+const require=createRequire('C:/Users/pc/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/loader.cjs');
+const {chromium}=require('playwright');
+const browser=await chromium.launch({headless:true,channel:'msedge'});
+const users=[{id:'legacy-qa',email:'legacy@local',displayName:'Cuenta heredada QA',role:'GENERAL_SERVICES',isActive:true,groups:[],permissions:{canResolveTickets:false,customFlag:true},effectivePermissions:{canResolveTickets:true,canManageUsers:false,canAssignTickets:false}}],writes=[],errors=[],profiles=[];
+const departments=['TECHNOLOGY','GENERAL_SERVICES','HUMAN_RESOURCES','ADMINISTRATIVE','WAREHOUSE','WORKSHOP','COMMUNICATION','COMMERCIALIZATION','TREASURY','ACCOUNTING','CALL_CENTER','TECHNICAL_FAILURE','SUPERVISION'];
+try{
+ const page=await browser.newPage({viewport:{width:1440,height:1000}});
+ page.on('dialog',dialog=>dialog.accept());
+ page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/api/**',async route=>{
+  const request=route.request(),path=new URL(request.url()).pathname;
+  if(path==='/api/admin/groups-catalog')return route.fulfill({json:{groups:['Grupo Norte','Grupo Sur']}});
+  if(path==='/api/admin/access-profiles'){
+   if(request.method()==='GET')return route.fulfill({json:{profiles}});
+   const preset=request.postDataJSON();profiles.push(preset);return route.fulfill({json:preset});
+  }
+  if(path==='/api/admin/users'&&request.method()==='GET')return route.fulfill({json:{users}});
+  if(path.startsWith('/api/admin/users')&&['POST','PUT'].includes(request.method())){
+   const value=request.postDataJSON();writes.push(value);
+   if(request.method()==='POST')users.push({...value,id:'qa-'+users.length});
+   else users.splice(users.findIndex(u=>u.id===value.id),1,value);
+   return route.fulfill({json:request.method()==='POST'?users.at(-1):value});
+  }
+  throw Error('Unexpected request: '+path);
+ });
+ await page.goto(process.env.QA_USERS_URL||'http://127.0.0.1:5188/scripts/qa-users-permissions.html',{waitUntil:'domcontentloaded'});
+ await page.getByRole('button',{name:'Cuenta heredada QA legacy',exact:true}).click();
+ await page.getByLabel('Nombre completo',{exact:true}).fill('Cuenta heredada revisada');
+ await page.getByRole('button',{name:'Guardar usuario',exact:true}).click();
+ await page.getByRole('dialog').waitFor({state:'hidden'});
+ assert.deepEqual(writes.at(-1).permissions,{canResolveTickets:false,customFlag:true});
+ for(const department of departments){
+  await page.getByRole('button',{name:'Nuevo usuario',exact:true}).click();
+  await page.getByLabel('Nombre completo',{exact:true}).fill('QA '+department);
+  await page.getByLabel('Usuario',{exact:true}).fill('qa.'+department.toLowerCase().replaceAll('_','.'));
+  await page.getByLabel('Departamento',{exact:true}).selectOption(department);
+  await page.getByRole('button',{name:'Guardar usuario',exact:true}).click();
+  await page.getByRole('dialog').waitFor({state:'hidden'});
+  assert.equal(writes.at(-1).permissions.canManageUsers,false);
+  assert.equal(writes.at(-1).permissions.usesExplicitPermissions,true);
+  assert.equal(writes.at(-1).permissions.canRequestWarehouse,true);
+ }
+ await page.getByRole('button',{name:'Editar permisos de QA TECHNOLOGY',exact:true}).click();
+ await page.getByLabel('Buscar permisos').fill('documentos');
+ await page.getByLabel('Subir documentos y enviar comunicaciones',{exact:true}).uncheck();
+ await page.getByRole('button',{name:'Guardar como perfil',exact:true}).click();
+ await page.getByText('Perfil guardado para las nuevas cuentas.',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Guardar usuario',exact:true}).click();
+ await page.getByRole('dialog').waitFor({state:'hidden'});
+ await page.getByRole('button',{name:'Actualizar usuarios',exact:true}).click();
+ await page.getByRole('button',{name:'Editar permisos de QA TECHNOLOGY',exact:true}).click();
+ assert.equal(await page.getByLabel('Subir documentos y enviar comunicaciones',{exact:true}).isChecked(),false);
+ await page.screenshot({path:'outputs/qa-users-permissions-desktop.png',fullPage:true});
+ await page.getByRole('button',{name:'Cuenta y perfil',exact:true}).click();
+ await page.getByLabel('Perfil predeterminado').selectOption('TECHNICIAN');
+ await page.getByRole('button',{name:'Guardar usuario',exact:true}).click();
+ await page.getByRole('dialog').waitFor({state:'hidden'});
+ assert.equal(writes.at(-1).supportTeam,'TECHNICIANS');assert.equal(writes.at(-1).permissions.canAssignTickets,false);
+ await page.getByRole('button',{name:'Editar permisos de QA GENERAL_SERVICES',exact:true}).click();
+ await page.getByRole('button',{name:'Cuenta y perfil',exact:true}).click();
+ await page.getByLabel('Perfil predeterminado').selectOption('DEPARTMENT_MANAGER');
+ await page.getByRole('button',{name:'Guardar usuario',exact:true}).click();
+ await page.getByRole('dialog').waitFor({state:'hidden'});
+ assert.equal(writes.at(-1).permissions.canManageDepartment,true);assert.equal(writes.at(-1).permissions.canManageUsers,false);
+ await page.getByLabel('Filtrar perfil',{exact:true}).selectOption('TECHNICIAN');
+ assert.equal(await page.getByRole('button',{name:'Editar permisos de QA TECHNOLOGY',exact:true}).count(),1);
+ assert.equal(await page.getByRole('button',{name:'Editar permisos de QA GENERAL_SERVICES',exact:true}).count(),0);
+ await page.getByLabel('Filtrar perfil',{exact:true}).selectOption('');
+ await page.screenshot({path:'outputs/qa-users-directory-desktop.png',fullPage:true});
+ await page.reload({waitUntil:'domcontentloaded'});
+ await page.getByRole('button',{name:'Actualizar usuarios',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Nuevo usuario',exact:true}).click();
+ await page.getByRole('button',{name:/^Permisos/}).click();
+ assert.equal(await page.getByLabel('Subir documentos y enviar comunicaciones',{exact:true}).isChecked(),false);
+ await page.getByRole('button',{name:'Cerrar usuario',exact:true}).click();
+ await page.setViewportSize({width:390,height:844});
+ await page.getByRole('button',{name:'Nuevo usuario',exact:true}).click();
+ await page.getByLabel('Nombre completo',{exact:true}).fill('Supervisor QA');
+ await page.getByLabel('Usuario',{exact:true}).fill('supervisor.qa');
+ await page.getByLabel('Perfil predeterminado').selectOption('SUPERVISOR');
+ await page.getByRole('button',{name:'Grupos asignados',exact:true}).click();
+ await page.getByLabel('Grupo Norte',{exact:true}).check();
+ await page.getByRole('button',{name:/^Permisos/}).click();
+ assert.equal(await page.getByRole('dialog').evaluate(el=>el.scrollWidth>el.clientWidth+1),false);
+ await page.screenshot({path:'outputs/qa-users-permissions-mobile.png',fullPage:true});
+ await page.getByRole('button',{name:'Guardar usuario',exact:true}).click();
+ await page.getByRole('dialog').waitFor({state:'hidden'});
+ assert.equal(writes.at(-1).role,'GROUP_ADMIN');assert.deepEqual(writes.at(-1).groups,['Grupo Norte']);
+ await page.screenshot({path:'outputs/qa-users-directory-mobile.png',fullPage:true});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth),false);
+ await page.getByLabel('Buscar usuarios',{exact:true}).fill('Grupo Norte');
+ assert.equal(await page.getByRole('button',{name:'Editar permisos de Supervisor QA',exact:true}).count(),1);
+ assert.equal(await page.getByRole('button',{name:'Editar permisos de QA TECHNOLOGY',exact:true}).count(),0);
+ await page.getByLabel('Buscar usuarios',{exact:true}).fill('');
+ for(let i=0;i<30;i++)users.push({...users[0],id:'pagination-'+i,email:'page'+i+'@local',displayName:'Página QA '+i});
+ await page.getByRole('button',{name:'Actualizar usuarios',exact:true}).click();
+ await page.getByText('45 usuarios encontrados · Página 1 de 2',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Siguiente',exact:true}).click();
+ await page.getByText('45 usuarios encontrados · Página 2 de 2',{exact:true}).waitFor();
+ await page.getByLabel('Buscar usuarios',{exact:true}).fill('QA TECHNOLOGY');
+ await page.getByText('1 usuarios encontrados · Página 1 de 1',{exact:true}).waitFor();
+ assert.deepEqual(errors,[]);
+ console.log('PASS 13 department support creations, saved denial after reload, persistent custom preset for new users, technician and manager presets, supervisor group selection, mobile/desktop, no JS errors. Mocked API only.');
+}finally{await browser.close();}

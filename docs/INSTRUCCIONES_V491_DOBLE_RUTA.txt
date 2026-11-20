@@ -1,0 +1,14 @@
+ACTUALIZACION V491 - SELECCION DE CARPETA EN TEMA OSCURO
+
+CAMBIO
+- La carpeta seleccionada ya no muestra un bloque blanco.
+- El fondo conserva el mismo azul oscuro del explorador.
+- Se mantiene el borde y el indicador azul para identificar la seleccion.
+- Se conservan Abrir, Abrir con y las demas acciones mediante clic derecho.
+
+INSTALACION
+1. Deten el sitio o grupo de aplicaciones.
+2. Extrae el ZIP y reemplaza todos los archivos de las dos rutas.
+3. Sube web.config al final; debe apuntar a .\RegistroAgencias.SqlServer.V491.exe.
+4. Inicia el sitio y confirma V491 en /api/version.
+5. Cierra sesion, vuelve a entrar y actualiza la pagina.

@@ -122,20 +122,33 @@ describe("flujo departamental de tickets", () => {
     expect(directoryStyles).toContain(".agency-directory-board.has-editor .agency-directory-list");
   });
 
-  it("importa agencias nuevas desde Excel con plantilla, validación, duplicados y auditoría", () => {
+  it("muestra Actualizar agencias solamente dentro del departamento de Tecnología", () => {
+    expect(app).toContain('selectedSupportDepartment === "TECHNOLOGY" && session.permissions.canManageAgencies');
+    expect(app).toContain('section === "agencies" && selectedSupportDepartment !== "TECHNOLOGY"');
+    expect(center).toContain('workspaceDepartment==="TECHNOLOGY"&&session.permissions.canManageAgencies');
+    expect(center).toContain('departmentEntry.section!=="agencies"||departmentEntry.department==="TECHNOLOGY"');
+    expect(center).toContain('supportStage==="agencyDirectory"&&canOpenAgencyDirectory');
+  });
+
+  it("crea o actualiza hasta 5,000 agencias desde Excel con validación y auditoría", () => {
     expect(program).toContain('MapPost("/api/technology/agencies/import"');
     expect(program).toContain("ValidateAgencyDirectoryImport");
     expect(program).toContain('RequireAuthorization("AgencyDirectoryManage")');
     expect(database).toContain("ImportAgencyDirectory");
     expect(database).toContain("WITH(UPDLOCK,HOLDLOCK)");
+    expect(database).toContain("SqlBulkCopy");
+    expect(database).toContain("expected_latitude=COALESCE");
     expect(database).toContain("AGENCY_DIRECTORY_EXCEL_IMPORTED");
     expect(center).toContain("downloadAgencyDirectoryTemplate");
     expect(center).toContain("readAgencyDirectoryExcel");
     expect(center).toContain("Revisión antes de importar");
     expect(center).toContain("Subir agencias");
     expect(center).toContain('header:"Código *"');
-    expect(center).toContain('header:"Dirección"');
+    expect(center).not.toContain('header:"Dirección"');
     expect(center).toContain("municipio:municipio||null");
+    expect(center).toContain("nonEmptyRows>5000");
+    expect(program).toContain("body.Agencies.Count>5000");
+    expect(program).toContain("result.Created>0||result.Updated>0");
     expect(database).toContain("EnsureAgencyDirectorySchema");
     expect(database).toContain("directory_direccion");
     expect(database).toContain("COALESCE(p.municipio,a.directory_municipio)");
@@ -180,7 +193,7 @@ describe("flujo departamental de tickets", () => {
     expect(center).toContain("Cable de corriente / Power cord");
     expect(center).toContain("humanResourcesEquipment");
     expect(center).toContain("departmentMaintenanceMovements");
-    expect(center).toContain('openMaintenanceForm(true,"WORKSHOP")');
+    expect(center).not.toContain('openMaintenanceForm(true,"WORKSHOP")');
     expect(center).toContain("maintenanceScannerBufferRef");
     expect(center).toContain("applyMaintenanceScan");
     expect(center).toContain("maintenance-inventory-table");
@@ -190,7 +203,7 @@ describe("flujo departamental de tickets", () => {
     expect(center).toContain("downloadMaintenanceForm");
     expect(documentPdf).toContain('import("qrcode")');
     expect(center).toContain("Firmas de entrega y recepción");
-    expect(center).toContain("if(savedMovement)setDocumentToEdit(savedMovement)");
+    expect(center).toContain('if(prepareWorkshopAfter&&savedMovement.movementType==="DAMAGED_RETURN")openWarehouseTransferForMovement(savedMovement,"REPAIR");else setDocumentToEdit(savedMovement)');
     expect(findingMigration).toContain("'GENERAL_SERVICES'',''HIGH''");
     expect(maintenanceMigration).toContain("'HUMAN_RESOURCES'");
     expect(maintenanceOperationsMigration).toContain("operational_area");
@@ -315,7 +328,7 @@ describe("flujo departamental de tickets", () => {
     const tickets = center.indexOf("<strong>Tickets</strong>");
     const internal = center.indexOf("<strong>Tickets internos</strong>", tickets);
     const transitions = center.indexOf("<strong>Agencias en construcción</strong>", internal);
-    const maintenance = center.indexOf("<strong>Mantenimiento y equipos</strong>", transitions);
+    const maintenance = center.indexOf("<strong>Solicitudes a Almacén</strong>", transitions);
     const findings = center.indexOf("<strong>Hallazgos automáticos</strong>", maintenance);
     const failureInsideTickets = center.indexOf("<strong>Avería Técnica</strong>", findings);
     expect([tickets, internal, transitions, maintenance, findings, failureInsideTickets].every(index => index >= 0)).toBe(true);
@@ -343,7 +356,7 @@ describe("flujo departamental de tickets", () => {
     expect(center).toContain('const supportTicketCount=workspaceTickets.filter(ticket=>ticket.ticketType==="SUPPORT").length');
     expect(center).toContain('const internalTicketCount=workspaceTickets.filter(ticket=>ticket.ticketType==="INTERNAL").length');
     expect(center).toContain('const supervisorAssignedTickets=workspaceTickets.filter(ticket=>ticket.ticketType==="SUPPORT"');
-    expect(center).toContain('ticket.ticketType==="SUPPORT"&&ticket.assignedTechnicianId===session.id');
+    expect(center).toContain('workspaceTickets.filter(ticket=>ticketIsAssignedToCurrentUser(ticket)&&!resolvedStatuses.has(ticket.status))');
     expect(center).toContain('{countedTickets.length} tickets · {adminControlOpen ? "Ocultar" : "Abrir control"}');
     expect(center).toContain('{countedTickets.map((ticket) => (');
     expect(center).toContain('if (ticket.ticketType !== ticketTypeFilter) return false;');

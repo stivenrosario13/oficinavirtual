@@ -1,0 +1,25 @@
+V529 - V520 + BUSCADOR + HALLAZGOS EJECUTIVOS + CORRECCION SQL
+================================================================
+
+Esta actualización usa como base exacta los archivos web publicados de V520.
+No incluye los cambios visuales solicitados después de V520.
+
+CAMBIOS UNICOS
+- Buscador de módulos agregado al header.
+- Reporte Ejecutivo Global con detalle de hallazgos automáticos: hallazgo, diagnóstico,
+  solución, verificación, recomendaciones, responsables, fechas, duración, evidencias y ubicación.
+- Consulta SQL compatible con el esquema completo y con el esquema histórico de V520.
+- Una tabla o columna opcional ausente ya no impide cargar el resto del reporte.
+
+INSTALACION
+1. Realice copia de seguridad del sitio y de la base de datos.
+2. Extraiga todo el ZIP en la raíz publicada, reemplazando los archivos existentes.
+3. Si MonsterASP apunta directamente a wwwroot, use la copia completa incluida en la carpeta wwwroot del ZIP.
+4. No elimine App_Data, uploads, logs, appsettings ni variables privadas del servidor.
+5. Reinicie el sitio y abra con Ctrl+F5.
+
+VERIFICACION
+- El diseño debe permanecer igual a V520.
+- El header debe mostrar “Buscar en la Oficina Virtual...”.
+- Reportes ejecutivos debe cargar sin el error SQL y mostrar el detalle completo de hallazgos.
+

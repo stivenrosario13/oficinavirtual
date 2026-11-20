@@ -1,0 +1,23 @@
+ACTUALIZACION V499 - VARIOS ARTICULOS EN UNA MISMA SOLICITUD POR VOZ
+
+1. Deten el sitio en MonsterASP.
+2. Extrae el ZIP y sube todos los archivos conservando las carpetas.
+3. Sube el contenido a la raiz publica y a wwwroot cuando el hosting use doble ruta.
+4. Sube web.config al final; debe apuntar a .\RegistroAgencias.SqlServer.V499.exe.
+5. Inicia el sitio y confirma "release":"V499" en /api/version.
+6. Cierra sesion, inicia nuevamente y permite el microfono del navegador.
+
+CAMBIOS
+- Permite agregar varios articulos a la misma solicitud y agencia por voz.
+- Frases admitidas: "agrega otro articulo", "anade dos teclados", "tambien necesito toner".
+- Conserva los articulos anteriores al agregar uno nuevo.
+- Si se repite un articulo, acumula su cantidad en lugar de eliminar el anterior.
+- Muestra el boton Agregar mas articulos junto a continuar con otra agencia y crear solicitudes.
+- Mantiene un maximo de 30 articulos y 10,000 unidades totales por solicitud y agencia.
+- Conserva las mejoras V498 de busqueda natural y tickets para los tres departamentos.
+
+VERIFICACION
+- Version de interfaz, API, ejecutable y cache: V499.
+- TypeScript sin errores.
+- Backend compilado con 0 errores.
+- Pruebas criticas de voz y solicitudes aprobadas.

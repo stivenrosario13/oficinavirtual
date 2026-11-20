@@ -1,0 +1,18 @@
+{
+  "campaign_id": "septiembre-2026-001",
+  "template_name": "recordatorio_factura",
+  "language": "es",
+  "customers": [
+    {
+      "id": "1",
+      "contrato": "C-1001",
+      "nombre": "Ana",
+      "apellido": "Pérez",
+      "telefono": "809-555-0101",
+      "balance": 1560,
+      "estatus": "Activo",
+      "consentimiento_whatsapp": "si",
+      "no_contactar": "no"
+    }
+  ]
+}

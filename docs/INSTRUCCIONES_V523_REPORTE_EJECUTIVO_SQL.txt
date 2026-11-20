@@ -1,0 +1,23 @@
+ACTUALIZACIÓN V523 · REPORTE EJECUTIVO GLOBAL
+=============================================
+
+1. Realice copia de seguridad del sitio y la base de datos.
+2. Detenga temporalmente la aplicación en MonsterASP.
+3. Extraiga el ZIP y cargue todo su contenido en la raíz del sitio.
+4. No elimine App_Data, cargas, logs ni configuraciones privadas.
+5. Inicie la aplicación y confirme /api/version: V523-WEB-20261116-1725.
+6. Cierre sesión, pulse Ctrl+F5 e inicie sesión nuevamente.
+
+CORRECCIONES PRINCIPALES
+- El Reporte ejecutivo global ya no se bloquea por JSON histórico incompleto.
+- Las fuentes opcionales se consultan de forma independiente: una tabla o columna
+  antigua no cancela los resultados de las demás áreas.
+- Los errores reales de conexión, credenciales o base inaccesible sí se conservan.
+- Se normalizan códigos, terminales y grupos de agencias con datos incompletos.
+- Los tickets de incidentes también toleran metadatos antiguos o dañados.
+- Cada incidencia de compatibilidad queda registrada en el log de MonsterASP.
+- Conserva todas las optimizaciones y funciones de V522 y versiones anteriores.
+
+EJECUTABLE
+- RegistroAgencias.SqlServer.V523.exe
+

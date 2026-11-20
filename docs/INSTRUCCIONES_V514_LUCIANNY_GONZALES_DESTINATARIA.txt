@@ -1,0 +1,24 @@
+ACTUALIZACION V514 - LUCIANNY GONZALES COMO DESTINATARIA DE INCIDENTES
+
+Problema corregido:
+- La cuenta real indicada es lucianny.gonzales, con S al final.
+- El sistema anterior reconocia principalmente lucianny.gonzalez, con Z al final.
+- Esa diferencia provocaba el mensaje Solo el destinatario puede responder.
+
+Resultado:
+- lucianny.gonzales y lucianny.gonzalez se reconocen como la misma operadora autorizada.
+- yessica.mercedes y yesica.mercedes conservan el mismo acceso.
+- El administrador principal conserva acceso completo.
+- Estas cuentas pueden ver todos los informes de incidentes de supervisores.
+- Pueden recibir y sellar los informes pendientes.
+- Pueden aprobar o rechazar cada ticket y registrar montos aprobados.
+- Al completar las decisiones, el informe queda autorizado o rechazado.
+- La reparación SQL activa ver, recibir, firmar y decidir documentos para ambas variantes de Lucianny.
+- Los supervisores continúan sin permiso para autorizar.
+
+INSTALACION
+1. Respalde el sitio y la base de datos.
+2. Detenga el sitio y reemplace completamente los archivos con este ZIP.
+3. Confirme que web.config apunta a RegistroAgencias.SqlServer.V514.exe.
+4. Inicie el sitio y confirme /api/version: V514-WEB-20261113-1452.
+5. Lucianny debe cerrar sesión, volver a entrar y presionar Ctrl+F5.

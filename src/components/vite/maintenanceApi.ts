@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from "@/lib/api-fetch";
 import type {DocumentMarks,SignatureRole} from "./maintenanceDocumentPdf";
 
 export async function registerDocumentSignature(endpoint:string,role:SignatureRole,data:string):Promise<DocumentMarks>{

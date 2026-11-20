@@ -1,0 +1,14 @@
+ACTUALIZACION V494 - DIRECTORIO FILTRADO POR DEPARTAMENTO
+
+1. Deten el sitio en MonsterASP.
+2. Extrae el ZIP y sube todos los archivos conservando las carpetas.
+3. Sube el contenido a la raiz publica y a wwwroot cuando el hosting use doble ruta.
+4. Sube web.config al final; debe apuntar a .\RegistroAgencias.SqlServer.V494.exe.
+5. Inicia el sitio y confirma "release":"V494" en /api/version.
+6. Cierra sesion e inicia nuevamente.
+
+COMPORTAMIENTO
+- Dentro de Tecnologia aparecen exclusivamente los usuarios de Tecnologia, Call Center, Averia Tecnica y Tecnicos.
+- Dentro de otro departamento aparecen exclusivamente los usuarios de ese departamento.
+- La vista global muestra todos solamente cuando no existe un departamento seleccionado.
+- Los permisos de Yessica y Vittini continúan limitados a sus equipos autorizados.

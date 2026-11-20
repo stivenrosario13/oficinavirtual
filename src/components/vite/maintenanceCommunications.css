@@ -38,3 +38,35 @@
 /* Tecnología conserva solamente tarjetas de historial, no la bandeja de Almacén. */
 .warehouse-sent-history{margin:0 0 20px;border:1px solid #315872;border-radius:16px;background:linear-gradient(145deg,#0c2136,#0a1a2d);color:#eaf7ff;overflow:hidden}.warehouse-sent-history>header{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:19px 21px;border-bottom:1px solid #31536a;background:#102b43}.warehouse-sent-history>header span{color:#6ad8ef;font-size:9px;font-weight:900;letter-spacing:1.1px}.warehouse-sent-history h3{margin:5px 0;font-size:21px}.warehouse-sent-history p{margin:0;color:#a8c2d3;font-size:11px}.warehouse-sent-history button,.warehouse-sent-history a{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 12px;border:1px solid #3d637c;border-radius:8px;background:#17364d;color:#e9f8ff;text-decoration:none;font:inherit;font-size:10px;font-weight:750}.warehouse-sent-history svg{width:17px;height:17px}.warehouse-sent-history>div{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:13px;padding:16px}.warehouse-sent-history article{position:relative;display:grid;grid-template-columns:48px minmax(0,1fr);gap:12px;padding:16px;border:1px solid #34566f;border-radius:13px;background:#102b42}.warehouse-sent-icon{display:grid;width:44px;height:44px;place-items:center;border:1px solid #327996;border-radius:11px;background:#123f56;color:#75def3}.warehouse-sent-history article>div{display:flex;min-width:0;flex-direction:column;gap:5px}.warehouse-sent-history article>div small{color:#70d7ec;font-size:8px;font-weight:850;letter-spacing:.8px}.warehouse-sent-history article>div strong{padding-right:90px;font-size:14px;overflow-wrap:anywhere}.warehouse-sent-history article>div p{line-height:1.5}.warehouse-sent-history article time{color:#84a8bd;font-size:9px}.warehouse-sent-status{position:absolute;top:13px;right:13px;padding:5px 7px;border-radius:999px;background:#4f3c1b;color:#ffe18b;font-size:8px;text-transform:uppercase}.warehouse-sent-status.received{background:#16435a;color:#94e9fb}.warehouse-sent-status.approved{background:#17493d;color:#a7f3d0}.warehouse-sent-status.rejected{background:#542735;color:#fecdd3}.warehouse-sent-history article footer{grid-column:1/-1;display:flex;gap:7px;flex-wrap:wrap;padding-top:11px;border-top:1px solid #2d4d63}.warehouse-sent-error{margin:14px 18px!important;padding:10px;border:1px solid #925063;border-radius:9px;background:#512536}.warehouse-sent-empty{grid-column:1/-1;display:flex;align-items:center;justify-content:center;min-height:150px;flex-direction:column;gap:8px;color:#9fc0d2}.warehouse-sent-document-detail{margin-bottom:20px;border-radius:14px;overflow:hidden}
 @media(max-width:760px){.warehouse-sent-history>header{align-items:flex-start;flex-direction:column}.warehouse-sent-history>div{grid-template-columns:1fr;padding:10px}.warehouse-sent-history article>div strong{padding-right:0}.warehouse-sent-status{position:static;grid-column:1/-1;width:max-content}.warehouse-pdf-list.cards{grid-template-columns:1fr}.warehouse-pdf-list .mc-row-actions a,.warehouse-pdf-list .mc-row-actions button{min-width:calc(50% - 8px)}}
+.warehouse-sent-history article footer.warehouse-sent-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.warehouse-sent-history .warehouse-sent-actions button{width:100%;min-width:0;min-height:49px;padding:9px 10px;border:1px solid #365f7a;border-radius:7px;background:#17364d;color:#e9f8ff;font-size:11px;line-height:1.25;text-align:center;cursor:pointer}
+.warehouse-sent-history .warehouse-sent-actions button.primary{border-color:#68ddfa;background:linear-gradient(135deg,#1e6e9b,#39afd9);color:#fff;font-weight:800}
+.warehouse-sent-history .warehouse-sent-actions button:hover{border-color:#76d9f1;background:#22516d}
+.warehouse-sent-history .warehouse-sent-actions button.primary:hover{background:linear-gradient(135deg,#257fae,#49bde5)}
+.warehouse-sent-history .warehouse-sent-actions button:focus-visible{outline:3px solid #7ce9ff;outline-offset:2px}
+@media(max-width:370px){.warehouse-sent-history article footer.warehouse-sent-actions{grid-template-columns:1fr}}
+
+/* V332: sello institucional visible en la bandeja y en el seguimiento del formulario. */
+.mw-document-stamp,.id-current-stamp{align-items:center;background:#12658a;border:2px solid #4fc3ee;border-radius:12px;color:#fff;display:flex;gap:10px;padding:10px 12px;box-shadow:inset 0 0 0 2px #ffffff24,0 8px 18px #020b1640}
+.mw-document-stamp svg,.id-current-stamp>svg{flex:0 0 auto;height:28px;width:28px}
+.mw-document-stamp span,.id-current-stamp span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.mw-document-stamp strong,.id-current-stamp strong{font-size:13px;font-weight:950;letter-spacing:1.15px}
+.mw-document-stamp small,.id-current-stamp small,.id-current-stamp b{font-size:9px;font-weight:700;line-height:1.35;overflow-wrap:anywhere}
+.mw-document-stamp.received,.id-current-stamp.received{background:#12658a;border-color:#4fc3ee;color:#fff}
+.mw-document-stamp.approved,.id-current-stamp.approved{background:#147a55;border-color:#4ee0a7;color:#fff}
+.mw-document-stamp.rejected,.id-current-stamp.rejected{background:#a62f46;border-color:#ff8298;color:#fff}
+.warehouse-pdf-list.cards .mw-document-stamp{margin:0 15px}
+.warehouse-pdf-list.list .mw-document-stamp{align-self:center;min-width:165px}
+.native-doc-detail>aside .id-current-stamp{margin:0 0 14px}
+.native-doc-detail>aside .id-current-stamp b{font-weight:650}
+@media(max-width:760px){.warehouse-pdf-list.cards .mw-document-stamp{margin:0 10px}.warehouse-pdf-list.list .mw-document-stamp{align-self:stretch;min-width:0}.native-doc-detail>aside .id-current-stamp{width:100%}}
+
+/* Bandeja operativa: los estados permanecen visibles y solo se desplazan las solicitudes. */
+.warehouse-pdf-management .mc-catalog-layout{align-items:start}
+.warehouse-pdf-management .mc-catalog-layout>aside{position:sticky;top:18px;align-self:start;z-index:2}
+.warehouse-pdf-management .warehouse-pdf-list{max-height:min(72vh,980px);overflow-y:auto;overscroll-behavior:contain;padding:2px 10px 14px 2px;scrollbar-color:#3eb8dc #091b2b;scrollbar-width:thin}
+.warehouse-pdf-management .warehouse-pdf-list::-webkit-scrollbar{width:11px}
+.warehouse-pdf-management .warehouse-pdf-list::-webkit-scrollbar-track{background:#091b2b;border:1px solid #223f55;border-radius:999px}
+.warehouse-pdf-management .warehouse-pdf-list::-webkit-scrollbar-thumb{background:linear-gradient(#54d3ef,#247fa8);border:2px solid #091b2b;border-radius:999px}
+.warehouse-pdf-management .mc-side-panel{box-shadow:0 16px 34px #020a1359}
+@media(max-width:760px){.warehouse-pdf-management .mc-catalog-layout>aside{position:static}.warehouse-pdf-management .warehouse-pdf-list{max-height:65vh;padding-right:7px}}

@@ -1,0 +1,19 @@
+ACTUALIZACIÓN V537 · PERMISOS Y ARTÍCULOS DE ALMACÉN · MONSTERASP
+
+Este paquete es incremental y conserva la instalación existente.
+
+1. No elimine ninguna carpeta ni archivo del servidor.
+2. No sustituya ni borre App_Data, uploads, logs, appsettings o .env.
+3. No cambie el web.config que ya funciona en MonsterASP.
+4. Extraiga/suba el contenido del ZIP sobre la carpeta actual de la aplicación,
+   aceptando únicamente reemplazar los archivos de aplicación incluidos.
+5. El ZIP contiene la ruta normal y la ruta alternativa wwwroot para cubrir las
+   dos estructuras usadas por MonsterASP.
+
+La actualización agrega el permiso "Crear artículos nuevos desde una entrada de
+inventario", lo habilita para diorly.abreu, ana.rodriguez y Administrador
+principal, y muestra el catálogo completo de permisos al editar usuarios.
+
+No contiene base de datos, contraseñas, configuraciones privadas, archivos
+subidos, App_Data, logs, app_offline.htm ni web.config.
+

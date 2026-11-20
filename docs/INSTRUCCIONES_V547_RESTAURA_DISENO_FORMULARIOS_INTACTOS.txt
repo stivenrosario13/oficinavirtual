@@ -1,0 +1,15 @@
+ACTUALIZACIÓN V547 PARA MONSTERASP
+
+RESULTADO
+- Restaura el catálogo de formularios administrativos con el diseño ancho de cuatro columnas en escritorio.
+- Conserva intactos los 17 formularios administrativos, sus campos, permisos y funcionamiento.
+- Mantiene el diseño adaptable de tres, dos y una columna para pantallas más pequeñas.
+
+INSTALACIÓN
+1. Detén temporalmente el sitio o el grupo de aplicaciones.
+2. Extrae el ZIP directamente sobre la carpeta principal publicada.
+3. Reemplaza los archivos existentes cuando MonsterASP lo solicite.
+4. Inicia nuevamente el sitio y fuerza una recarga con Ctrl+F5.
+
+SEGURIDAD
+El paquete no contiene web.config, appsettings, .env, Data, App_Data, uploads ni logs.

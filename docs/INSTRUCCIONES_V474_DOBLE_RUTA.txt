@@ -1,0 +1,27 @@
+ACTUALIZACION V474 - TEXTO VISIBLE EN OFICINA VIRTUAL - MONSTERASP
+
+CORRECCION PRINCIPAL
+1. Se corrigió la regla móvil del encabezado que ocultaba las preguntas y los nombres dentro del robot.
+2. La tarjeta “Pregunta actual” ahora muestra siempre el texto completo que Oficina Virtual está preguntando.
+3. Cada opción muestra su número y también el nombre completo de la agencia, falla o artículo.
+4. Los códigos y las descripciones secundarias permanecen visibles.
+5. En pantallas pequeñas la pregunta actual queda fija dentro del panel mientras se recorren las opciones.
+6. Los textos largos se ajustan a varias líneas sin salir del panel.
+
+FUNCIONES CONSERVADAS
+- Todas las fallas activas se muestran para crear tickets.
+- Los artículos similares se muestran por nombre y código cuando el robot no comprende el artículo.
+- Las solicitudes admiten una agencia o varias agencias con artículos separados por agencia.
+- Se genera una solicitud y un PDF independiente por cada agencia.
+- El robot sigue siendo privado del Administrador principal y se activa con “Oficina Virtual”.
+
+INSTALACION
+1. Detén el sitio y el Application Pool en MonsterASP.
+2. Extrae el ZIP conservando su estructura y reemplaza la publicación anterior.
+3. No borres App_Data, uploads ni la base de datos del servidor.
+4. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V474.exe.
+5. Inicia el sitio y confirma V474 en /api/version y /version-web.json.
+6. Recarga el navegador con Ctrl+F5 para eliminar los estilos anteriores de la caché.
+
+SEGURIDAD
+Este paquete contiene configuración privada de almacenamiento. No lo compartas públicamente.

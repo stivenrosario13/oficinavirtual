@@ -1,0 +1,20 @@
+ACTUALIZACION V483 - TODOS LOS REGISTROS HASTA LA FECHA ACTUAL
+
+CAMBIO PRINCIPAL
+El reporte ejecutivo consulta desde el primer registro existente hasta la fecha y hora actual. No usa solamente los datos del dia.
+
+INCLUYE
+- Todos los tickets creados hasta hoy, incluyendo abiertos, en proceso, resueltos y cerrados.
+- Todos los hallazgos hasta hoy por supervisor, tecnico, soporte, departamento y estado.
+- Todas las solicitudes recibidas por Almacen hasta hoy, por departamento y estado.
+- Todas las auditorias completadas hasta hoy, pendientes y en revision por grupo y agencia.
+- El PDF muestra de forma visible: Desde el primer registro hasta la fecha actual.
+- Acceso exclusivo para el Administrador principal.
+
+INSTALACION
+1. Deten el sitio y el Application Pool y conserva una copia de seguridad.
+2. Extrae el ZIP sobre la publicacion actual conservando App_Data, uploads, logs, .env y la base de datos.
+3. Confirma que web.config apunte a .\RegistroAgencias.SqlServer.V483.exe y subelo al final.
+4. Inicia el sitio, comprueba V483 en /api/version, cierra sesion y recarga con Ctrl+F5.
+
+No requiere ejecutar SQL manualmente. El paquete contiene configuracion privada de almacenamiento; no lo compartas publicamente.

@@ -1,0 +1,21 @@
+ACTUALIZACION V527 - DISEÑO OPCION 1
+
+Incluye todo lo disponible en V526 y aplica:
+
+1. Sidebar moderno completo en escritorio.
+2. Logo, secciones agrupadas, estados activos y accesos según permisos.
+3. Encabezado limpio con título, buscador de módulos, notificaciones, mensajes y cuenta.
+4. Entrada directa al módulo habitual de cada perfil.
+5. Inicio de tarjetas disponible desde la opción Inicio, sin ser obligatorio.
+6. Menú desplegable y navegación inferior conservados en móvil.
+7. Actividad reciente y estado por región conservados en el inicio.
+
+INSTALACION EN MONSTERASP
+
+- Extraiga el ZIP.
+- Copie primero el contenido de la raíz al sitio.
+- Si MonsterASP usa wwwroot como raíz pública, copie también el contenido de la carpeta wwwroot.
+- No reemplace appsettings, .env, App_Data, uploads ni logs.
+- Reinicie el sitio o Application Pool y confirme la versión V527.
+
+ARCHIVO PRINCIPAL: RegistroAgencias.SqlServer.V527.dll

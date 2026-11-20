@@ -1,3 +1,5 @@
+import {userDepartments} from './user-departments';
+import {isAdministrativeProfile} from './administrative-profiles';
 export type PortalSession = {
   authenticated: boolean;
   persistentSessionToken?: string | null;
@@ -6,17 +8,20 @@ export type PortalSession = {
   displayName: string;
   role:
     | "Administrator"
+    | "Administrative"
+    | "Department"
     | "Viewer"
     | "GroupAdministrator"
     | "Fiscalizador"
     | "Technology"
     | "GeneralServices"
-    | "HumanResources";
+    | "HumanResources"
+    | "Warehouse";
   mustChangePassword: boolean;
   avatarUrl: string | null;
   scope: "all" | "assigned-groups" | "support-department";
-  supportDepartment:
-    "TECHNOLOGY" | "GENERAL_SERVICES" | "HUMAN_RESOURCES" | null;
+  supportDepartment: string | null;
+  assignedDepartment?: string | null;
   supportTeam:
     | "CALL_CENTER"
     | "TECHNICAL_FAILURE"
@@ -24,7 +29,14 @@ export type PortalSession = {
     | "WAREHOUSE"
     | "WORKSHOP"
     | null;
-  permissions: {
+  permissions: Partial<Record<import('./operational-permissions').OperationalPermissionKey,boolean>> & {
+    "profile:WAREHOUSE_REQUESTER"?: boolean;
+    "profile:SUPPORT"?: boolean;
+    "profile:ADMINISTRATIVE"?: boolean;
+    "profile:DEPARTMENT_ADMINISTRATIVE"?: boolean;
+    usesExplicitPermissions?: boolean;
+    canViewFieldAudits?: boolean;
+    canManageDepartment?: boolean;
     canView: boolean;
     canManage: boolean;
     canManageUsers: boolean;
@@ -41,6 +53,10 @@ export type PortalSession = {
     canViewAllSupportDepartments: boolean;
     canConfigureSupport: boolean;
     canViewSupportFindings: boolean;
+    canCancelFindingWithEvidence: boolean;
+    canCancelFindingWithoutEvidence: boolean;
+    canCancelFindingWithReason: boolean;
+    canCancelFindingWithoutReason: boolean;
     canUseSupportChat: boolean;
     canManageSupportChat: boolean;
     canModerateSupportChat: boolean;
@@ -48,21 +64,32 @@ export type PortalSession = {
     canShareSupportConversations: boolean;
     canDeleteSupportTickets: boolean;
     canViewTicketNotifications: boolean;
+    canAuthorizeWarehouseRequests: boolean;
+    canLoadWarehouseInventory: boolean;
+    canCreateWarehouseArticles?: boolean;
   };
 };
 
 export function roleLabel(role: PortalSession["role"]): string {
+  if (role === "Administrative") return "Administrativo";
   if (role === "Administrator") return "Administrador principal";
   if (role === "GroupAdministrator") return "Supervisor";
   if (role === "Fiscalizador") return "Fiscalizador";
   if (role === "Technology") return "Técnico de Tecnología";
   if (role === "GeneralServices") return "Técnico de Servicios Generales";
   if (role === "HumanResources") return "Recursos Humanos";
+  if (role === "Warehouse") return "Almacén";
   return "Consulta general";
 }
 
 export function sessionRoleLabel(session: PortalSession): string {
+  if(session.role==='Department')return `${session.permissions.canManageDepartment?'Gerente':isAdministrativeProfile(session)?'Administrativo':'Usuario'} · ${userDepartments.find(([code])=>code===session.assignedDepartment)?.[1]||'Departamento'}`;
   if (session.role === "Administrator") return "Administrador principal";
+  if (session.role === "Administrative") return session.permissions.canManageDepartment ? "Gerente · Administración" : "Administrativo";
+  if(session.permissions.canManageDepartment){
+    const area=session.role==='Warehouse'||session.supportTeam==='WAREHOUSE'?'Almacén':session.supportTeam==='WORKSHOP'?'Taller':session.role==='Technology'?(session.supportTeam==='CALL_CENTER'?'Call Center':session.supportTeam==='TECHNICAL_FAILURE'?'Avería Técnica':'Tecnología'):session.role==='GeneralServices'?'Servicios Generales':session.role==='HumanResources'?'Recursos Humanos':null;
+    if(area)return `Gerente · ${area}`;
+  }
   if (session.role === "GroupAdministrator") return "Supervisor de agencia";
   if (session.supportDepartment) {
     const department =

@@ -1,0 +1,39 @@
+ACTUALIZACION V473 - ASISTENTE VISUAL DE TICKETS Y SOLICITUDES DE ALMACEN - MONSTERASP
+
+CAMBIOS V473
+1. Cada pregunta que hace Oficina Virtual queda visible en una tarjeta de “Pregunta actual”.
+2. Para crear tickets se muestran en pantalla todas las fallas activas del área seleccionada.
+3. Si el robot no reconoce exactamente un artículo, muestra las opciones más cercanas del inventario con nombre y código.
+4. Las opciones pueden seleccionarse por voz diciendo el número, nombre o código, o directamente con un clic.
+5. Las cantidades también cuentan con botones rápidos, conservando la validación de enteros entre 1 y 10,000.
+6. Las solicitudes para una agencia guardan solamente los artículos confirmados para esa agencia.
+7. Las solicitudes para varias agencias trabajan de forma secuencial: agencia, artículos, confirmación y siguiente agencia.
+8. En pantalla se mantiene un resumen independiente con los artículos confirmados para cada agencia.
+9. Al terminar se genera una solicitud y un PDF independientes por agencia.
+10. Antes de abrir el formulario se vuelven a validar agencias, artículos, cantidades y el límite de 10,000 por agencia.
+11. La misma validación se aplica tanto a las respuestas habladas como a las opciones seleccionadas con clic.
+12. Se conserva la activación privada del Administrador principal mediante la frase “Oficina Virtual”.
+
+FLUJO DE UNA AGENCIA
+1. Indica o selecciona la agencia.
+2. Indica los artículos y cantidades.
+3. Si un artículo es confuso, elige una de las opciones mostradas.
+4. Confirma “crear solicitudes”.
+
+FLUJO DE VARIAS AGENCIAS
+1. Indica las agencias que participarán.
+2. Agrega los artículos y cantidades de la primera agencia.
+3. Di “terminé con esta agencia, continuemos con la otra”.
+4. Repite los artículos y cantidades para cada agencia restante.
+5. Di “crear solicitudes” para abrir y enviar el lote validado.
+
+INSTALACION
+1. Detén el sitio y el Application Pool en MonsterASP.
+2. Extrae el ZIP conservando su estructura y reemplaza la publicación anterior.
+3. No borres App_Data, uploads ni la base de datos del servidor.
+4. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V473.exe.
+5. Inicia el sitio y confirma V473 en /api/version y /version-web.json.
+6. Abre por HTTPS, permite micrófono y sonido, y recarga con Ctrl+F5.
+
+SEGURIDAD
+Este paquete contiene configuración privada de almacenamiento. No lo compartas públicamente.

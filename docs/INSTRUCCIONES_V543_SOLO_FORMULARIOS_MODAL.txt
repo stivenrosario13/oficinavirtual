@@ -1,0 +1,18 @@
+ACTUALIZACIÓN V543 PARA MONSTERASP
+
+Este paquete conserva el diseño anterior del sistema y realiza únicamente estas correcciones:
+
+1. Los tres formularios de prestaciones y cheques aparecen solamente dentro del modal "Nueva solicitud".
+2. Se eliminó de la pantalla principal el bloque "Flujo de prestaciones laborales".
+3. El formulario "Solicitud de pago de prestaciones en cheque" ya no solicita los campos "Solicitado por Recursos Humanos" ni "Solicitado por Administración".
+4. La visibilidad se controla por departamento:
+   - Recursos Humanos: solicitud de pago de prestaciones en cheque.
+   - Administración: solicitud de prestaciones, entrega de cheques en blanco y entrega de cheques firmados.
+
+INSTALACIÓN
+1. Detén temporalmente el sitio o el grupo de aplicaciones.
+2. Extrae el ZIP directamente sobre la carpeta principal publicada, donde están el ejecutable/DLL y la carpeta wwwroot.
+3. Reemplaza los archivos existentes cuando MonsterASP lo solicite.
+4. Inicia nuevamente el sitio y abre Oficina Virtual.
+
+El paquete usa el formato de doble ruta de esta instalación y no contiene web.config, appsettings, .env, Data, App_Data, uploads ni logs.

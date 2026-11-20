@@ -1,0 +1,17 @@
+.call-center-supervisor-routing{
+  width:min(100%,760px);
+  display:grid;
+  grid-template-columns:minmax(220px,1fr) minmax(220px,1fr) auto;
+  align-items:end;
+  gap:10px;
+  padding:12px;
+  border:1px solid #315b73;
+  border-radius:14px;
+  background:#0b263a;
+}
+.call-center-supervisor-routing>.search-select{width:100%}
+.call-center-supervisor-routing>button{min-height:44px;white-space:nowrap}
+@media(max-width:760px){
+  .call-center-supervisor-routing{grid-template-columns:1fr}
+  .call-center-supervisor-routing>button{width:100%}
+}

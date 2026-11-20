@@ -1,0 +1,21 @@
+ACTUALIZACION V461 - DESTINOS DE SUPERVISORES - MONSTERASP
+
+CAMBIOS V461
+- Los supervisores ya no tienen la opción "Para un grupo" al solicitar artículos a Almacén.
+- Pueden solicitar para una agencia o para varias agencias.
+- Cuando seleccionan varias agencias, el sistema conserva una solicitud individual para cada agencia y agrupa sus artículos correspondientes.
+- El servidor rechaza destinos de grupo enviados desde pestañas o versiones antiguas.
+- Los supervisores continúan limitados a las agencias pertenecientes a sus grupos asignados.
+- Conserva el acceso de Vittini a las solicitudes de Avería Técnica y todos los cambios anteriores.
+
+INSTALACION
+1. Guarda una copia de los archivos actuales y del web.config ACTIVO.
+2. Detén el sitio desde MonsterASP.
+3. Extrae el ZIP en la carpeta del web.config ACTIVO y reemplaza los archivos.
+4. Conserva App_Data, uploads, appsettings y las variables propias del servidor.
+5. El web.config ACTIVO debe apuntar a .\RegistroAgencias.SqlServer.V461.exe.
+6. Inicia el sitio y confirma V461 en /api/version y /version-web.json.
+7. Los supervisores deben recargar con Ctrl+F5.
+
+PRIVACIDAD
+El ZIP contiene la clave privada de almacenamiento en web.config. No lo publiques ni lo compartas.

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   activeTicketsByTechnologyArea,
   operationalQueueStart,
+  ticketResultForOperationalDate,
   ticketsInOperationalQueue,
   turnCode,
   type OperationsTicket,
@@ -70,5 +71,14 @@ describe("cola tecnológica por áreas", () => {
       ticket("11", "CALL_CENTER", "HIGH", "2026-09-10T14:00:00Z"),
     ], afterCutoff);
     expect(visible.map((item) => item.id)).toEqual(["10"]);
+  });
+
+  it("cierra la cola a las 22:00 y clasifica el resultado diario",()=>{
+    const created=new Date(2026,8,11,9,0,0).toISOString(),resolved=new Date(2026,8,11,18,0,0).toISOString();
+    const completed=ticket("12","CALL_CENTER","MEDIUM",created,{status:"RESOLVED",updatedAt:resolved,history:[{id:"h1",action:"RESOLVED",actorName:"Técnico",createdAt:resolved}]});
+    const pending=ticket("13","CALL_CENTER","MEDIUM",created);
+    expect(ticketsInOperationalQueue([completed,pending],new Date(2026,8,11,22,1,0))).toEqual([]);
+    expect(ticketResultForOperationalDate(completed,"2026-09-11")?.result).toBe("COMPLETED");
+    expect(ticketResultForOperationalDate(pending,"2026-09-11")?.result).toBe("PENDING");
   });
 });

@@ -1,0 +1,31 @@
+import {createRequire} from 'node:module';
+const require=createRequire('C:/Users/pc/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/loader.cjs');
+const {chromium}=require('playwright');
+const browser=await chromium.launch({headless:true,channel:'msedge'}),page=await browser.newPage({viewport:{width:1365,height:1000}}),sent=[],errors=[];
+const agencies=[{id:'11111111-1111-1111-1111-111111111111',codigo:'123',terminal:'Agencia Uno',grupo:'Grupo A'},{id:'22222222-2222-2222-2222-222222222222',codigo:'456',terminal:'Agencia Dos',grupo:'Grupo B'}];
+page.on('pageerror',e=>errors.push(e.message));
+await page.route('**/api/**',async route=>{const req=route.request(),path=new URL(req.url()).pathname;
+ if(path==='/api/tickets/agencies')return route.fulfill({json:{agencies}});
+ if(path==='/api/warehouse/fulfillment/inventory')return route.fulfill({json:[{department:'TECHNOLOGY',productId:'QA',name:'Papel QA',available:20000,serials:[],warehouse:'QA',group:'Consumibles',division:'QA',unitId:'UND',tracksSerial:false}]});
+ if(path==='/api/institutional-documents'&&req.method()==='POST'){const payload=req.postDataBuffer().toString('utf8'),match=payload.match(/name="(warehouseRequest|administrativeRequest)"\r\n\r\n([^\r\n]+)/);sent.push(JSON.parse(match[2]));return route.fulfill({json:{id:999}});}
+ if(path==='/api/institutional-documents')return route.fulfill({json:[]});
+ throw Error('Unexpected API '+path);
+});
+const go=(department,login='qa')=>page.goto('http://127.0.0.1:5176/scripts/qa-inventory-agencies.html?department='+department+'&login='+login);
+async function submit(label='Enviar solicitud'){const result=page.waitForResponse(r=>r.url().endsWith('/api/institutional-documents')&&r.request().method()==='POST');await page.getByRole('button',{name:label,exact:true}).click();await result;await page.getByRole('button',{name:label,exact:true}).waitFor();}
+try{
+ for(const [login,count] of [['emma.mendoza',5],['derihan.alisha',2],['whilmaly.sulay',7],['sandra.ramirez',1],['emely.figueroa',1],['diana.ventura',1]]){await go('ADMIN_FORMS',login);await page.locator('.admin-form-cards').waitFor();if(await page.locator('.admin-form-cards button').count()!==count)throw Error('Wrong form scope '+login);}
+ await go('ADMIN_FORMS','emma.mendoza');await page.getByRole('button',{name:/Reposición de SIM Claro/}).click();await page.getByLabel('Compañía telefónica').selectOption('ALTICE');await page.getByLabel('Empresa titular').fill('Empresa QA');await page.getByLabel('Representante legal').fill('Representante QA');await page.getByLabel('Cédula del representante').fill('00100000001');await page.getByLabel('Persona autorizada',{exact:true}).fill('Persona QA');await page.getByLabel('Cédula de la persona autorizada').fill('00100000002');await page.getByLabel('Número de línea').fill('8095550101');await submit('Generar PDF y enviar');if(sent.at(-1).formData.carrier!=='ALTICE')throw Error('Altice not saved');
+ await go('ADMIN_FORMS','emma.mendoza');await page.getByRole('button',{name:/Asignación de flota/}).click();await page.getByLabel('Persona que recibe').fill('Empleado QA');await page.getByLabel('Modelo del equipo').fill('Teléfono QA');await page.getByLabel('IMEI / serial').fill('QA-IMEI');await submit('Generar PDF y enviar');if(sent.at(-1).targetType!=='EMPLEADO'||sent.at(-1).formType!=='FLEET')throw Error('Fleet target');
+ await go('ADMIN_FORMS','derihan.alisha');await page.getByRole('button',{name:/Entrega de módem/}).click();await page.getByLabel('Agencia',{exact:true}).fill('Agencia QA');await page.getByLabel('Terminal / código de agencia').fill('123');await page.getByLabel('Modelo',{exact:true}).fill('Modem QA');await page.getByLabel('Serial / IMEI').fill('QA-MODEM');await submit('Generar PDF y enviar');if(sent.at(-1).targetType!=='AGENCIA'||sent.at(-1).formType!=='MODEM')throw Error('Modem target');
+ await go('ADMIN_FORMS','sandra.ramirez');await page.getByRole('button',{name:/Relación de combustible/}).click();await page.getByLabel('Fecha',{exact:true}).fill('2026-10-02');await page.getByLabel('Placa',{exact:true}).fill('QA-123');await page.getByLabel('Monto RD$').fill('1500');await page.getByLabel('Modelo del vehículo').fill('Vehículo QA');await page.getByLabel('Departamento',{exact:true}).fill('Servicios Generales');await submit('Generar PDF y enviar');if(sent.at(-1).formData.rows[0].department!=='Servicios Generales')throw Error('Fuel department');
+ for(const department of ['WAREHOUSE','TECHNOLOGY','GENERAL_SERVICES','HUMAN_RESOURCES','SUPERVISION','ADMINISTRATIVE']){
+  await go(department);const row=page.locator('.warehouse-request-lines article').first();await row.locator('select option[value="QA"]').waitFor({state:'attached'});await row.locator('select').selectOption('QA');await row.locator('input[type="number"]').fill('10000');
+  if(department==='ADMINISTRATIVE'){if(await page.getByLabel('Destino de la solicitud').count())throw Error('Administrative destination exposed');await submit();continue;}
+  await page.getByLabel('Destino de la solicitud').selectOption('AGENCY');await page.getByLabel('Agencia solicitante').locator('option[value="'+agencies[1].id+'"]').waitFor({state:'attached'});if(await page.getByLabel('Grupo de agencias').count())throw Error('Old group selector remains');await page.getByLabel('Agencia solicitante').selectOption(agencies[1].id);await submit();if(sent.at(-1).agencyId!==agencies[1].id)throw Error('Wrong agency');
+  await page.getByLabel('Destino de la solicitud').selectOption('GROUP');await page.getByLabel('Grupo de agencias').selectOption('Grupo A');await submit();if(sent.at(-1).destinationType!=='GROUP'||sent.at(-1).agencyGroup!=='Grupo A')throw Error('Wrong group');
+  await page.getByLabel('Destino de la solicitud').selectOption('DEPARTMENT');await submit();if(sent.at(-1).destinationType!=='DEPARTMENT')throw Error('Wrong department');
+ }
+ await go('ADMIN_PORTAL','emely.figueroa');await page.getByPlaceholder('Buscar formulario, cédula, RNC, terminal o remitente…').waitFor();await page.screenshot({path:'tmp/administrative-profiles-qa.png',fullPage:true});
+ if(errors.length)throw Error(errors.join('\n'));console.log('PASS six profile catalogs, Altice, fleet, modem, fuel PDF submissions, search, 16 warehouse submissions; mocked API only.');
+}finally{await browser.close();}

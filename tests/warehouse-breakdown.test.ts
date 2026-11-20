@@ -1,0 +1,10 @@
+import {readFileSync,mkdirSync,writeFileSync} from 'node:fs';import {expect,it} from 'vitest';import {PDFDocument} from 'pdf-lib';import {buildWarehouseRequestPdf} from '../src/components/vite/warehouseRequestPdf';import {buildReceiptCopy} from '../src/components/vite/institutionalReceiptPdf';import type {DocumentDetail} from '../src/components/vite/DocumentSystemModule';
+const logo='data:image/png;base64,'+readFileSync('public/loto-real-logo-transparent.png').toString('base64');
+it.each([1,2,6,30])('preserves the full breakdown for %s items in original and stamped copies',async(count)=>{
+ const lines=Array.from({length:count},(_,i)=>({kind:'EQUIPMENT' as const,name:i===0?'Rollos de papel Loto Real térmico 170 pies':`Artículo adicional ${i+1}`,quantity:i===0?500:7,serial:'',note:''}));
+ const original=new Uint8Array(await buildWarehouseRequestPdf({number:'SOL-ALM-QA-DESGLOSE',department:'Almacén',agency:{codigo:'USO INTERNO',terminal:'Departamento de Almacén',grupo:'Grupo Tejeda'},priority:'MEDIUM',notes:'Grupo Bávaro',lines,createdBy:'Ana Rodríguez',createdByLogin:'ana.rodriguez',logoData:logo}));
+ const item={department:'Almacén',recipientDepartment:'Almacén',ownerDisplayName:'Ana Rodríguez',ownerUserName:'ana.rodriguez',status:'approved',receivedUtc:'2026-09-30T18:00:00Z',receiverDisplayName:'Diorly Abreu',receiverLogin:'diorly.abreu',receiptCode:'REAL-REC-QA',decisionBy:'Diorly Abreu',decisionUtc:'2026-09-30T18:10:00Z',warehouseRequest:{number:'SOL-ALM-QA-DESGLOSE',agencyCode:'USO INTERNO',agencyName:'Departamento de Almacén',agencyGroup:'Grupo Tejeda',priority:'MEDIUM',lines}} as DocumentDetail;
+ const stamped=await buildReceiptCopy(original,item,logo,'https://example.invalid');const pages=(await PDFDocument.load(stamped)).getPageCount();expect(pages).toBe((await PDFDocument.load(original)).getPageCount());expect(pages).toBe(count===1?1:count===30?3:2);
+ const repeated=await buildReceiptCopy(stamped,item,logo,'https://example.invalid');expect((await PDFDocument.load(repeated)).getPageCount()).toBe(pages);
+ if(count===6){mkdirSync('tmp/pdfs',{recursive:true});writeFileSync('tmp/pdfs/almacen-desglose-sellado.pdf',stamped);}
+});

@@ -1,0 +1,25 @@
+V533 - V520 + PDF DE HALLAZGOS VALIDADO VISUALMENTE
+====================================================
+
+Esta actualización sustituye el generador PDF manual de V532, cuyo texto podía quedar
+invisible en el visor, por jsPDF 4.2.1 incluido dentro del paquete.
+
+CAMBIOS PUNTUALES
+- Texto, fondos, tarjetas y encabezados visibles en el PDF descargado.
+- Portada institucional y una ficha detallada por hallazgo.
+- Pregunta de auditoría y motivo exacto de creación automática.
+- Diagnóstico, solución, verificación, recomendaciones y trazabilidad.
+- Saltos de página seguros para descripciones extensas.
+- Endpoint de notificaciones resistente a fuentes SQL opcionales no disponibles.
+- Diseño web general conservado sobre la base exacta V520.
+
+INSTALACION
+1. Reemplace completamente V532 por el contenido de este ZIP.
+2. Si MonsterASP publica desde wwwroot, utilice la copia completa de la carpeta wwwroot incluida.
+3. No elimine App_Data, uploads, logs, appsettings ni variables privadas.
+4. Reinicie el sitio y abra con Ctrl+F5.
+
+VERIFICACION
+- Confirme la versión V533-WEB-20261116-2023.
+- Abra Reporte ejecutivo global y pulse “Descargar PDF detallado”.
+- El archivo debe mostrar texto y tarjetas desde la primera página.

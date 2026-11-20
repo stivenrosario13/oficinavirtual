@@ -1,0 +1,42 @@
+import {createRequire} from 'node:module';
+process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY='1';
+const require=createRequire('C:/Users/pc/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/loader.cjs');
+const {chromium}=require('playwright');
+const browser=await chromium.launch({headless:true,channel:'msedge'});
+try {for(const width of [390,1365]) {
+ const page=await browser.newPage({viewport:{width,height:950}}), errors=[];
+ page.on('pageerror',e=>{errors.push(e.message);console.log('PAGE ERROR',e.message);});
+ await page.route(/^https:\/\//,route=>route.abort());
+ await page.route('**/api/**',async route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path==='/api/warehouse/fulfillment/inventory')return route.fulfill({json:[]});
+  if(path.endsWith('/statistics'))return route.fulfill({status:503,json:{error:'QA statistics unavailable'}});
+  const body={tickets:[],agencies:[],findings:[],technicians:[],departments:[],movements:[],requests:[],notifications:[],groups:[],projects:[],entries:[],items:[]};
+  if(path==='/api/support/catalog')body.departments=['GENERAL_SERVICES','TECHNOLOGY','HUMAN_RESOURCES'].map((code,i)=>({code,name:['Servicios Generales','Tecnología','Recursos Humanos'][i],categories:[],isActive:true,accentColor:'#38BDF8'}));
+  await route.fulfill({json:body});
+ });
+ await page.goto('http://127.0.0.1:5183/scripts/qa-supervisor-layout.html',{waitUntil:'domcontentloaded'});
+ const home=page.getByRole('navigation',{name:'Casos del supervisor'});
+ await home.waitFor();
+ await page.screenshot({path:`outputs/qa-supervisor-home-${width}.png`,fullPage:true,timeout:10000});
+ if(await home.locator('.support-section-copy strong').count()!==4)throw Error('Expected four properly structured cards: '+await home.innerText());
+ if(await page.locator('.ticket-workspace').isVisible())throw Error('Home mixes ticket table');
+ await page.screenshot({path:`outputs/qa-supervisor-home-${width}.png`,fullPage:true});
+ await home.getByRole('button',{name:/Mis tickets asignados/}).click();
+ await page.locator('.ticket-workspace').waitFor({state:'visible'});
+ if(await home.count())throw Error('Home cards remain over inbox');
+ await page.getByRole('button',{name:/Volver al centro de soporte/}).click();
+ await home.waitFor();
+ await home.getByRole('button',{name:/Mis casos resueltos/}).click();
+ if(await page.locator('#ticket-technician-filter').isVisible())throw Error('Supervisor sees other technicians filter');
+ await page.getByRole('button',{name:/Volver al centro de soporte/}).click();
+ await home.getByRole('button',{name:/Crear ticket/}).click();
+ await page.getByRole('heading',{name:'¿Qué departamento necesitas?'}).waitFor();
+ if(await home.count())throw Error('Home cards mixed with creation');
+ await page.getByRole('button',{name:'Volver a mis casos'}).click();
+ await home.waitFor();
+ const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1);
+ if(errors.length||overflow)throw Error(JSON.stringify({errors,overflow,width}));
+ console.log(`PASS ${width}px: home, assigned inbox, resolved, creation, navigation; no JS errors or overflow`);
+ await page.close();
+}}finally{await browser.close();}

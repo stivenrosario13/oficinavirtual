@@ -1,0 +1,41 @@
+<Window x:Class="BloomCobrosAgent.CampaignFilterWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Filtros de campaña" Width="620" Height="650" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" Background="#F4F6F4">
+    <Grid Margin="28">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <StackPanel>
+            <TextBlock Text="Preparar campaña masiva" FontSize="26" FontWeight="SemiBold"/>
+            <TextBlock Text="Selecciona exactamente qué clientes deben entrar. Las exclusiones de seguridad no se pueden desactivar." Foreground="#65736C" TextWrapping="Wrap" Margin="0,6,0,20"/>
+        </StackPanel>
+        <Border Grid.Row="1" Background="White" CornerRadius="10" Padding="20">
+            <StackPanel>
+                <TextBlock Text="ESTADOS DE CUENTA" Foreground="#65736C" FontSize="11" FontWeight="Bold"/>
+                <WrapPanel Margin="0,10,0,20">
+                    <CheckBox x:Name="OverdueCheck" Content="Atrasados" IsChecked="True" Margin="0,0,22,0" Checked="FilterChanged" Unchecked="FilterChanged"/>
+                    <CheckBox x:Name="SuspendedCheck" Content="Suspendidos" IsChecked="True" Margin="0,0,22,0" Checked="FilterChanged" Unchecked="FilterChanged"/>
+                    <CheckBox x:Name="UpcomingCheck" Content="Próximos a vencer" Checked="FilterChanged" Unchecked="FilterChanged"/>
+                </WrapPanel>
+
+                <Grid Margin="0,0,0,16"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,8,0"><TextBlock Text="Balance mínimo" FontWeight="SemiBold"/><TextBox x:Name="MinimumBox" Text="0" Padding="10" Margin="0,5,0,0" TextChanged="FilterChanged"/></StackPanel>
+                    <StackPanel Grid.Column="1" Margin="8,0,0,0"><TextBlock Text="Balance máximo (opcional)" FontWeight="SemiBold"/><TextBox x:Name="MaximumBox" Padding="10" Margin="0,5,0,0" TextChanged="FilterChanged"/></StackPanel>
+                </Grid>
+                <TextBlock Text="Sector contiene" FontWeight="SemiBold"/><TextBox x:Name="SectorBox" Padding="10" Margin="0,5,0,14" TextChanged="FilterChanged"/>
+                <TextBlock Text="Localidad contiene" FontWeight="SemiBold"/><TextBox x:Name="LocationBox" Padding="10" Margin="0,5,0,14" TextChanged="FilterChanged"/>
+                <Grid Margin="0,0,0,18"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,8,0"><TextBlock Text="Máximo de destinatarios" FontWeight="SemiBold"/><TextBox x:Name="LimitBox" Padding="10" Margin="0,5,0,0" TextChanged="FilterChanged"/></StackPanel>
+                    <StackPanel Grid.Column="1" Margin="8,0,0,0"><TextBlock Text="Orden" FontWeight="SemiBold"/><ComboBox x:Name="SortBox" Margin="0,5,0,0" Padding="8" SelectionChanged="FilterChanged"><ComboBoxItem Content="Mayor balance" IsSelected="True"/><ComboBoxItem Content="Menor balance"/><ComboBoxItem Content="Nombre"/><ComboBoxItem Content="Contrato"/></ComboBox></StackPanel>
+                </Grid>
+                <Border Background="#E9F3EE" CornerRadius="8" Padding="14">
+                    <StackPanel><TextBlock Text="VISTA PREVIA" Foreground="#35664F" FontSize="11" FontWeight="Bold"/><TextBlock x:Name="PreviewText" Text="Calculando..." FontSize="20" FontWeight="SemiBold" Margin="0,4,0,0"/><TextBlock x:Name="DetailText" Foreground="#65736C" Margin="0,4,0,0" TextWrapping="Wrap"/></StackPanel>
+                </Border>
+            </StackPanel>
+        </Border>
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button Content="Cancelar" Click="CancelButton_Click" Background="#607269" Margin="0,0,10,0"/>
+            <Button Content="Aplicar filtros" Click="ApplyButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

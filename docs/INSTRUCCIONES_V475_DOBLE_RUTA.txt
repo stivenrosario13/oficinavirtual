@@ -1,0 +1,36 @@
+ACTUALIZACION V475 - OFICINA VIRTUAL PROFESIONAL PARA ALMACEN - MONSTERASP
+
+CORRECCIONES V475
+1. Se corrigió la selección de artículos sugeridos: el código elegido ahora se resuelve contra el inventario real.
+2. Se reconocen cantidades habladas como uno, dos, tres, cinco y otros números admitidos.
+3. Se reconocen códigos de agencia completos, parciales y pronunciados en bloques.
+4. Cuando una agencia no coincide exactamente, se muestran las opciones más cercanas con código, nombre y grupo.
+5. Cuando un artículo no coincide exactamente, se muestran opciones del inventario con nombre y código.
+6. El campo de respuesta ya no acumula toda la conversación ni reenvía respuestas anteriores.
+7. Cada respuesta del Administrador aparece en pantalla junto a la pregunta del robot.
+8. Las selecciones hechas con clic muestran el nombre real elegido, no solamente “opción 1”.
+9. El panel muestra la agencia confirmada antes de solicitar artículos.
+10. El panel muestra si los catálogos están conectados y cuántas agencias y artículos cargó.
+11. Se agregó un botón “Actualizar datos” para volver a cargar agencias, fallas e inventario.
+12. Se mantiene una solicitud y un PDF separados por agencia en solicitudes múltiples.
+
+FLUJO RECOMENDADO
+1. Di “Oficina Virtual”.
+2. Pide una solicitud de Almacén.
+3. Di el código o nombre de la agencia; también puedes elegirla en pantalla.
+4. Confirma que aparezca “Agencia confirmada”.
+5. Di los artículos con sus cantidades, por ejemplo “dos módems y cinco cables de red”.
+6. Si aparece una lista, di el número, nombre o código del artículo, o selecciónalo con clic.
+7. Para varias agencias termina el bloque actual y continúa con la siguiente.
+8. Di “crear solicitudes” cuando todas las agencias estén confirmadas.
+
+INSTALACION
+1. Detén el sitio y el Application Pool en MonsterASP.
+2. Extrae el ZIP conservando su estructura y reemplaza la publicación anterior.
+3. No borres App_Data, uploads ni la base de datos del servidor.
+4. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V475.exe.
+5. Inicia el sitio y confirma V475 en /api/version y /version-web.json.
+6. Recarga el navegador con Ctrl+F5.
+
+SEGURIDAD
+Este paquete contiene configuración privada de almacenamiento. No lo compartas públicamente.

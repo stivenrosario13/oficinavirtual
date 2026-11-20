@@ -1,0 +1,46 @@
+{
+  "name": "Bloom | Estados de WhatsApp",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["messages"],
+        "options": {}
+      },
+      "id": "8c8a492e-832b-469e-8917-f73ce43756ef",
+      "name": "WhatsApp Trigger oficial",
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [-420, 0],
+      "webhookId": "bloom-whatsapp-status"
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $input.first().json.body ?? $input.first().json;\nconst values = [];\nif (Array.isArray(payload.entry)) {\n  for (const entry of payload.entry) for (const change of entry.changes ?? []) values.push(change.value ?? {});\n} else values.push(payload.value ?? payload);\nconst output = [];\nfor (const value of values) {\n  for (const status of value.statuses ?? []) {\n    output.push({ json: { event_type: 'message_status', message_id: status.id ?? '', recipient_phone: status.recipient_id ?? '', status: status.status ?? 'unknown', timestamp: status.timestamp ? new Date(Number(status.timestamp) * 1000).toISOString() : new Date().toISOString(), conversation_id: status.conversation?.id ?? '', pricing_category: status.pricing?.category ?? '', errors: status.errors ?? [] } });\n  }\n  for (const message of value.messages ?? []) {\n    output.push({ json: { event_type: 'incoming_message', message_id: message.id ?? '', customer_phone: message.from ?? '', message_type: message.type ?? 'unknown', text: message.text?.body ?? '', timestamp: message.timestamp ? new Date(Number(message.timestamp) * 1000).toISOString() : new Date().toISOString() } });\n  }\n}\nreturn output.length ? output : [{ json: { event_type: 'ignored', received_at: new Date().toISOString() } }];"
+      },
+      "id": "b3ca5c05-69b8-4bc6-a3c9-783f039b6418",
+      "name": "Normalizar eventos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-170, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({ json: { ...item.json, audit_note: 'Conecta este nodo a PostgreSQL, SQL Server o Data Table para persistencia permanente.' } }));"
+      },
+      "id": "c6995ed8-e023-4876-8901-ddbc588a64d1",
+      "name": "Salida para auditoría",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [80, 0]
+    }
+  ],
+  "connections": {
+    "WhatsApp Trigger oficial": { "main": [[{ "node": "Normalizar eventos", "type": "main", "index": 0 }]] },
+    "Normalizar eventos": { "main": [[{ "node": "Salida para auditoría", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": { "executionOrder": "v1", "saveDataErrorExecution": "all", "saveDataSuccessExecution": "all", "timezone": "America/Santo_Domingo" },
+  "active": false,
+  "versionId": "7844b064-cbdf-4877-804f-66983a84b6bc",
+  "tags": []
+}

@@ -1,0 +1,36 @@
+.admin-excel-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:16px 0;padding:14px;background:#f0f6fa;border:1px solid #d6e2eb;border-radius:12px}
+.admin-excel-tools button,.admin-excel-import button{display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.admin-excel-tools svg,.admin-excel-import button svg{width:17px;height:17px}
+.admin-excel-tools small{color:#536879}
+.admin-excel-table{overflow:auto;min-height:160px}
+.admin-excel-table table{width:100%;border-collapse:collapse;text-align:left;font-size:14px}
+.admin-excel-table th{background:#edf3f7;color:#24475c}
+.admin-excel-table th,.admin-excel-table td{padding:12px;border-bottom:1px solid #dce6ed;vertical-align:top}
+.admin-excel-table td small{display:block;margin-top:4px;color:#657687;max-width:200px;overflow-wrap:anywhere}
+.admin-excel-table .invalid{color:#b42318;max-width:300px}
+.admin-excel-table td:last-child{min-width:190px}
+.admin-excel-import h3{display:flex;align-items:center;gap:10px}
+.admin-excel-import button:disabled{opacity:.55;cursor:not-allowed}
+@media(max-width:650px){.admin-excel-tools{align-items:stretch;flex-direction:column}.admin-excel-table{font-size:12px}.admin-excel-import>footer{flex-wrap:wrap}}
+@media(max-width:650px){
+  .administrative-portal .adw-dialog-backdrop.admin-excel-backdrop:has(>.admin-excel-import){padding:4px;box-sizing:border-box}
+  .administrative-portal .adw-dialog.admin-request-form.admin-excel-import{width:calc(100vw - 8px)!important;height:calc(100dvh - 8px)!important;max-height:calc(100dvh - 8px)!important;scrollbar-gutter:auto}
+  .admin-excel-table table,.admin-excel-table tbody,.admin-excel-table tr,.admin-excel-table td{display:block;width:auto}
+  .admin-excel-table thead{display:none}
+  .admin-excel-table tr{padding:12px;margin-bottom:12px;background:#0d2941;border:1px solid #365d76;border-radius:10px}
+  .admin-excel-table td{padding:6px 0;border:0;overflow-wrap:anywhere}
+  .admin-excel-table td::before{content:attr(data-label);display:block;font-size:11px;font-weight:700;color:#526e83;margin-bottom:4px}
+  .admin-excel-table td:last-child{min-width:0}
+  .admin-excel-table td:last-child button+button{margin-left:8px}
+}
+.admin-request-form.admin-excel-import{border-color:#3b6883;background:#091c2f;color:#eef9ff}
+.admin-request-form.admin-excel-import>header,.admin-request-form.admin-excel-import>footer{border-color:#365c75;background:#0d2941}
+.admin-request-form.admin-excel-import h3{color:#f4fbff}.admin-request-form.admin-excel-import>p{color:#b7cedb}
+.admin-request-form.admin-excel-import .admin-excel-tools{border-color:#365d76;background:#10283f}.admin-request-form.admin-excel-import .admin-excel-tools small{color:#b9d0dc}
+.admin-request-form.admin-excel-import .admin-excel-tools button,.admin-request-form.admin-excel-import>footer button{border:1px solid #4c849e;border-radius:8px;background:#17364e;color:#fff}
+.admin-request-form.admin-excel-import>footer button.primary{border-color:#54d6f0;background:linear-gradient(135deg,#087ba5,#1ab2d2)}
+.admin-request-form.admin-excel-import .admin-excel-table th{background:#102b43;color:#eaf8ff}.admin-request-form.admin-excel-import .admin-excel-table td{border-color:#36556b;color:#dcecf4}
+.admin-request-form.admin-excel-import .admin-excel-table tr{color:#eef9ff}
+.admin-request-form.admin-excel-import .admin-excel-table td small,.admin-request-form.admin-excel-import .admin-excel-table td::before{color:#9fc3d5}
+.admin-request-form.admin-excel-import .admin-excel-table .invalid{color:#ffb4ad}
+.admin-request-form.admin-excel-import .mw-error{border:1px solid #a74e59;background:#421f2b;color:#ffd9dd}

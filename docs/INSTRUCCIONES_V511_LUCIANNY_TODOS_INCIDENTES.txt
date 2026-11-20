@@ -1,0 +1,22 @@
+ACTUALIZACION V511 - LUCIANNY VE TODOS LOS INFORMES DE INCIDENTES
+
+Correccion definitiva:
+- La bandeja de Formularios administrativos reconoce directamente la cuenta lucianny.gonzalez.
+- No depende del rol tecnico, departamento asignado ni ruta usada para abrir Formularios administrativos.
+- Consulta todos los canales documentales para incluir informes historicos y actuales.
+- Muestra exclusivamente todos los informes de incidentes creados por todos los supervisores.
+- Incluye el informe existente creado por Steven y los que creen los supervisores en el futuro.
+- Lucianny puede abrir, recibir, aprobar o rechazar cada ticket y registrar montos aprobados.
+- Yessica conserva el mismo comportamiento.
+- El rol Supervisor permanece sin permiso para autorizar.
+- Se conservan las correcciones anteriores del PDF de incidentes.
+
+INSTALACION EN MONSTERASP
+1. Haga una copia de seguridad del sitio y de la base de datos.
+2. Detenga temporalmente el sitio o use app_offline.htm durante la sustitucion.
+3. Extraiga el ZIP completo en la raiz y reemplace todos los archivos.
+4. El paquete contiene las rutas raiz y wwwroot.
+5. Confirme que web.config apunta a RegistroAgencias.SqlServer.V511.exe.
+6. Inicie el sitio y compruebe /api/version: V511-WEB-20261113-1415.
+7. Lucianny debe cerrar sesion, volver a entrar y abrir Formularios administrativos.
+8. Debe aparecer el informe de Steven junto con todos los informes de incidentes existentes.

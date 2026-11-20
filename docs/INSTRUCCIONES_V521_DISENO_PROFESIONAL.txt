@@ -1,0 +1,24 @@
+ACTUALIZACIÓN V521 · DISEÑO PROFESIONAL INTEGRAL
+===============================================
+
+1. Realice copia de seguridad del sitio y la base de datos.
+2. Detenga temporalmente la aplicación en MonsterASP.
+3. Extraiga el ZIP y cargue todo su contenido en la raíz del sitio.
+4. No elimine App_Data, cargas, logs ni configuraciones privadas.
+5. Inicie la aplicación y confirme /api/version: V521-WEB-20261116-1510.
+6. Cierre sesión, pulse Ctrl+F5 e inicie sesión nuevamente.
+
+MEJORAS PRINCIPALES
+- Nueva capa visual profesional y coherente para todo el sistema.
+- Conserva los colores institucionales oscuros con textos blancos legibles.
+- Unifica tarjetas, paneles, formularios, botones, tablas, estados y modales.
+- Mejora jerarquía visual, espaciado, alineación y tamaños de texto.
+- Controles con foco visible, áreas táctiles correctas y estados consistentes.
+- Diseño adaptable mejorado para escritorio, tablet y móvil.
+- Formularios y ventanas extensas se desplazan sin cortar su contenido.
+- Respeta la preferencia del usuario para reducir animaciones.
+- Conserva íntegros todos los cambios funcionales de V520 y anteriores.
+
+EJECUTABLE
+- RegistroAgencias.SqlServer.V521.exe
+

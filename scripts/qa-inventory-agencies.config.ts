@@ -1,0 +1,2 @@
+import {defineConfig} from 'vite';import react from '@vitejs/plugin-react';import {fileURLToPath} from 'node:url';
+export default defineConfig({plugins:[react()],server:{watch:null},optimizeDeps:{entries:['scripts/qa-inventory-agencies.html']},resolve:{alias:{'@':fileURLToPath(new URL('../src',import.meta.url))}},build:{outDir:'tmp/inventory-agencies-preview',rollupOptions:{input:'scripts/qa-inventory-agencies.html'}},preview:{host:'127.0.0.1',port:5176,strictPort:true}});

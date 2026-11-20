@@ -1,0 +1,11 @@
+import {createRequire} from 'node:module';const require=createRequire('C:/Users/pc/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/loader.cjs');const {chromium}=require('playwright');
+const browser=await chromium.launch({headless:true,channel:'msedge'}),page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+await page.route('**/api/**',async route=>{const path=new URL(route.request().url()).pathname;
+ const json=path==='/api/admin/users'?{users:[{id:'bryan',email:'bryan.arias@grupotejeda.local',displayName:'Bryan Arias',role:'WAREHOUSE',supportTeam:'WAREHOUSE',isActive:true,groups:[],agencyCount:0,permissions:{canManageDepartment:true,canViewFieldAudits:true,canViewDashboard:true,canViewSupportDashboard:true}}]}:path==='/api/admin/groups-catalog'?{groups:[]}:{};await route.fulfill({json});});
+try{
+ await page.goto('http://127.0.0.1:5177/scripts/qa-manager-profile.html');await page.getByRole('button',{name:'Administradores y permisos',exact:true}).click();await page.getByPlaceholder('Buscar por nombre, apellido o usuario...').fill('bryan');await page.getByRole('button',{name:/Bryan Arias/}).click();
+ const role=page.getByRole('combobox',{name:/^Rol/});await role.waitFor();if(await role.inputValue()!=='DEPARTMENT_MANAGER')throw Error('Manager role not shown');if(await page.getByRole('combobox',{name:/^Departamento del gerente/}).inputValue()!=='WAREHOUSE')throw Error('Wrong department');
+ await role.selectOption('WAREHOUSE');await role.selectOption('DEPARTMENT_MANAGER');if(await page.getByRole('combobox',{name:/^Departamento del gerente/}).inputValue()!=='WAREHOUSE')throw Error('Department lost after selecting Manager');
+ await page.goto('http://127.0.0.1:5177/scripts/qa-manager-profile.html?manager');await page.getByPlaceholder('Buscar auditoría, agencia, empleado o ubicación...').waitFor();if(await page.getByRole('button',{name:'Administradores y permisos',exact:true}).count())throw Error('Manager has user admin');
+ if(errors.length)throw Error(errors.join('\n'));console.log('PASS Manager selector, warehouse retained, field-audit reader without user administration');
+}finally{await browser.close();}

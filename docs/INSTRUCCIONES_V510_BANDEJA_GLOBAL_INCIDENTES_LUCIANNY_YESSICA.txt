@@ -1,0 +1,23 @@
+ACTUALIZACION V510 - BANDEJA GLOBAL DE INFORMES DE INCIDENTES
+
+Contenido de esta version:
+- lucianny.gonzalez y Yessica Mercedes usan la misma bandeja dedicada de informes de incidentes.
+- La bandeja muestra todos los informes de incidentes creados por todos los supervisores.
+- No se limita a documentos propios, grupo, departamento ni supervisor creador.
+- Lucianny y Yessica pueden abrir, recibir y sellar cada informe.
+- Pueden aprobar o rechazar individualmente cada ticket y registrar el monto aprobado.
+- El administrador principal conserva acceso global.
+- Los supervisores pueden crear y consultar sus informes, pero no pueden autorizar.
+- Se conservan todas las correcciones anteriores del PDF de incidentes.
+
+INSTALACION EN MONSTERASP
+1. Realice una copia de seguridad del sitio y de la base de datos.
+2. Detenga temporalmente el sitio o utilice app_offline.htm durante la sustitucion.
+3. Extraiga el ZIP completo en la raiz del sitio y reemplace todos los archivos.
+4. El paquete contiene las rutas raiz y wwwroot para compatibilidad con MonsterASP.
+5. Confirme que web.config apunta a RegistroAgencias.SqlServer.V510.exe.
+6. Inicie el sitio y compruebe /api/version: V510-WEB-20261113-1400.
+7. Inicie sesion con lucianny.gonzalez y abra Formularios administrativos.
+8. La pantalla debe titularse Informes de incidentes y mostrar los informes de todos los supervisores.
+
+Lucianny y Yessica pueden usar el perfil Administrativo o el perfil administrativo departamental. El acceso se reconoce por sus cuentas autorizadas y nunca habilita al rol Supervisor.

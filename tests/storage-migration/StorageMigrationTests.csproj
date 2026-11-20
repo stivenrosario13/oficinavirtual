@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App"/><PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.3"/>
+    <Compile Include="../../api/StorageService.cs" Link="StorageService.cs"/>
+    <Compile Include="../../api/StorageMigrationRunner.cs" Link="StorageMigrationRunner.cs"/>
+    <Compile Include="../../api/StorageUploadQueue.cs" Link="StorageUploadQueue.cs"/>
+    <Compile Include="../../api/StorageDocumentInventory.cs" Link="StorageDocumentInventory.cs"/>
+  </ItemGroup>
+</Project>

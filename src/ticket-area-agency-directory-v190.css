@@ -99,6 +99,7 @@
 .agency-import-preview > footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 14px 14px; }
 .agency-import-preview > footer small { color: #9abfd2; }
 .agency-import-preview > footer button { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: 8px; border: 1px solid #4ad2aa; border-radius: 12px; padding: 8px 14px; background: #147457; color: #fff; font-weight: 900; }
+.agency-import-progress{position:relative;display:grid;gap:7px;margin:0 14px 14px;border:1px solid #2d6f8e;border-radius:10px;padding:12px;overflow:hidden;background:#081f33}.agency-import-progress>span{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#0d795e55,#2bcba766);transition:width .25s ease}.agency-import-progress>small{position:relative;color:#dffaff;font-weight:800;text-align:center}
 .agency-import-errors { display: flex; gap: 12px; margin: 0 14px 14px; border: 1px solid #bb5b67; border-radius: 13px; padding: 14px; background: #4a1826; color: #ff9aab; }
 .agency-import-errors > span { display: grid; gap: 5px; }
 .agency-import-errors strong { color: #fff; }

@@ -21,7 +21,7 @@ sealed partial class Database
                 BEGIN
                     CREATE TABLE dbo.persistent_login_tokens(
                         id uniqueidentifier NOT NULL CONSTRAINT DF_persistent_login_tokens_id DEFAULT NEWID(),
-                        user_id uniqueidentifier NOT NULL,
+                        user_id char(36) NOT NULL,
                         token_hash varbinary(32) NOT NULL,
                         created_at datetime2(3) NOT NULL CONSTRAINT DF_persistent_login_tokens_created DEFAULT SYSUTCDATETIME(),
                         last_used_at datetime2(3) NOT NULL CONSTRAINT DF_persistent_login_tokens_used DEFAULT SYSUTCDATETIME(),
@@ -40,17 +40,18 @@ sealed partial class Database
         finally{PersistentSessionSchemaLock.Release();}
     }
 
-    public async Task<string?> CreatePersistentLoginToken(string userId,CancellationToken ct)
+    public async Task<string?> CreatePersistentLoginToken(string userId,CancellationToken ct,string recoveryVersion="")
     {
         if(!Guid.TryParse(userId,out var id))return null;
         var token=Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         await using var connection=await Open(ct);
         await EnsurePersistentSessionSchema(connection,ct);
-        await using var command=new SqlCommand("INSERT INTO dbo.persistent_login_tokens(user_id,token_hash) VALUES(@userId,@hash);",connection);
-        command.Parameters.AddWithValue("@userId",id);
+        await EnsureRecoverySchema(connection,ct);
+        await using var command=new SqlCommand("INSERT INTO dbo.persistent_login_tokens(user_id,token_hash) SELECT @userId,@hash FROM dbo.admin_users u WITH(UPDLOCK,HOLDLOCK) WHERE u.id=@userId AND u.is_active=1 AND COALESCE((SELECT session_version FROM dbo.account_recovery r WHERE r.user_id=CONVERT(nvarchar(80),u.id)),N'')=@version;",connection);
+        command.Parameters.AddWithValue("@userId",id.ToString());
+        command.Parameters.AddWithValue("@version",recoveryVersion);
         command.Parameters.Add("@hash",System.Data.SqlDbType.VarBinary,32).Value=PersistentSessionHash(token);
-        await command.ExecuteNonQueryAsync(ct);
-        return token;
+        return await command.ExecuteNonQueryAsync(ct)==1?token:null;
     }
 
     public async Task<AdminIdentity?> RestorePersistentLogin(string? token,CancellationToken ct)
@@ -63,9 +64,13 @@ sealed partial class Database
         {
             command.Parameters.Add("@hash",System.Data.SqlDbType.VarBinary,32).Value=PersistentSessionHash(token);
             var value=await command.ExecuteScalarAsync(ct);
-            if(value is Guid id)userId=id;
+            if(Guid.TryParse(Convert.ToString(value),out var id))userId=id;
         }
-        return userId is Guid restoredId?await Account(restoredId,ct):null;
+        if(userId is not Guid restoredId)return null;
+        var account=await Account(restoredId,ct);
+        await using var stillValid=new SqlCommand("SELECT COUNT(*) FROM dbo.persistent_login_tokens WHERE token_hash=@hash AND revoked_at IS NULL",connection);
+        stillValid.Parameters.Add("@hash",System.Data.SqlDbType.VarBinary,32).Value=PersistentSessionHash(token);
+        return Convert.ToInt32(await stillValid.ExecuteScalarAsync(ct))==1?account:null;
     }
 
     public async Task RevokePersistentLogin(string? token,CancellationToken ct)

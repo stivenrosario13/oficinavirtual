@@ -1,0 +1,27 @@
+ACTUALIZACION V469 - LECTURA NATURAL DE AGENCIAS E INTERRUPCION POR VOZ - MONSTERASP
+
+CAMBIOS V469
+1. El robot lee los códigos de agencia de dos dígitos en dos dígitos, conservando correctamente los ceros.
+2. Ejemplo: 6011055 se pronuncia “sesenta, once, cero cinco, cinco”.
+3. Al mencionar o confirmar una agencia, también pronuncia el nombre de la agencia.
+4. En opciones ambiguas pronuncia código, nombre y grupo para que el Administrador principal pueda elegir correctamente.
+5. Mientras el robot habla, mantiene una escucha especial para detectar si el usuario quiere interrumpirlo.
+6. Cuando el usuario habla, el robot detiene su lectura y procesa inmediatamente la nueva respuesta.
+7. Incluye protección contra eco para evitar que el robot confunda su propia voz con la voz del usuario.
+8. Conserva todas las validaciones estrictas de agencias, fallas, áreas, inventario, cantidades y datos obligatorios de V468.
+9. No crea tickets ni solicitudes si falta un dato obligatorio o existe una selección ambigua.
+10. Solo el Administrador principal puede utilizar el robot.
+
+INSTALACION
+1. Detén el sitio y el Application Pool en MonsterASP.
+2. Extrae el ZIP conservando su estructura y reemplaza la publicación anterior.
+3. No borres App_Data, uploads ni la base de datos del servidor.
+4. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V469.exe.
+5. Inicia el sitio y confirma V469 en /api/version y /version-web.json.
+6. Abre por HTTPS, permite micrófono y sonido, y recarga con Ctrl+F5.
+
+NOTA DEL NAVEGADOR
+La primera autorización del micrófono requiere una interacción del usuario por seguridad del navegador. Si no comienza automáticamente, pulsa una vez el botón del robot. Para interrumpir una respuesta hablada, habla normalmente; el robot detendrá la lectura cuando reconozca una frase distinta de su propio audio.
+
+SEGURIDAD
+Este paquete contiene configuración privada de almacenamiento. No lo compartas públicamente.

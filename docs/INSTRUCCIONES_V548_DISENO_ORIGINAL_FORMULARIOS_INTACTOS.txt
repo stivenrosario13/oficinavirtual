@@ -1,0 +1,17 @@
+ACTUALIZACIÓN V548 PARA MONSTERASP
+
+RESULTADO
+- Restaura exactamente el diseño original V539/V536 del catálogo administrativo.
+- Elimina el catálogo ancho de cuatro columnas de la entrega anterior.
+- Recupera el modal compacto de tres columnas en escritorio.
+- Conserva intactos los 17 formularios administrativos, sus campos, permisos y funcionamiento.
+
+INSTALACIÓN
+1. No utilices el paquete V547 de cuatro columnas.
+2. Detén temporalmente el sitio o el grupo de aplicaciones.
+3. Extrae este ZIP directamente sobre la carpeta principal publicada.
+4. Reemplaza los archivos existentes cuando MonsterASP lo solicite.
+5. Inicia nuevamente el sitio y fuerza una recarga con Ctrl+F5.
+
+SEGURIDAD
+El paquete no contiene web.config, appsettings, .env, Data, App_Data, uploads ni logs.

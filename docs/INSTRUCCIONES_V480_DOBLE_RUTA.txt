@@ -1,0 +1,21 @@
+ACTUALIZACION V480 - MISMAS SECCIONES ADMINISTRATIVAS EN TODOS LOS DEPARTAMENTOS
+
+CAMBIOS
+1. El perfil Administrativo de cada departamento abre el mismo menu que Administracion.
+2. Incluye Soporte, Archivos y comunicaciones, Formularios administrativos y Solicitudes a Almacen.
+3. Auditoria operativa e Inventario administrativo siguen sujetos a los mismos permisos de Administracion.
+4. Conserva el departamento de cada cuenta y reconoce perfiles administrativos anteriores.
+5. Navegacion unificada en computadora y movil, sin menus duplicados.
+
+INSTALACION EN MONSTERASP
+1. Haz una copia de seguridad de la publicacion y configuracion actuales.
+2. Deten el sitio y el Application Pool.
+3. Extrae este ZIP en la misma carpeta donde aplicaste la actualizacion anterior, conservando toda su estructura. Incluye las dos rutas habituales de publicacion.
+4. Reemplaza los archivos de la aplicacion. Conserva App_Data, uploads, logs, archivos .env, configuracion de conexion y la base de datos existentes.
+5. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V480.exe. Sube web.config al final de la transferencia.
+6. Inicia el sitio y el Application Pool. Comprueba V480 en /api/version y /version-web.json.
+7. Cierra sesion, recarga con Ctrl+F5 y vuelve a entrar para actualizar la identidad del perfil y comprobar las secciones.
+
+CONTENIDO
+Interfaz compilada, API .NET 8, dependencias e instrucciones. No incluye datos de usuarios ni requiere ejecutar SQL manualmente para este cambio.
+El paquete conserva la configuracion privada de almacenamiento del formato habitual. Guardalo como archivo privado.

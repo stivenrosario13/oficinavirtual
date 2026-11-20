@@ -1,0 +1,31 @@
+ACTUALIZACION V501 - INFORME DE INCIDENTES - MONSTERASP
+========================================================
+
+CONTENIDO
+- Formulario limitado a: Fecha de elaboracion, Elaborado por, Departamento,
+  Asunto, Grupo del supervisor, Agencia, Numero de ticket y Contacto de la
+  agente de venta.
+- El grupo se completa automaticamente para el supervisor segun la agencia.
+- Se admiten varios tickets de la misma agencia dentro de una solicitud.
+- Yessica/Yesica Mercedes y el administrador principal pueden aprobar o
+  rechazar cada ticket de manera independiente.
+- Cada ticket aprobado exige el monto a pagar; cada rechazo exige su motivo.
+- El formulario PDF autorizado se reconstruye con el resultado, monto,
+  responsable, fecha y detalle de cada ticket.
+
+INSTALACION SEGURA
+1. Haz una copia de seguridad del sitio y de la base de datos.
+2. No borres App_Data, uploads, logs ni la configuracion privada existente.
+3. Extrae este ZIP en la raiz del sitio. El paquete incluye las dos rutas
+   compatibles: raiz y wwwroot.
+4. Permite reemplazar archivos con el mismo nombre. No elimines los anteriores.
+5. Reinicia la aplicacion desde MonsterASP.
+6. Abre una ventana privada y confirma la version V501-WEB-20261112-1830.
+
+PRUEBA RECOMENDADA
+1. Un supervisor crea un informe con D488 y OBB8 para la misma agencia.
+2. Yessica Mercedes o el administrador usa Recibir y sellar.
+3. Aprueba D488, registra su monto y rechaza OBB8 con un motivo.
+4. Descarga el PDF autorizado y confirma ambos resultados por separado.
+
+Este cambio no requiere una migracion SQL y conserva los informes anteriores.

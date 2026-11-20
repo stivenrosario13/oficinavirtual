@@ -1,0 +1,101 @@
+import {createRequire} from 'node:module';
+import {mkdir} from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import {PDFDocument,StandardFonts} from 'pdf-lib';
+const require=createRequire('C:/Users/pc/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/loader.cjs');
+const {chromium}=require('playwright');
+const base=process.env.QA_URL||'http://127.0.0.1:5199';
+await mkdir('outputs/administrative-workspace',{recursive:true});
+const pdf=await PDFDocument.create();pdf.setSubject('REAL-ADMINISTRATIVE-FORM-V376|ADMIN_SEAL=1,110,220,87,33');
+const font=await pdf.embedFont(StandardFonts.Helvetica);
+for(let i=0;i<2;i++)pdf.addPage([612,792]).drawText('Entrega de SIM y equipo - Documento de prueba',{x:50,y:730,size:16,font});
+const bytes=Buffer.from(await pdf.save());
+const document={id:1,title:'Entrega de SIM y equipo · SOL-ADM-20261006191223-8318',originalFileName:'entrega.pdf',contentType:'application/pdf',size:bytes.length,department:'Tecnología',recipientDepartment:'Administración',ownerDisplayName:'Rosmarlin Vittini',ownerUserName:'qa',createdUtc:'2026-10-06T19:12:23Z',receivedUtc:'2026-10-07T12:00:00Z',receiverDisplayName:'Administrativo QA',status:'approved',area:'communications',channel:'requirements',isOwner:true,isRecipient:true,canMove:false,canEdit:false,fileUrl:'/api/qa-document.pdf',sharedWith:[],history:[],administrativeRequest:{formType:'DEVICE',number:'SOL-ADM-20261006191223-8318',assetType:'FLOTA',targetName:'Empleado QA',formData:{}},administrativeDelivery:{receivedBy:'Empleado QA',at:'2026-10-07T15:00:00Z'}};
+Object.assign(document,{receiverLogin:'admin.qa',receiptCode:'REC-QA',verificationToken:'qa-token',decisionBy:'Administrativo QA',decisionUtc:'2026-10-07T13:00:00Z'});
+Object.assign(document.administrativeDelivery,{deliveredBy:'Administrativo QA',deliveredLogin:'admin.qa',number:'ENT-QA'});
+const browser=await chromium.launch({headless:true,channel:'msedge'});
+try{
+ for(const width of [1440,768,390]){
+  const page=await browser.newPage({viewport:{width,height:1000},serviceWorkers:'block'}),errors=[],writes=[];
+  await page.addInitScript(()=>{localStorage.setItem('push-prompt-dismissed','1');localStorage.setItem('portal-sidebar-collapsed','0')});
+  page.on('pageerror',error=>errors.push(error.message));
+  await page.route(/^https:\/\//,route=>route.abort());
+  await page.route('**/api/**',async route=>{
+   const req=route.request(),path=new URL(req.url()).pathname;
+   if(path==='/api/admin/session')return route.fulfill({json:{authenticated:true,id:'admin-qa',email:'derihan.alisha@grupotejeda.local',displayName:'Administrativo QA',role:'Administrative',scope:'all',supportDepartment:null,supportTeam:null,mustChangePassword:false,avatarUrl:null,permissions:{canView:true,canCreateTickets:true,canConfigureProfile:true}}});
+   if(path==='/api/license/status')return route.fulfill({json:{enabled:true,allowed:true,status:'ACTIVE',code:'ACTIVE',message:'QA',usingGracePeriod:false}});
+   if(path==='/api/institutional-documents/1')return route.fulfill({json:document});
+   if(path==='/api/qa-document.pdf')return route.fulfill({contentType:'application/pdf',body:bytes});
+   if(path==='/api/institutional-documents')return route.fulfill({json:[document]});
+   if(path==='/api/institutional-documents/users')return route.fulfill({json:[]});
+   if(path==='/api/administrative-files'||path==='/api/administrative-files/folders')return route.fulfill({json:[]});
+   if(path==='/api/tickets/agencies')return route.fulfill({json:{agencies:[{id:'agency-qa',codigo:'123',terminal:'Agencia QA',grupo:'Grupo QA'}]}});
+   if(path==='/api/support/catalog')return route.fulfill({json:{departments:['TECHNOLOGY','GENERAL_SERVICES','HUMAN_RESOURCES'].map((code,i)=>({code,name:['Tecnología','Servicios Generales','Recursos Humanos'][i],categories:[{code:'CPU_FAILURE',name:'Falla CPU',description:'CPU sin encender, lenta o con avería de hardware.',defaultPriority:'HIGH',isActive:true,requiresDetail:false},{code:'PRINTER_FAILURE',name:'Falla en el printer',description:'Impresora sin operar o con impresión defectuosa.',defaultPriority:'CRITICAL',isActive:true,requiresDetail:true,detailLabel:'Detalle del printer',options:['No imprime','Papel atascado']}]}))}});
+   if(path==='/api/tickets'&&req.method()==='POST'){writes.push(req.postDataJSON());return route.fulfill({json:{ticketNumber:100+writes.length}})}
+   if(path==='/api/tickets/notifications')return route.fulfill({json:{notifications:[],unreadCount:0}});
+   if(path==='/api/warehouse/fulfillment/inventory')return route.fulfill({json:[]});
+   if(path==='/api/groups')return route.fulfill({json:{groups:[]}});
+   return route.fulfill({json:{tickets:[],notifications:[],unreadCount:0}});
+  });
+  const nav=async name=>{const trigger=page.getByRole('button',{name:'Abrir menú principal',exact:true});if(await trigger.isVisible())await trigger.click();await page.locator('#portal-sidebar').getByRole('button',{name,exact:true}).click()};
+  await page.goto(base,{waitUntil:'domcontentloaded'});
+  await page.getByRole('button',{name:'Ver formulario',exact:true}).waitFor();
+  assert.equal(await page.locator('.administrative-portal-nav').count(),0);
+  await page.getByRole('button',{name:'Ver formulario',exact:true}).click();
+  await page.locator('.id-pdf canvas').waitFor();
+  await page.waitForFunction(()=>document.querySelector('.id-pdf canvas')?.width>300);
+  await page.getByText('Página 1 / 3',{exact:true}).waitFor();
+  assert.equal(await page.locator('.native-doc-detail-toolbar h2').evaluate(el=>getComputedStyle(el).color),'rgb(255, 255, 255)');
+  await page.getByRole('button',{name:'Acercar documento'}).click();assert.equal(await page.locator('.id-document-zoom output').textContent(),'110%');
+  await page.getByRole('button',{name:'Siguiente',exact:true}).click();await page.getByText('Página 2 / 3',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Anterior',exact:true}).waitFor({state:'visible'});
+  await page.waitForFunction(()=>!document.querySelector('.id-pdf-loading'));
+  assert.ok(await page.locator('.native-doc-detail-toolbar').evaluate(el=>el.getBoundingClientRect().height)<400,'Document toolbar should stay compact');
+  assert.equal(await page.locator('.native-doc-error').count(),0);
+  const overlapping=await page.locator('.document-action-bar').evaluate(el=>{const boxes=[...el.querySelectorAll('button,a')].map(e=>e.getBoundingClientRect());return boxes.some((a,i)=>boxes.slice(i+1).some(b=>a.left<b.right&&b.left<a.right&&a.top<b.bottom&&b.top<a.bottom))});assert.equal(overlapping,false);
+  await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:`outputs/administrative-workspace/document-${width}.png`,fullPage:true,animations:"disabled"});
+  await nav('Archivos y comunicaciones');await page.getByRole('heading',{name:'Biblioteca de Administración',exact:true}).waitFor();
+  for(const label of ['Nueva carpeta','Subir archivos'])assert.equal(await page.getByRole('button',{name:label,exact:true}).count(),1);
+  assert.equal(await page.getByText('Solicitudes a Taller',{exact:true}).count(),0);
+  await page.screenshot({path:`outputs/administrative-workspace/files-${width}.png`,fullPage:true,animations:"disabled"});
+  await nav('Solicitudes a Almacén');await page.getByRole('heading',{name:'Solicitudes de equipo',exact:true}).waitFor();
+  await nav('Formularios administrativos');await page.getByRole('button',{name:'Nueva solicitud',exact:true}).click();
+  await page.locator('.admin-form-cards').waitFor();assert.equal(await page.locator('.admin-form-cards>button').count(),2);
+  await page.getByRole('button',{name:/Entrega de SIM y equipo/}).click();
+  assert.equal(await page.locator('.admin-request-form>header h3').evaluate(el=>getComputedStyle(el).color),'rgb(255, 255, 255)');
+  assert.equal(await page.locator('.admin-inline-back').evaluate(el=>{const a=el.getBoundingClientRect(),b=el.nextElementSibling.getBoundingClientRect();return a.bottom>b.top}),false,'Back button must not overlap the form heading');
+  await page.screenshot({path:`outputs/administrative-workspace/form-${width}.png`,fullPage:true,animations:"disabled"});
+  await page.locator('.admin-request-form>header>button').click();
+  await nav('Soporte');await page.getByRole('button',{name:/Crear ticket interno/}).click();
+  await page.locator('.internal-department-grid').getByRole('button',{name:/Tecnología/}).click();
+  await page.screenshot({path:`outputs/administrative-workspace/support-${width}.png`,fullPage:true,animations:"disabled"});
+  await page.getByRole('button',{name:/Falla CPU/}).click();await page.getByRole('button',{name:/Falla en el printer/}).click();
+  await page.getByRole('button',{name:/Continuar con 2 casos/}).click();
+  await page.getByRole('combobox',{name:'Agencia',exact:true}).fill('Agencia QA');await page.getByRole('option',{name:/123 · Agencia QA/}).click();await page.getByLabel('Detalle del printer',{exact:true}).selectOption('No imprime');
+  await page.getByLabel('Asunto',{exact:true}).fill('Soporte administrativo');await page.getByLabel('Descripción de la falla',{exact:true}).fill('La agencia necesita asistencia con ambos equipos.');
+  await page.getByRole('button',{name:'Enviar ticket interno',exact:true}).click();await page.getByRole('dialog').waitFor({state:'hidden'});
+  assert.equal(writes.length,2);assert.equal(writes[0].ticketType,'INTERNAL');assert.equal(writes[0].priority,'CRITICAL');assert.ok(writes[1].description.includes('No imprime'));
+  assert.deepEqual(errors,[]);console.log(`PASS ${width}px: sidebar, files, warehouse, form catalog, white titles, PDF controls, two internal tickets; mocked API only.`);
+  await page.close();
+ }
+ for(const [code,name] of [['TECHNOLOGY','Tecnología'],['GENERAL_SERVICES','Servicios Generales'],['HUMAN_RESOURCES','Recursos Humanos'],['ADMINISTRATIVE','Administración'],['COMMUNICATION','Comunicación'],['COMMERCIALIZATION','Comercialización'],['TREASURY','Tesorería'],['ACCOUNTING','Contabilidad'],['CALL_CENTER','Call Center'],['TECHNICAL_FAILURE','Avería Técnica']]){
+  const page=await browser.newPage({viewport:{width:1440,height:1000},serviceWorkers:'block'}),errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.addInitScript(()=>localStorage.setItem('push-prompt-dismissed','1'));
+  await page.route(/^https:\/\//,route=>route.abort());
+  await page.route('**/api/**',route=>{
+   const path=new URL(route.request().url()).pathname;
+   if(path==='/api/admin/session')return route.fulfill({json:{authenticated:true,id:'qa',role:'Department',assignedDepartment:code,email:'qa@example.invalid',displayName:'Departamento QA',scope:'all',supportDepartment:null,supportTeam:null,permissions:{canView:true,canCreateTickets:true}}});
+   if(path==='/api/license/status')return route.fulfill({json:{enabled:true,allowed:true,status:'ACTIVE',code:'ACTIVE',message:'QA'}});
+   if(path==='/api/tickets/agencies')return route.fulfill({json:{agencies:[]}});
+   return route.fulfill({json:[]});
+  });
+  await page.goto(base,{waitUntil:'domcontentloaded'});
+  await page.getByRole('heading',{name:`Biblioteca de ${name}`,exact:true}).waitFor();
+  const sidebar=page.locator('#portal-sidebar');
+  await sidebar.getByRole('button',{name:'Formularios administrativos',exact:true}).click();await page.getByRole('heading',{name:'Solicitudes administrativas',exact:true}).waitFor();
+  await sidebar.getByRole('button',{name:'Solicitudes a Almacén',exact:true}).click();await page.getByRole('heading',{name:'Solicitudes de equipo',exact:true}).waitFor();
+  await sidebar.getByRole('button',{name:'Archivos y comunicaciones',exact:true}).click();await page.getByRole('heading',{name:`Biblioteca de ${name}`,exact:true}).waitFor();
+  assert.equal(await page.locator('.request-hub-cards,.administrative-portal-nav').count(),0);assert.deepEqual(errors,[]);
+  console.log(`PASS ${name}: document sections controlled by sidebar.`);await page.close();
+ }
+}finally{await browser.close()}

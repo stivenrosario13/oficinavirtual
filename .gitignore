@@ -30,6 +30,16 @@
 **/obj/
 /artifacts/
 
+# Local Codex work products and generated inspection/build folders
+/.codex/
+/.codex-*/
+
+# Generated desktop-agent release bundles
+/bloom-cobros-agent/dist/
+
+# Separate portfolio projects and packaged site exports
+/sites/
+
 # Generated releases, previews and local runtime data
 /outputs/
 /output/

@@ -1,0 +1,23 @@
+ACTUALIZACION V484 - REPORTES DE TALLER Y EJECUTIVOS POR DEPARTAMENTO
+
+CAMBIOS PRINCIPALES
+- Taller incluye un reporte diario de todos los movimientos realizados.
+- El reporte de Taller permite seleccionar el dia mediante calendario y descargar un PDF con el logo institucional.
+- El PDF ejecutivo incluye Taller y presenta cada departamento con sus datos separados.
+- Tickets, hallazgos, responsables, solicitudes de Almacen y actividad de Taller se identifican claramente.
+- Se mejoraron el orden, los indicadores, las tablas, el diseno y los saltos de pagina del PDF ejecutivo.
+
+INSTALACION EN MONSTER ASP
+1. Conserva una copia de seguridad y detiene el sitio y el Application Pool.
+2. Extrae el ZIP sobre la publicacion actual.
+3. No elimines ni reemplaces manualmente App_Data, uploads, logs, .env ni la base de datos.
+4. Confirma que web.config apunte a .\RegistroAgencias.SqlServer.V484.exe y subelo al final.
+5. Inicia el sitio y comprueba V484 en /api/version.
+6. Cierra sesion, vuelve a entrar y recarga el navegador con Ctrl+F5.
+
+COMPROBACIONES
+- En Taller debe aparecer el boton Reporte diario y la pestana Reporte de movimientos.
+- En Reportes ejecutivos debe aparecer Movimientos de Taller y una ficha independiente para cada departamento.
+- Descarga ambos PDF y confirma el logo REAL / Grupo Tejeda.
+
+No requiere ejecutar SQL manualmente. El paquete contiene configuracion privada de almacenamiento; no lo compartas publicamente.

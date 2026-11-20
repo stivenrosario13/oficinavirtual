@@ -1,4 +1,17 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {passwordChangeEvent,startSessionValidation} from "@/lib/session-validation";
+import { apiFetch as fetch } from "@/lib/api-fetch";
+import { lazy as reactLazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { lazySection as lazy } from './components/vite/LazySection';
+const WarehouseRequesterWorkspace=lazy(()=>import('./components/vite/WarehouseRequesterWorkspace'));
+import {canReceiveWarehouseNotifications,isWarehouseNotificationUser,playWarehouseAlert} from './lib/warehouse-alert';
+const WarehouseNotificationDocument=lazy(()=>import('./components/vite/WarehouseNotificationDocument'));
+import {canManageWorkshop} from './lib/workshop-access';
+const WorkshopWorkspace=lazy(()=>import('./components/vite/WorkshopWorkspace'));
+const WarehouseSupport=lazy(()=>import('./components/vite/WarehouseSupport'));
+const WarehouseLiveQueuePage=lazy(()=>import('./components/vite/WarehouseLiveQueuePage'));
+const WarehouseRequestComposer=lazy(()=>import('./components/vite/WarehouseRequestComposer'));
+const AdminHeaderVoiceAssistant=reactLazy(()=>import('./components/vite/AdminHeaderVoiceAssistant'));
 import {
   BarChart3,
   Bell,
@@ -6,9 +19,14 @@ import {
   Building2,
   CheckCircle2,
   CheckCheck,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
+  FileText,
+  FileSignature,
+  FolderOpen,
+  Home,
   LifeBuoy,
   KeyRound,
   LoaderCircle,
@@ -23,31 +41,62 @@ import {
   ShieldCheck,
   Trash2,
   UserRound,
+  Warehouse,
   X,
 } from "lucide-react";
-import EvidenceSuccess from "@/components/vite/EvidenceSuccess";
-import EmployeeAuditForm from "@/components/vite/EmployeeAuditForm";
+const EvidenceSuccess=lazy(()=>import("@/components/vite/EvidenceSuccess"));
+const EmployeeAuditForm=lazy(()=>import("@/components/vite/EmployeeAuditForm"));
 import PortalLogin from "@/components/vite/PortalLogin";
-import ProfileSettings from "@/components/vite/ProfileSettings";
-import SupportChat from "@/components/vite/SupportChat";
+const ProfileSettings=lazy(()=>import("@/components/vite/ProfileSettings"));
+const SupportChat=lazy(()=>import("@/components/vite/SupportChat"));
 import type { PortalSession } from "@/lib/session";
 import { sessionRoleLabel } from "@/lib/session";
+import {isAdministrativeProfile,isIncidentOperatorAccount} from './lib/administrative-profiles';
+import {userDepartments} from './lib/user-departments';
+const ManagerDepartmentSupport=lazy(()=>import('./components/vite/ManagerDepartmentSupport'));
+const DepartmentWorkspace=lazy(()=>import('./components/vite/AdministrativeWorkspace'));
+import DepartmentDocumentNavigation, {type DepartmentDocumentSection} from './components/vite/DepartmentDocumentNavigation';
 import type { OperationsTicket } from "@/lib/operations-center";
 import {deviceDate,deviceTimestamp} from "@/lib/display";
+import type {VoiceWarehouseBatch} from "@/lib/voice-operation-assistant";
 
-const EquipmentTracking = lazy(()=>import("./components/vite/WorkshopBoard").then(module=>({default:module.EquipmentTracking})));
+const EquipmentTracking = lazy(async()=>{const module=await import("./components/vite/WorkshopBoard");return {default:module.EquipmentTracking};});
 const AdminPanel = lazy(() => import("@/components/vite/AdminPanel"));
+const UsersPermissionsWorkspace = lazy(() => import('./components/vite/UsersPermissionsWorkspace'));
 const TicketCenter = lazy(() => import("@/components/vite/TicketCenter"));
 const OperationsCenter = lazy(() => import("@/components/vite/OperationsCenter"));
+import AdministrativeNavigation, {type AdministrativeSection} from "./components/vite/AdministrativeNavigation";
+const AdministrativePortal = lazy(() => import("@/components/vite/AdministrativePortal"));
+const AdministrativeRequests = lazy(() => import("@/components/vite/AdministrativeRequests"));
+const ExecutiveReports = lazy(() => import("@/components/vite/ExecutiveReports"));
+import PortalHome, { type PortalHomeModule } from "@/components/vite/PortalHome";
+
+const StorageMigrationPanel = lazy(() => import("./components/vite/StorageMigrationPanel"));
+const AgencyLocations = lazy(() => import("./components/vite/AgencyLocations"));
 
 type PortalView =
+  | "home"
+  | "locations"
+  | "storage"
   | "audit"
   | "dashboard"
+  | "users"
+  | "executiveReports"
+  | "managerSupport"
+  | "managerFiles"
+  | "managerQueue"
+  | "managerAudit"
   | "tickets"
+  | "createTicket"
   | "warehouse"
+  | "warehouseQueue"
   | "workshop"
+  | "reception"
   | "systemAudit"
-  | "queue";
+  | "queue"
+  | "incidentReports";
+
+type DepartmentSidebarSection = "support" | DepartmentDocumentSection | "transitions" | "agencies";
 
 type Step = "group" | "agency" | "details" | "success";
 type Group = { grupo: string; pending: number };
@@ -57,6 +106,9 @@ type Agency = {
   terminal: string;
   expectedLatitude?: number | null;
   expectedLongitude?: number | null;
+  auditCount?: number;
+  lastAuditedAt?: string | null;
+  status?: "PENDING" | "COMPLETED" | "REVIEW_REQUIRED";
 };
 type Geo = {
   latitude: number;
@@ -106,7 +158,7 @@ type TicketNotification = {
   message: string | null;
   actorName: string | null;
   notificationId: string | null;
-  ticketType: "SUPPORT" | "INTERNAL";
+  ticketType: "SUPPORT" | "INTERNAL" | "FINDING" | "WAREHOUSE";
   isRead: boolean;
 };
 type ChatNotification = {
@@ -122,11 +174,12 @@ type ChatNotification = {
   isRead: boolean;
 };
 export type SupportNavigationTarget = {
-  kind: "TICKET" | "CHAT";
+  kind: "TICKET" | "CHAT" | "FINDING";
   assignedDepartment: string;
   ticketId?: string;
   ticketNumber?: number;
-  ticketType?: "SUPPORT" | "INTERNAL";
+  ticketType?: "SUPPORT" | "INTERNAL" | "FINDING";
+  findingId?: string;
   ticketStatus?: string;
   conversationId?: string;
   requestKey: number;
@@ -134,15 +187,7 @@ export type SupportNavigationTarget = {
 type NotificationItem = TicketNotification | ChatNotification;
 type NotificationToast = { key: string; item: NotificationItem };
 type PendingNotificationReceipt = { key: string; at: string };
-type LicenseStatus = {
-  enabled: boolean;
-  allowed: boolean;
-  status: string;
-  code: string;
-  message: string;
-  expiresAt?: string | null;
-  usingGracePeriod: boolean;
-};
+import {readLicenseStatus,type LicenseStatus} from './lib/license-status';
 
 const stringValue = (value: unknown, fallback = "") =>
   typeof value === "string" || typeof value === "number"
@@ -161,6 +206,7 @@ const normalizeTicketEvent = (
     OPENED: "CREATED",
     ASSIGN: "ASSIGNED",
     ASSIGNED: "ASSIGNED",
+    REASSIGNED: "ASSIGNED",
     ESCALATE: "ESCALATED",
     ESCALATED: "ESCALATED",
     TRANSFERRED: "ESCALATED",
@@ -243,9 +289,7 @@ const normalizeTicketNotification = (
     notificationId:
       stringValue(item.notificationId ?? item.notification_id).trim() || null,
     ticketType:
-      stringValue(item.ticketType ?? item.ticket_type).toUpperCase() === "INTERNAL"
-        ? "INTERNAL"
-        : "SUPPORT",
+      stringValue(item.ticketType ?? item.ticket_type).toUpperCase() === "WAREHOUSE"?"WAREHOUSE":stringValue(item.ticketType ?? item.ticket_type).toUpperCase() === "FINDING"?"FINDING":stringValue(item.ticketType ?? item.ticket_type).toUpperCase() === "INTERNAL"?"INTERNAL":"SUPPORT",
     isRead: Boolean(item.isRead ?? item.is_read),
   };
 };
@@ -262,7 +306,7 @@ const ticketEventLabel: Record<TicketNotificationEvent, string> = {
 };
 
 const ticketNotificationTitle = (item: TicketNotification) =>
-  `${ticketEventLabel[item.eventType]} · Ticket #${item.ticketNumber}`;
+  item.ticketType==="WAREHOUSE"?`Nueva solicitud a Almacén · ${item.codigo}`:item.ticketType==="FINDING"?`${ticketEventLabel[item.eventType]} · Hallazgo automático`:`${ticketEventLabel[item.eventType]} · Ticket #${item.ticketNumber}`;
 
 const ticketNotificationDetail = (item: TicketNotification) =>
   item.message ||
@@ -288,7 +332,7 @@ const legacyNotificationIdentity = (item: NotificationItem) =>
 
 const notificationIdentity = (item: NotificationItem) =>
   item.kind === "TICKET" && item.notificationId
-    ? `TICKET_EVENT:${item.notificationId}`
+    ? `${item.ticketType==="WAREHOUSE"?"WAREHOUSE_REQUEST":item.ticketType==="FINDING"?"FINDING_EVENT":"TICKET_EVENT"}:${item.notificationId}`
     : item.kind === "CHAT"
       ? `CHAT_MESSAGE:${item.id}`
       : legacyNotificationIdentity(item);
@@ -309,29 +353,24 @@ async function api<T>(path: string, options?: RequestInit): Promise<T> {
 const initialViewForSession = (
   authenticated: PortalSession,
 ): PortalView => {
+  if (isIncidentOperatorAccount(authenticated.email, authenticated.displayName)) return "incidentReports";
+  if (isAdministrativeProfile(authenticated) || authenticated.role === "Department" && authenticated.permissions.canManageDepartment) return "reception";
   if (authenticated.supportTeam === "WAREHOUSE") return "warehouse";
   if (authenticated.supportTeam === "WORKSHOP") return "workshop";
-  if (
-    authenticated.role === "Administrator" &&
-    authenticated.permissions.canViewSupportDashboard
-  )
-    return "tickets";
-  if (
-    authenticated.role === "GroupAdministrator" &&
-    authenticated.permissions.canAudit
-  )
-    return "audit";
+  if (authenticated.role === "Administrator" && authenticated.permissions.canViewSupportDashboard) return "tickets";
+  if (authenticated.role === "GroupAdministrator" && authenticated.permissions.canAudit) return "audit";
   if (authenticated.permissions.canAudit) return "audit";
   if (authenticated.permissions.canViewDashboard) return "dashboard";
   if (authenticated.permissions.canViewSupportDashboard) return "tickets";
-  return "dashboard";
+  return "home";
 };
 
 const decodePushApplicationKey=(value:string)=>{const padded=value.replace(/-/g,"+").replace(/_/g,"/")+"===".slice((value.length+3)%4);return Uint8Array.from(atob(padded),character=>character.charCodeAt(0));};
 const samePushApplicationKey=(current:ArrayBuffer|null,key:Uint8Array)=>{if(!current)return false;const left=new Uint8Array(current);return left.length===key.length&&left.every((value,index)=>value===key[index]);};
 const ensurePushSubscription=async(registration:ServiceWorkerRegistration,publicKey:string)=>{const applicationServerKey=decodePushApplicationKey(publicKey);let subscription=await registration.pushManager.getSubscription();if(subscription&&!samePushApplicationKey(subscription.options.applicationServerKey,applicationServerKey)){await subscription.unsubscribe();subscription=null;}return subscription||registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey});};
 const supportNavigationFromUrl=(href:string):SupportNavigationTarget|null=>{
-  const url=new URL(href,window.location.origin);const explicitKind=url.searchParams.get("notification")?.toUpperCase();const kind=explicitKind||(url.searchParams.has("ticket")?"TICKET":url.searchParams.has("conversationId")?"CHAT":undefined);const department=url.searchParams.get("department")||"";
+  const url=new URL(href,window.location.origin);const explicitKind=url.searchParams.get("notification")?.toUpperCase();const kind=explicitKind||(url.searchParams.has("findingId")?"FINDING":url.searchParams.has("ticket")?"TICKET":url.searchParams.has("conversationId")?"CHAT":undefined);const department=url.searchParams.get("department")||"";
+  if(kind==="FINDING"){const findingId=url.searchParams.get("findingId");return findingId?{kind:"FINDING",assignedDepartment:department,findingId,requestKey:Date.now()}:null;}
   if(kind==="TICKET"){
     const ticketNumber=Number(url.searchParams.get("ticket"));if(!Number.isFinite(ticketNumber))return null;
     return{kind:"TICKET",assignedDepartment:department,ticketId:url.searchParams.get("ticketId")||undefined,ticketNumber,ticketType:url.searchParams.get("ticketType")==="INTERNAL"?"INTERNAL":"SUPPORT",ticketStatus:url.searchParams.get("ticketStatus")||undefined,requestKey:Date.now()};
@@ -342,8 +381,8 @@ const supportNavigationFromUrl=(href:string):SupportNavigationTarget|null=>{
   }
   return null;
 };
-const notificationReceiptFromUrl=(href:string):PendingNotificationReceipt|null=>{const url=new URL(href,window.location.origin);const key=url.searchParams.get("notificationKey")||"";const at=url.searchParams.get("notificationAt")||"";return (key.startsWith("TICKET_EVENT:")||key.startsWith("CHAT_MESSAGE:"))&&Number.isFinite(Date.parse(at))?{key,at}:null;};
-const clearNotificationDeepLink=()=>{const url=new URL(window.location.href);["notification","ticketId","ticket","department","ticketType","ticketStatus","conversationId","notificationKey","notificationAt"].forEach(key=>url.searchParams.delete(key));window.history.replaceState(null,"",`${url.pathname}${url.search}${url.hash}`);};
+const notificationReceiptFromUrl=(href:string):PendingNotificationReceipt|null=>{const url=new URL(href,window.location.origin);const key=url.searchParams.get("notificationKey")||"";const at=url.searchParams.get("notificationAt")||"";return (key.startsWith("TICKET_EVENT:")||key.startsWith("FINDING_EVENT:")||key.startsWith("CHAT_MESSAGE:"))&&Number.isFinite(Date.parse(at))?{key,at}:null;};
+const clearNotificationDeepLink=()=>{const url=new URL(window.location.href);["notification","findingId","ticketId","ticket","department","ticketType","ticketStatus","conversationId","notificationKey","notificationAt"].forEach(key=>url.searchParams.delete(key));window.history.replaceState(null,"",`${url.pathname}${url.search}${url.hash}`);};
 
 const persistentSessionStorageKey="oficina-virtual-device-session";
 const storedPersistentSession=()=>localStorage.getItem(persistentSessionStorageKey)||"";
@@ -353,15 +392,20 @@ export default function App() {
   const [equipmentCode,setEquipmentCode]=useState(()=>new URLSearchParams(window.location.search).get("equipment"));
   const [pendingNotificationTarget,setPendingNotificationTarget]=useState<SupportNavigationTarget|null>(()=>supportNavigationFromUrl(window.location.href));
   const [pendingNotificationReceipt,setPendingNotificationReceipt]=useState<PendingNotificationReceipt|null>(()=>notificationReceiptFromUrl(window.location.href));
+  const [administrativeSection,setAdministrativeSection]=useState<AdministrativeSection>("forms");
+  const [departmentDocumentSection,setDepartmentDocumentSection]=useState<DepartmentDocumentSection>("files");
   const [license, setLicense] = useState<LicenseStatus | null>(null);
   const [session, setSession] = useState<PortalSession | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [headerAccountOpen, setHeaderAccountOpen] = useState(false);
+  const [portalSearch, setPortalSearch] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem("portal-sidebar-collapsed") === "1",
   );
   const [view, setView] = useState<PortalView>("audit");
+  const [adminVoiceWarehouse,setAdminVoiceWarehouse]=useState<VoiceWarehouseBatch|null>(null);
   const [step, setStep] = useState<Step>("group");
   const [groups, setGroups] = useState<Group[]>([]);
   const [agencies, setAgencies] = useState<Agency[]>([]);
@@ -380,6 +424,12 @@ export default function App() {
   const [supportNavigation, setSupportNavigation] =
     useState<SupportNavigationTarget | null>(null);
   const [supportEntryRequest, setSupportEntryRequest] = useState(0);
+  const [selectedSupportDepartment, setSelectedSupportDepartment] = useState<string | null>(null);
+  const [departmentEntry, setDepartmentEntry] = useState<{
+    key: number;
+    department: string;
+    section: DepartmentSidebarSection;
+  } | null>(null);
   const [supervisorTicketInboxRequest, setSupervisorTicketInboxRequest] = useState(0);
   const [reportAgencyOpen, setReportAgencyOpen] = useState(false);
   const [, setUnreadNotifications] = useState(0);
@@ -415,9 +465,12 @@ export default function App() {
     setPushPromptOpen(Notification.permission==='default'&&localStorage.getItem('push-prompt-dismissed')!=='1');
   }, [session]);
   const notificationAudio = useRef<AudioContext | null>(null);
+  const [warehouseNotificationId,setWarehouseNotificationId]=useState<number|null>(null);
   const notificationSnapshot = useRef<Set<string> | null>(null);
 
   const openTicketFromOperations = useCallback((ticket: OperationsTicket) => {
+    setSelectedSupportDepartment(ticket.assignedDepartment);
+    setDepartmentEntry({ key: Date.now(), department: ticket.assignedDepartment, section: "support" });
     setSupportNavigation({
       kind: "TICKET",
       assignedDepartment: ticket.assignedDepartment,
@@ -439,7 +492,7 @@ export default function App() {
     let active = true;
     fetch("/api/license/status", { cache: "no-store" })
       .then(async (response) => {
-        const data = (await response.json()) as LicenseStatus;
+        const data = await readLicenseStatus(response);
         if (active) setLicense(data);
       })
       .catch(() => {
@@ -500,15 +553,17 @@ export default function App() {
       const readSession=async(url:string,init?:RequestInit)=>{
         let response: Response | undefined;
         let networkError: unknown;
-        for(let attempt=0;attempt<4;attempt+=1){
+        for(let attempt=0;attempt<2;attempt+=1){
+          const controller = new AbortController();
+          const timer = window.setTimeout(() => controller.abort(), 8000);
           try{
-            response=await fetch(url,{...init,cache:"no-store",credentials:"same-origin"});
+            response=await fetch(url,{...init,signal:controller.signal,cache:"no-store",credentials:"same-origin"});
             networkError=undefined;
-            if(response.ok||!([500,502,503,504] as number[]).includes(response.status)||attempt===3)break;
+            if(response.ok||!([500,502,503,504] as number[]).includes(response.status)||attempt===1)break;
           }catch(error){
             networkError=error;
-            if(attempt===3)throw error;
-          }
+            if(attempt===1)throw error;
+          } finally { window.clearTimeout(timer); }
           await new Promise(resolve=>window.setTimeout(resolve,350*(attempt+1)));
         }
         if(!response)throw networkError instanceof Error?networkError:new Error("El servidor no respondió.");
@@ -537,11 +592,38 @@ export default function App() {
       .finally(() => setCheckingSession(false));
   }, []);
 
+  const accountUpdateRef = useRef({changing:false,generation:0,checking:false});
+  useEffect(() => {
+    const changed=(event:Event)=>{accountUpdateRef.current.changing=Boolean((event as CustomEvent<boolean>).detail);accountUpdateRef.current.generation++;};
+    window.addEventListener(passwordChangeEvent,changed);
+    return()=>window.removeEventListener(passwordChangeEvent,changed);
+  },[]);
   const expireIfUnauthorized = useCallback((loadError: unknown) => {
     if ((loadError as Error & { status?: number }).status !== 401)return;
-    if(storedPersistentSession()){window.location.reload();return;}
-    setSession(null);
+    // An old concurrent request can finish after a password change renewed the cookie.
+    // Verify the current cookie before clearing the newly established session.
+    const state=accountUpdateRef.current;if(state.changing||state.checking)return;
+    state.checking=true;const generation=state.generation;
+    void (async()=>{
+      try {
+        const response=await fetch('/api/admin/session',{cache:'no-store'});
+        const revoked=response.status===401||response.ok&&(await response.json()).authenticated===false;
+        if(!revoked||state.changing||generation!==state.generation)return;
+        if(storedPersistentSession()){window.location.reload();return;}
+        setSession(null);
+      } catch { /* A temporary outage is not proof that this session expired. */ }
+      finally {state.checking=false;}
+    })();
   }, []);
+
+  useEffect(() => {
+    if (!session?.id) return;
+    return startSessionValidation(() => {
+      localStorage.removeItem(persistentSessionStorageKey);
+      setSession(null);
+      setProfileOpen(false);
+    });
+  }, [session?.id,session?.persistentSessionToken]);
 
   const loadGroups = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -593,9 +675,13 @@ export default function App() {
   const canUseSupportChat = session?.permissions.canUseSupportChat;
   const canViewTicketNotifications =
     session?.permissions.canViewTicketNotifications;
+  const receivesWarehouseNotifications=canReceiveWarehouseNotifications(session);
+  const usesWarehouseAlert=isWarehouseNotificationUser(session);
 
   useEffect(()=>{
     if(!sessionId||!pendingNotificationTarget)return;
+    setSelectedSupportDepartment(pendingNotificationTarget.assignedDepartment || null);
+    if (pendingNotificationTarget.assignedDepartment) setDepartmentEntry({key:Date.now(),department:pendingNotificationTarget.assignedDepartment,section:"support"});
     setView("tickets");
     setSupportNavigation({...pendingNotificationTarget,requestKey:Date.now()});
     setPendingNotificationTarget(null);
@@ -603,18 +689,18 @@ export default function App() {
   },[pendingNotificationTarget,sessionId]);
 
   useEffect(() => {
-    if (sessionId && !sessionMustChangePassword && canAudit)
+    if (sessionId && !sessionMustChangePassword && canAudit && view === "audit")
       void loadGroups();
-  }, [canAudit, loadGroups, sessionId, sessionMustChangePassword]);
+  }, [canAudit, loadGroups, sessionId, sessionMustChangePassword, view]);
   useEffect(() => {
-    if (!sessionId || sessionMustChangePassword || !canAudit) return;
+    if (!sessionId || sessionMustChangePassword || !canAudit || view !== "audit" || step === "details" || step === "success") return;
     const refreshAgencyCatalog = () => {
       void loadGroups(true);
       if (group) void loadAgenciesForGroup(group, true);
     };
     window.addEventListener("support-live-refresh", refreshAgencyCatalog);
     return () => window.removeEventListener("support-live-refresh", refreshAgencyCatalog);
-  }, [canAudit, group, loadAgenciesForGroup, loadGroups, sessionId, sessionMustChangePassword]);
+  }, [canAudit, group, loadAgenciesForGroup, loadGroups, sessionId, sessionMustChangePassword, view, step]);
   useEffect(() => {
     if (!sessionId || sessionMustChangePassword) return;
     let timer: number | null = null;
@@ -653,23 +739,26 @@ export default function App() {
       setUnreadNotifications(0);
       return;
     }
-    let refreshInFlight = false;
+    let refreshInFlight = false,cancelled=false;
+    notificationSnapshot.current=null;
+    setWarehouseNotificationId(null);
     const refreshNotifications = async () => {
-      if (refreshInFlight || !navigator.onLine) return;
+      if (refreshInFlight || !navigator.onLine || document.hidden) return;
       refreshInFlight = true;
       try {
-        const [ticketResponse, chatResponse] = await Promise.all([
+        const [ticketResponse, chatResponse,warehouseResponse] = await Promise.all([
           fetch("/api/tickets/notifications"),
           canUseSupportChat
             ? fetch("/api/support/chat/notifications")
             : Promise.resolve(null),
+          receivesWarehouseNotifications?fetch('/api/warehouse/fulfillment/notifications',{cache:'no-store',credentials:'same-origin'}).catch(()=>null):Promise.resolve(null),
         ]);
         if (ticketResponse.status === 401 || chatResponse?.status === 401) {
           expireIfUnauthorized({status:401});
           return;
         }
-        if (!ticketResponse.ok) return;
-        const ticketBody: unknown = await ticketResponse.json();
+        if (!ticketResponse.ok&&!warehouseResponse?.ok) return;
+        const ticketBody: unknown = ticketResponse.ok?await ticketResponse.json():[];
         const chatBody = chatResponse?.ok
           ? await chatResponse.json()
           : { notifications: [] };
@@ -678,7 +767,8 @@ export default function App() {
           : ticketBody && typeof ticketBody === "object"
             ? ((ticketBody as { notifications?: unknown }).notifications ?? [])
             : [];
-        const tickets = (Array.isArray(rawTickets) ? rawTickets : [])
+        const warehouseBody:unknown=warehouseResponse?.ok?await warehouseResponse.json():[];
+        const tickets = [...(Array.isArray(rawTickets) ? rawTickets : []),...(Array.isArray(warehouseBody)?warehouseBody:[])]
           .map(normalizeTicketNotification)
           .filter((item): item is TicketNotification => item !== null);
         const chats = (
@@ -695,6 +785,7 @@ export default function App() {
           (a, b) =>
             deviceTimestamp(b.updatedAt) - deviceTimestamp(a.updatedAt),
         );
+        if(cancelled)return;
         const incoming = new Set(items.map(notificationIdentity));
         const visibleItems = items;
         const newItems = notificationSnapshot.current
@@ -704,8 +795,10 @@ export default function App() {
                 !notificationSnapshot.current!.has(notificationIdentity(item)),
             )
           : [];
-        if (notificationSnapshot.current && newItems.length)
-          playNotificationChime();
+        if (notificationSnapshot.current && newItems.length){
+          if(usesWarehouseAlert&&newItems.some(item=>item.kind==='TICKET'&&item.ticketType==='WAREHOUSE'))playWarehouseAlert(notificationAudio.current);
+          else playNotificationChime();
+        }
         if (newItems.length) {
           const toasts = newItems.slice(0, 3).map((item) => ({
             key: notificationIdentity(item),
@@ -724,7 +817,7 @@ export default function App() {
             ),
           );
         }
-        notificationSnapshot.current = incoming;
+        notificationSnapshot.current = new Set([...(notificationSnapshot.current||[]),...incoming]);
         setTicketNotifications(visibleItems);
         setUnreadNotifications(visibleItems.filter((item) => !item.isRead).length);
       } catch {
@@ -734,8 +827,14 @@ export default function App() {
       }
     };
     void refreshNotifications();
+    const notificationInterval=window.matchMedia('(max-width: 720px)').matches?30000:10000;
+    const notificationTimer=usesWarehouseAlert?window.setInterval(()=>void refreshNotifications(),notificationInterval):undefined;
+    const refreshWhenVisible=()=>{if(!document.hidden)void refreshNotifications();};
+    document.addEventListener('visibilitychange',refreshWhenVisible);
     window.addEventListener("support-live-refresh", refreshNotifications);
     return () => {
+      cancelled=true;window.clearInterval(notificationTimer);
+      document.removeEventListener('visibilitychange',refreshWhenVisible);
       window.removeEventListener("support-live-refresh", refreshNotifications);
     };
   }, [
@@ -744,6 +843,8 @@ export default function App() {
     expireIfUnauthorized,
     sessionId,
     sessionMustChangePassword,
+    receivesWarehouseNotifications,
+    usesWarehouseAlert,
   ]);
   useEffect(() => {
     if (!notificationCenterOpen) return;
@@ -808,6 +909,8 @@ export default function App() {
     setTicketNotifications([]);
     setUnreadNotifications(0);
     setNotificationCenterOpen(false);
+    setSelectedSupportDepartment(null);
+    setDepartmentEntry(null);
     setView("audit");
     setStep("group");
   };
@@ -840,13 +943,17 @@ export default function App() {
     const readThrough=ticketNotifications.filter(candidate=>!candidate.isRead&&deviceTimestamp(candidate.updatedAt)<=openedAt);
     if(readThrough.length){const keys=[...new Set(readThrough.map(notificationIdentity))];void api("/api/notifications/state",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({keys,action:"READ"})}).catch(expireIfUnauthorized);const readKeys=new Set(keys);setTicketNotifications(current=>current.map(candidate=>readKeys.has(notificationIdentity(candidate))?{...candidate,isRead:true}:candidate));setUnreadNotifications(current=>Math.max(0,current-readKeys.size));}
     setNotificationCenterOpen(false);
+    if(item.kind==='TICKET'&&item.ticketType==='WAREHOUSE'){setWarehouseNotificationId(Number(item.id));return;}
+    setSelectedSupportDepartment(item.assignedDepartment || null);
+    if (item.assignedDepartment) setDepartmentEntry({key:Date.now(),department:item.assignedDepartment,section:"support"});
     setView("tickets");
     setSupportNavigation({
-      kind: item.kind,
+      kind: item.kind === "TICKET"&&item.ticketType==="FINDING"?"FINDING":item.kind,
       assignedDepartment: item.assignedDepartment,
       ticketId: item.kind === "TICKET" ? item.id : undefined,
       ticketNumber: item.kind === "TICKET" ? item.ticketNumber : undefined,
-      ticketType: item.kind === "TICKET" ? item.ticketType : undefined,
+      ticketType: item.kind === "TICKET" && item.ticketType!=="WAREHOUSE" ? item.ticketType : undefined,
+      findingId:item.kind==="TICKET"&&item.ticketType==="FINDING"?item.id:undefined,
       ticketStatus: item.kind === "TICKET" ? item.status : undefined,
       conversationId: item.kind === "CHAT" ? item.conversationId : undefined,
       requestKey: Date.now(),
@@ -926,6 +1033,8 @@ export default function App() {
         ? "Servicios Generales"
         : code === "HUMAN_RESOURCES"
           ? "Recursos Humanos"
+          : code === "ADMINISTRATIVE"
+            ? "Departamento Administrativo"
           : code;
   const renderNotificationRows = (items: NotificationItem[]) =>
     items.map((item) => (
@@ -950,7 +1059,7 @@ export default function App() {
         <span className="notification-primary">
           {!item.isRead && <i className="notification-new-dot" aria-label="Nueva" />}
           <strong>
-            {item.kind === "TICKET" ? `#${item.ticketNumber}` : "Chat"}
+            {item.kind === "TICKET" ? item.ticketType==="WAREHOUSE"?"Solicitud":item.ticketType==="FINDING"?"Hallazgo":`#${item.ticketNumber}` : "Chat"}
           </strong>
           <small>
             {item.kind === "TICKET"
@@ -987,7 +1096,7 @@ export default function App() {
           )}
         </span>
         <span className="notification-row-actions">
-          <time>{deviceDate(item.updatedAt).toLocaleString("es-DO")}</time>
+          <time title="Fecha del evento de la notificación">Actividad: {deviceDate(item.updatedAt).toLocaleString("es-DO")}</time>
           <span>
             {!item.isRead && <button type="button" onClick={(event) => { event.stopPropagation(); markNotificationsRead([item]); }}><CheckCheck /> Leído</button>}
             <button type="button" className="notification-dismiss" onClick={(event) => { event.stopPropagation(); dismissNotifications([item]); }}><Trash2 /> Descartar</button>
@@ -1038,28 +1147,59 @@ export default function App() {
       />
     );
 
+  if(session.permissions['profile:WAREHOUSE_REQUESTER'])return <Suspense fallback={<Loading/>}><WarehouseRequesterWorkspace session={session} onLogout={()=>void logout()} onSession={setSession}/></Suspense>;
   const isAdministrator = session.role === "Administrator";
+  const managerDepartment=session.assignedDepartment||((session.role==='Warehouse'||session.supportTeam==='WAREHOUSE')?'WAREHOUSE':session.supportTeam==='WORKSHOP'?'WORKSHOP':session.supportTeam==='CALL_CENTER'||session.supportTeam==='TECHNICAL_FAILURE'?session.supportTeam:session.supportDepartment||(session.role==='Administrative'?'ADMINISTRATIVE':session.role==='GroupAdministrator'?'SUPERVISION':null));
+  const scopedManager=!isAdministrator&&!!session.permissions.canManageDepartment&&!!managerDepartment;
+  const departmentalPrincipal=session.role==="Department"&&scopedManager;
+  const usesAdministrativeSidebar=isAdministrativeProfile(session)||departmentalPrincipal;
+  const managerDepartmentName=userDepartments.find(([code])=>code===managerDepartment)?.[1]||'Departamento';
   const isSupervisor = session.role === "GroupAdministrator";
-  const isWarehouseOperator = session.supportTeam === "WAREHOUSE";
+  const incidentOperator=isIncidentOperatorAccount(session.email,session.displayName);
+  const canViewIncidentReports=isAdministrator||isSupervisor||incidentOperator;
+  const isWarehouseOperator = session.role === "Warehouse" || session.supportTeam === "WAREHOUSE";
   const isWorkshopOperator = session.supportTeam === "WORKSHOP";
   const isMaintenanceOperator = isWarehouseOperator || isWorkshopOperator;
-  const isDepartmentManager = Boolean(session.supportDepartment === "TECHNOLOGY" && !session.supportTeam && session.permissions.canAssignTickets);
+  const isDepartmentManager = Boolean(session.supportDepartment && !session.supportTeam && session.permissions.canAssignTickets);
   const technologyQueueTeam=session.role==="Technology"&&(session.supportTeam==="CALL_CENTER"||session.supportTeam==="TECHNICAL_FAILURE"||session.supportTeam==="TECHNICIANS")?session.supportTeam:null;
-  const canOpenLiveQueue=Boolean((isAdministrator||isDepartmentManager||technologyQueueTeam)&&session.permissions.canViewSupportDashboard);
+  const isPersonalTechnician = Boolean(
+    !isAdministrator &&
+    !usesAdministrativeSidebar &&
+    !session.permissions.canManageDepartment &&
+    session.supportDepartment &&
+    !isMaintenanceOperator &&
+    (session.supportTeam === "TECHNICIANS" || !session.permissions.canAssignTickets),
+  );
+  const canOpenLiveQueue=Boolean(!isPersonalTechnician&&(isAdministrator||session.supportDepartment)&&session.permissions.canViewSupportDashboard);
   const canOpenTicketWorkspace =
-    session.permissions.canViewSupportDashboard || isSupervisor;
-  const canOpenWarehouse = isAdministrator || isWarehouseOperator || isDepartmentManager;
-  const canOpenWorkshop = isAdministrator || isWorkshopOperator || isDepartmentManager;
+    session.permissions.canViewSupportDashboard || isSupervisor || isWarehouseOperator;
+  const canOpenWarehouse = isAdministrator || isWarehouseOperator || (isDepartmentManager && session.role !== "Department");
+  const canOpenWarehouseQueue = isAdministrator || isWarehouseOperator;
+  const canOpenWorkshop = canManageWorkshop(session);
   const viewLabel: Record<PortalView, string> = {
+    home: "Inicio",
+    locations: "Ubicaciones de agencias",
+    storage: "Almacenamiento",
     audit: "Auditoría de campo",
     dashboard: "Mi panel",
-    tickets: isSupervisor ? "Mis tickets" : "Soporte",
+    users: "Usuarios y permisos",
+    executiveReports: "Reportes ejecutivos",
+    managerSupport: "Soporte del departamento",
+    managerFiles: scopedManager?"Archivos y comunicaciones":({files:"Archivos y comunicaciones",forms:"Formularios administrativos",warehouse:"Solicitudes a Almacén",workshop:"Solicitudes a Taller"}[departmentDocumentSection]),
+    managerQueue: "Cola en vivo",
+    managerAudit: "Auditoría operativa",
+    tickets: isWarehouseOperator ? "Soporte de Almacén" : isPersonalTechnician ? "Soporte" : selectedSupportDepartment ? departmentLabel(selectedSupportDepartment) : "Departamentos",
+    createTicket: "Soporte",
     warehouse: "Departamento de Almacén",
+    warehouseQueue: "Control diario de Almacén",
     workshop: "Departamento Taller",
+    reception: "Recepción virtual",
     systemAudit: "Auditoría operativa",
     queue: "Cola en vivo",
+    incidentReports: "Informe de incidentes · Juegos tradicionales",
   };
   const navigateTo = (target: PortalView) => {
+    if(target === "storage" && !isAdministrator) return;
     // Entrar desde el menú principal es navegación normal, no una solicitud
     // para abrir el último ticket visto desde una notificación u operación.
     if (target === "tickets") {
@@ -1067,6 +1207,23 @@ export default function App() {
       setSupportEntryRequest((current) => current + 1);
     }
     setView(target);
+    setSidebarOpen(false);
+  };
+  const openDepartments = () => {
+    setSelectedSupportDepartment(null);
+    setDepartmentEntry(null);
+    navigateTo("tickets");
+  };
+  const openDepartmentSection = (section: DepartmentSidebarSection) => {
+    if (!selectedSupportDepartment) return;
+    if (section === "agencies" && selectedSupportDepartment !== "TECHNOLOGY") return;
+    setSupportNavigation(null);
+    setDepartmentEntry({
+      key: Date.now(),
+      department: selectedSupportDepartment,
+      section,
+    });
+    setView("tickets");
     setSidebarOpen(false);
   };
   const toggleSidebar = () => {
@@ -1077,8 +1234,131 @@ export default function App() {
     });
   };
 
+  const homeModules = ([
+    canOpenTicketWorkspace && {
+      id: "support",
+      title: "Soporte",
+      description: "Tickets, incidencias y seguimiento.",
+      icon: LifeBuoy,
+      onSelect: () => scopedManager && !usesAdministrativeSidebar ? navigateTo("managerSupport") : isAdministrator ? openDepartments() : navigateTo("tickets"),
+    },
+    canViewIncidentReports && {
+      id: "forms",
+      title: "Formularios administrativos",
+      description: "Solicitudes, registros y autorizaciones.",
+      icon: FileSignature,
+      accent: "violet" as const,
+      onSelect: () => navigateTo("incidentReports"),
+    },
+    canOpenWarehouse && {
+      id: "warehouse",
+      title: "Almacén",
+      description: "Inventario, movimientos y solicitudes.",
+      icon: Warehouse,
+      onSelect: () => navigateTo("warehouse"),
+    },
+    canOpenWorkshop && {
+      id: "workshop",
+      title: "Taller",
+      description: "Órdenes de trabajo, servicios y mantenimientos.",
+      icon: Settings,
+      onSelect: () => navigateTo("workshop"),
+    },
+    (isAdministrator || session.permissions.canViewDashboard) && {
+      id: "reports",
+      title: "Reportes",
+      description: "Indicadores, gestión operativa y reportes ejecutivos.",
+      icon: BarChart3,
+      accent: "violet" as const,
+      onSelect: () => navigateTo(isAdministrator ? "executiveReports" : "dashboard"),
+    },
+    isAdministrator && session.permissions.canManageUsers && {
+      id: "users",
+      title: "Usuarios",
+      description: "Gestión de cuentas, accesos y permisos.",
+      icon: UserRound,
+      onSelect: () => navigateTo("users"),
+    },
+    (session.permissions.canAudit || session.permissions.canViewFieldAudits) && {
+      id: "audit",
+      title: "Auditoría de campo",
+      description: "Revisiones, evidencias y control territorial.",
+      icon: ClipboardCheck,
+      onSelect: () => navigateTo("audit"),
+    },
+    usesAdministrativeSidebar && {
+      id: "administration",
+      title: "Administración",
+      description: "Recepción documental y gestión departamental.",
+      icon: Building2,
+      onSelect: () => navigateTo("reception"),
+    },
+    {
+      id: "locations",
+      title: "Ubicaciones de agencias",
+      description: "Directorio territorial, mapas y coordenadas.",
+      icon: MapPin,
+      onSelect: () => navigateTo("locations"),
+    },
+    isAdministrator && {
+      id: "storage",
+      title: "Almacenamiento",
+      description: "Documentos, capacidad y administración de archivos.",
+      icon: FolderOpen,
+      onSelect: () => navigateTo("storage"),
+    },
+    canOpenWarehouseQueue && {
+      id: "warehouse-control",
+      title: "Control diario de Almacén",
+      description: "Solicitudes pendientes, recepción y despacho.",
+      icon: Monitor,
+      onSelect: () => navigateTo("warehouseQueue"),
+    },
+    scopedManager && !usesAdministrativeSidebar && {
+      id: "manager-files",
+      title: "Archivos y comunicaciones",
+      description: "Documentos institucionales del departamento.",
+      icon: FolderOpen,
+      accent: "violet" as const,
+      onSelect: () => navigateTo("managerFiles"),
+    },
+    !usesAdministrativeSidebar && (isAdministrator || session.permissions.canManageDepartment) && {
+      id: "operational-audit",
+      title: "Auditoría operativa",
+      description: "Hallazgos, trazabilidad y control de procesos.",
+      icon: ScrollText,
+      onSelect: () => navigateTo(scopedManager ? "managerAudit" : "systemAudit"),
+    },
+    canOpenLiveQueue && {
+      id: "live-queue",
+      title: "Cola en vivo",
+      description: "Casos activos y atención operativa en tiempo real.",
+      icon: Monitor,
+      onSelect: () => navigateTo(scopedManager ? "managerQueue" : "queue"),
+    },
+    isSupervisor && {
+      id: "reception",
+      title: "Recepción virtual",
+      description: "Solicitudes administrativas y recepción documental.",
+      icon: FileSignature,
+      onSelect: () => navigateTo("reception"),
+    },
+  ] as Array<PortalHomeModule | false | undefined>).filter((item): item is PortalHomeModule => Boolean(item));
+
+  const searchModules = homeModules.filter((module) =>
+    `${module.title} ${module.description}`.toLocaleLowerCase("es").includes(portalSearch.trim().toLocaleLowerCase("es")),
+  );
+  const runPortalSearch = () => {
+    if (!portalSearch.trim()) {
+      navigateTo("home");
+      return;
+    }
+    searchModules[0]?.onSelect();
+    if (searchModules.length) setPortalSearch("");
+  };
+
   return (
-    <div className={`app-shell office-shell sidebar-layout${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
+    <div className={`app-shell office-shell sidebar-layout portal-card-navigation${sidebarCollapsed ? " sidebar-collapsed" : ""}${['Administrative','Department'].includes(session.role)||selectedSupportDepartment?' sidebar-only-navigation':''}`}>
       <aside id="portal-sidebar" className={`portal-sidebar${sidebarOpen ? " open" : ""}`} aria-label="Menú principal">
         <div className="sidebar-brand">
           <img src="/loto-real-logo-transparent.png" alt="Loto Real" />
@@ -1089,47 +1369,91 @@ export default function App() {
           <button type="button" className="sidebar-mobile-close" onClick={() => setSidebarOpen(false)} aria-label="Cerrar menú"><X /></button>
         </div>
         <nav className="sidebar-nav">
+          <button type="button" className={view === "home" ? "active" : ""} aria-current={view === "home" ? "page" : undefined} onClick={() => navigateTo("home")} title="Inicio"><Home/><span>Inicio</span></button>
+          <button type="button" className={view === 'locations' ? 'active' : ''} aria-current={view === 'locations' ? 'page' : undefined} onClick={()=>navigateTo('locations')}><MapPin/><span>Ubicaciones de agencias</span></button>
+          {scopedManager&&!usesAdministrativeSidebar&&<><span className="sidebar-section-label">Gerencia · {managerDepartmentName}</span>{([['managerSupport','Soporte',LifeBuoy],['managerFiles','Archivos y comunicaciones',FolderOpen],['managerQueue','Cola en vivo',Monitor],['managerAudit','Auditoría operativa',ScrollText]] as const).map(([target,label,Icon])=><button key={target} className={view===target?'active':''} onClick={()=>navigateTo(target)}><Icon/><span>{label}</span></button>)}</>}
+          {isAdministrator && <button type="button" className={view === "storage" ? "active" : ""} aria-current={view === "storage" ? "page" : undefined} onClick={() => navigateTo("storage")}><FolderOpen/><span>Almacenamiento</span></button>}
+          {isAdministrator&&session.permissions.canManageUsers&&<button type="button" className={view==='users'?'active':''} aria-current={view==='users'?'page':undefined} onClick={()=>navigateTo('users')}><ShieldCheck/><span>Usuarios y permisos</span></button>}
+          {isAdministrator&&<button type="button" className={view==='executiveReports'?'active':''} aria-current={view==='executiveReports'?'page':undefined} onClick={()=>navigateTo('executiveReports')}><BarChart3/><span>Reportes ejecutivos</span></button>}
           <span className="sidebar-section-label">Principal</span>
-          {session.permissions.canAudit && (
+          {!departmentalPrincipal&&(session.permissions.canAudit || session.permissions.canViewFieldAudits) && (
             <button type="button" className={view === "audit" ? "active" : ""} aria-current={view === "audit" ? "page" : undefined} onClick={() => navigateTo("audit")} title="Auditoría de campo">
               <ClipboardCheck /><span>Auditoría de campo</span>
             </button>
           )}
-          {session.permissions.canViewDashboard && (
+          {!departmentalPrincipal&&session.permissions.canViewDashboard && (
             <button type="button" className={view === "dashboard" ? "active" : ""} aria-current={view === "dashboard" ? "page" : undefined} onClick={() => navigateTo("dashboard")} title="Mi panel">
               <BarChart3 /><span>Mi panel</span>
             </button>
           )}
-          {(isAdministrator || isSupervisor || isMaintenanceOperator || isDepartmentManager || technologyQueueTeam) && <span className="sidebar-section-label">Tickets y operación</span>}
-          {!isSupervisor && !isMaintenanceOperator && session.permissions.canViewSupportDashboard && (
+          {(isAdministrator || isSupervisor || isMaintenanceOperator || isDepartmentManager || technologyQueueTeam) && <span className="sidebar-section-label">Organización</span>}
+          {canOpenWarehouseQueue && <>
+            <button type="button" className={view === "warehouse" ? "active" : ""} aria-current={view === "warehouse" ? "page" : undefined} onClick={() => navigateTo("warehouse")} title="Almacén central">
+              <Warehouse/><span>Almacén central</span>
+            </button>
+            <button type="button" className={view === "warehouseQueue" ? "active" : ""} aria-current={view === "warehouseQueue" ? "page" : undefined} onClick={() => navigateTo("warehouseQueue")} title="Control diario de solicitudes de Almacén">
+              <Monitor/><span>Control diario de Almacén</span>
+              <i className="sidebar-live-dot" aria-label="Actualización automática activa" />
+            </button>
+          </>}
+          {!isPersonalTechnician && !isSupervisor && !isMaintenanceOperator && session.role !== "Department" && session.role !== "Administrative" && session.permissions.canViewSupportDashboard && (
+            <button type="button" className={view === "tickets" && !selectedSupportDepartment ? "active" : ""} aria-current={view === "tickets" && !selectedSupportDepartment ? "page" : undefined} onClick={openDepartments} title="Departamentos">
+              <Building2 /><span>Departamentos</span>
+            </button>
+          )}
+          {canOpenWorkshop&&<button type="button" className={view==="workshop"?"active":""} onClick={()=>navigateTo("workshop")} title="Taller"><Warehouse/><span>Taller</span></button>}
+          {isWarehouseOperator&&<><button type="button" className={view==="createTicket"?"active":""} onClick={()=>navigateTo("createTicket")} title="Crear ticket"><LifeBuoy/><span>Crear ticket</span></button><button type="button" className={view==="tickets"?"active":""} onClick={()=>navigateTo("tickets")} title="Soporte de Almacén"><LifeBuoy/><span>Soporte de Almacén</span></button></>}
+          {isPersonalTechnician && session.permissions.canViewSupportDashboard && (
             <button type="button" className={view === "tickets" ? "active" : ""} aria-current={view === "tickets" ? "page" : undefined} onClick={() => navigateTo("tickets")} title="Soporte">
               <LifeBuoy /><span>Soporte</span>
               {unreadTicketNotifications > 0 && <em>{unreadTicketNotifications > 99 ? "99+" : unreadTicketNotifications}</em>}
             </button>
           )}
+          {session.role === "Department" && !usesAdministrativeSidebar && !isPersonalTechnician && <>
+            <button type="button" className={view === "createTicket" ? "active" : ""} aria-current={view === "createTicket" ? "page" : undefined} onClick={() => navigateTo("createTicket")}><LifeBuoy/><span>Soporte</span></button>
+            {session.permissions.canViewSupportDashboard && <button className={view === "tickets" ? "active" : ""} onClick={() => {setDepartmentEntry(null);navigateTo("tickets");}}><LifeBuoy/><span>Mis tickets</span></button>}
+            <DepartmentDocumentNavigation section={view==="managerFiles"?departmentDocumentSection:null} onSelect={section=>{setDepartmentDocumentSection(section);navigateTo("managerFiles")}} canWorkshop={managerDepartment!=="ADMINISTRATIVE"&&Boolean(session.permissions.canViewWorkshop&&session.permissions.canCreateMaintenanceMovements)}/>
+          </>}
+          {usesAdministrativeSidebar && <AdministrativeNavigation section={view==="reception"?administrativeSection:null} canSupport={session.permissions.canCreateTickets} canAudit={Boolean(session.permissions.canManageDepartment)||session.email.toLowerCase().replace("@grupotejeda.local","")==="emma.mendoza"} canInventory={Boolean(session.permissions.canManageDepartment&&session.permissions.canManageAdministrativeAssets)} onSelect={section=>{setAdministrativeSection(section);navigateTo("reception")}}/>}
+          {isAdministrator&&<button type="button" className={view==="incidentReports"?"active":""} aria-current={view==="incidentReports"?"page":undefined} onClick={()=>navigateTo("incidentReports")} title="Todos los formularios administrativos"><FileSignature/><span>Formularios administrativos</span></button>}
+          {!isAdministrator&&!isSupervisor&&incidentOperator&&<button type="button" className={view==="incidentReports"?"active":""} aria-current={view==="incidentReports"?"page":undefined} onClick={()=>navigateTo("incidentReports")} title="Todos los informes de incidentes creados por supervisores"><FileText/><span>Informes de incidentes</span></button>}
           {isSupervisor && (
-            <button type="button" className={view === "tickets" ? "active" : ""} aria-current={view === "tickets" ? "page" : undefined} onClick={() => { navigateTo("tickets"); setSupervisorTicketInboxRequest((current) => current + 1); }} title="Mis tickets">
-              <LifeBuoy /><span>Mis tickets</span>
-              {unreadTicketNotifications > 0 && <em>{unreadTicketNotifications > 99 ? "99+" : unreadTicketNotifications}</em>}
-            </button>
+            <>
+              <button type="button" className={view === "tickets" ? "active" : ""} aria-current={view === "tickets" ? "page" : undefined} onClick={() => { navigateTo("tickets"); setSupervisorTicketInboxRequest((current) => current + 1); }} title="Mis tickets">
+                <LifeBuoy /><span>Mis tickets</span>
+                {unreadTicketNotifications > 0 && <em>{unreadTicketNotifications > 99 ? "99+" : unreadTicketNotifications}</em>}
+              </button>
+              <button type="button" className={view === "reception" ? "active" : ""} aria-current={view === "reception" ? "page" : undefined} onClick={() => navigateTo("reception")} title="Recepción virtual">
+                <FileSignature /><span>Recepción virtual</span>
+              </button>
+              <button type="button" className={view === "incidentReports" ? "active" : ""} aria-current={view === "incidentReports" ? "page" : undefined} onClick={() => navigateTo("incidentReports")} title="Informes de incidentes">
+                <FileText /><span>Informes de incidentes</span>
+              </button>
+            </>
           )}
-          {canOpenWarehouse && (
-            <button type="button" className={view === "warehouse" ? "active" : ""} aria-current={view === "warehouse" ? "page" : undefined} onClick={() => navigateTo("warehouse")} title="Departamento de Almacén">
-              <Building2 /><span>Almacén</span>
-            </button>
+          {selectedSupportDepartment && !usesAdministrativeSidebar && !isPersonalTechnician && !isSupervisor && (
+            <>
+              <span className="sidebar-section-label">{departmentLabel(selectedSupportDepartment)}</span>
+              <button type="button" className={view === "tickets" && (!departmentEntry || departmentEntry.section === "support") ? "active" : ""} onClick={() => openDepartmentSection("support")} title="Soporte del departamento">
+                <LifeBuoy /><span>Soporte</span>
+                {unreadTicketNotifications > 0 && <em>{unreadTicketNotifications > 99 ? "99+" : unreadTicketNotifications}</em>}
+              </button>
+              <DepartmentDocumentNavigation section={view==="tickets"&&departmentEntry&&["files","forms","warehouse","workshop"].includes(departmentEntry.section)?departmentEntry.section as DepartmentDocumentSection:null} onSelect={openDepartmentSection} canWorkshop={selectedSupportDepartment!=="ADMINISTRATIVE"&&Boolean(session.permissions.canViewWorkshop&&session.permissions.canCreateMaintenanceMovements)}/>
+              {(session.supportTeam!=="CALL_CENTER"||session.permissions.canViewAgencyTransitions)&&<button type="button" className={view === "tickets" && departmentEntry?.section === "transitions" ? "active" : ""} onClick={() => openDepartmentSection("transitions")} title="Agencias en construcción">
+                <Building2 /><span>Agencias en construcción</span>
+              </button>}
+              {selectedSupportDepartment === "TECHNOLOGY" && session.permissions.canManageAgencies && <button type="button" className={view === "tickets" && departmentEntry?.section === "agencies" ? "active" : ""} onClick={() => openDepartmentSection("agencies")} title="Actualizar agencias">
+                <MapPin /><span>Actualizar agencias</span>
+              </button>}
+            </>
           )}
-          {canOpenWorkshop && (
-            <button type="button" className={view === "workshop" ? "active" : ""} aria-current={view === "workshop" ? "page" : undefined} onClick={() => navigateTo("workshop")} title="Departamento Taller">
-              <Settings /><span>Taller</span>
-            </button>
-          )}
-          {isAdministrator && session.permissions.canManageAudits && (
+          {!usesAdministrativeSidebar && (isAdministrator && session.permissions.canManageAudits || session.permissions.canManageDepartment) && (
             <button type="button" className={view === "systemAudit" ? "active" : ""} aria-current={view === "systemAudit" ? "page" : undefined} onClick={() => navigateTo("systemAudit")} title="Auditoría operativa">
               <ScrollText /><span>Auditoría operativa</span>
             </button>
           )}
-          {canOpenLiveQueue && (
-            <button type="button" className={view === "queue" ? "active" : ""} aria-current={view === "queue" ? "page" : undefined} onClick={() => navigateTo("queue")} title="Cola en vivo">
+          {canOpenLiveQueue && (isAdministrator || selectedSupportDepartment || session.supportDepartment) && (
+            <button type="button" className={view === "queue" || view === "managerQueue" ? "active" : ""} aria-current={view === "queue" || view === "managerQueue" ? "page" : undefined} onClick={() => navigateTo(usesAdministrativeSidebar && scopedManager ? "managerQueue" : "queue")} title="Cola en vivo">
               <Monitor /><span>Cola en vivo</span>
               <i className="sidebar-live-dot" aria-label="Actualización automática activa" />
             </button>
@@ -1145,11 +1469,25 @@ export default function App() {
             {sidebarCollapsed ? <ChevronRight /> : <ChevronLeft />}
           </button>
           <div className="topbar-view-context">
+            <button type="button" className="portal-header-home" onClick={() => navigateTo("home")} aria-label="Ir al inicio">
+              <img src="/loto-real-logo-transparent.png" alt="" />
+            </button>
             <span>
               <small>Oficina virtual · navegación</small>
-              <strong>{viewLabel[view]}</strong>
+              <strong>{view==="reception"&&usesAdministrativeSidebar?({support:"Soporte",files:"Archivos y comunicaciones",forms:"Formularios administrativos",warehouse:"Solicitudes a Almacén",audit:"Auditoría operativa",inventory:"Inventario administrativo"}[administrativeSection]):viewLabel[view]}</strong>
             </span>
           </div>
+          <label className="portal-global-search">
+            <Search />
+            <input
+              value={portalSearch}
+              onChange={(event) => setPortalSearch(event.target.value)}
+              onKeyDown={(event) => { if (event.key === "Enter") runPortalSearch(); }}
+              placeholder="Buscar en la Oficina Virtual..."
+              aria-label="Buscar un módulo"
+            />
+            {portalSearch && <button type="button" className="portal-search-clear" onClick={() => setPortalSearch("")} aria-label="Limpiar búsqueda"><X /></button>}
+          </label>
           <div className="header-account">
             {session.permissions.canViewTicketNotifications && (
               <button
@@ -1162,58 +1500,89 @@ export default function App() {
                 {unreadTicketNotifications > 0 && <em>{unreadTicketNotifications > 99 ? "99+" : unreadTicketNotifications}</em>}
               </button>
             )}
-            {session.permissions.canViewTicketNotifications && <button className="notification-bell" onClick={()=>void sendPushTest()} title="Enviar notificación de prueba" aria-label="Enviar notificación de prueba"><BellRing /></button>}
             {session.permissions.canUseSupportChat && (
               <button className="notification-bell message-bell" onClick={() => openNotificationCenter("CHAT")} title="Centro de mensajes" aria-label={`Centro de mensajes${unreadChatNotifications ? `, ${unreadChatNotifications} nuevos` : ""}`}>
                 <MessageCircle />
                 {unreadChatNotifications > 0 && <em>{unreadChatNotifications > 99 ? "99+" : unreadChatNotifications}</em>}
               </button>
             )}
-            <button className="header-profile" onClick={() => setProfileOpen(true)}>
-              {session.avatarUrl ? <img src={session.avatarUrl} alt={session.displayName} /> : <UserRound />}
-              <span><small>{sessionRoleLabel(session)}</small><strong>{session.displayName}</strong></span>
-              <Settings />
-            </button>
-            <button className="header-logout" onClick={() => void logout()} title="Cerrar sesión" aria-label="Cerrar sesión"><LogOut /></button>
+            <div className="header-user-menu">
+              <button className="header-profile" onClick={() => setHeaderAccountOpen((open) => !open)} aria-expanded={headerAccountOpen} aria-haspopup="menu" aria-label="Abrir menú de cuenta">
+                {session.avatarUrl ? <img src={session.avatarUrl} alt={session.displayName} /> : <UserRound />}
+                <ChevronDown />
+              </button>
+              {headerAccountOpen && <>
+                <button type="button" className="header-menu-dismiss" onClick={() => setHeaderAccountOpen(false)} aria-label="Cerrar menú de cuenta" />
+                <div className="header-user-popover" role="menu">
+                  <header>
+                    {session.avatarUrl ? <img src={session.avatarUrl} alt="" /> : <UserRound />}
+                    <span><small>{sessionRoleLabel(session)}</small><strong>{session.displayName}</strong></span>
+                  </header>
+                  {isAdministrator && <Suspense fallback={null}><AdminHeaderVoiceAssistant onWarehouseCommand={text=>setAdminVoiceWarehouse(text)}/></Suspense>}
+                  <button type="button" onClick={() => { setHeaderAccountOpen(false); setProfileOpen(true); }}><Settings /><span><strong>Mi perfil</strong><small>Cuenta, foto y contraseña</small></span></button>
+                  {session.permissions.canViewTicketNotifications && <button type="button" onClick={() => { setHeaderAccountOpen(false); void sendPushTest(); }}><BellRing /><span><strong>Probar notificaciones</strong><small>Verificar avisos del navegador</small></span></button>}
+                  <button type="button" className="header-user-signout" onClick={() => void logout()}><LogOut /><span><strong>Cerrar sesión</strong><small>Salir de la Oficina Virtual</small></span></button>
+                </div>
+              </>}
+            </div>
           </div>
-          <nav className="main-nav mobile-main-nav" aria-label="Secciones principales en móvil">
-            {session.permissions.canAudit && (
+          {!['Administrative','Department'].includes(session.role)&&!selectedSupportDepartment&&(          <nav className={`main-nav mobile-main-nav ${isSupervisor||session.role==='Administrative'?'requester-mobile-nav':''}`} aria-label="Secciones principales en móvil">
+            <button type="button" className={view === 'locations' ? 'active' : ''} aria-current={view === 'locations' ? 'page' : undefined} onClick={()=>navigateTo('locations')}><MapPin/><span>Ubicaciones</span></button>
+            {isAdministrator && <button type="button" className={view === "storage" ? "active" : ""} aria-current={view === "storage" ? "page" : undefined} onClick={() => navigateTo("storage")}><FolderOpen/><span>Almacenamiento</span></button>}
+          {isAdministrator&&session.permissions.canManageUsers&&<button className={view==='users'?'active':''} onClick={()=>navigateTo('users')}><ShieldCheck/><span>Usuarios y permisos</span></button>}
+            {isAdministrator&&<button className={view==='executiveReports'?'active':''} onClick={()=>navigateTo('executiveReports')}><BarChart3/><span>Reportes</span></button>}
+            {scopedManager&&!usesAdministrativeSidebar&&<>{([['managerSupport','Soporte',LifeBuoy],['managerFiles','Archivos y comunicaciones',FolderOpen],['managerQueue','Cola en vivo',Monitor],['managerAudit','Auditoría operativa',ScrollText]] as const).map(([target,label,Icon])=><button key={target} className={view===target?'active':''} onClick={()=>navigateTo(target)}><Icon/><span>{label}</span></button>)}</>}
+            {!departmentalPrincipal&&(session.permissions.canAudit || session.permissions.canViewFieldAudits) && (
               <button type="button" className={view === "audit" ? "active" : ""} aria-current={view === "audit" ? "page" : undefined} onClick={() => navigateTo("audit")}>
                 <ClipboardCheck /><span>Auditoría</span>
               </button>
             )}
-            {session.permissions.canViewDashboard && (
+            {!departmentalPrincipal&&session.permissions.canViewDashboard && (
               <button type="button" className={view === "dashboard" ? "active" : ""} aria-current={view === "dashboard" ? "page" : undefined} onClick={() => navigateTo("dashboard")}>
                 <BarChart3 /><span>Mi panel</span>
               </button>
             )}
-            {canOpenTicketWorkspace && !isMaintenanceOperator && (
-              <button type="button" className={view === "tickets" ? "active" : ""} aria-current={view === "tickets" ? "page" : undefined} onClick={() => { navigateTo("tickets"); if (session.role === "GroupAdministrator") setSupervisorTicketInboxRequest((current) => current + 1); }}>
-                <LifeBuoy /><span>{isSupervisor ? "Mis tickets" : "Soporte"}</span>
+            {canOpenWarehouse&&<button type="button" className={view==='warehouse'?'active':''} aria-current={view==='warehouse'?'page':undefined} onClick={()=>navigateTo('warehouse')}><Warehouse/><span>Almacén central</span></button>}
+            {canOpenWarehouseQueue&&<button type="button" className={view==='warehouseQueue'?'active':''} aria-current={view==='warehouseQueue'?'page':undefined} onClick={()=>navigateTo('warehouseQueue')}><Monitor/><span>Control diario de Almacén</span></button>}
+            {canOpenWorkshop&&<button type="button" className={view==='workshop'?'active':''} aria-current={view==='workshop'?'page':undefined} onClick={()=>navigateTo('workshop')}><Warehouse/><span>Taller</span></button>}
+            {canOpenTicketWorkspace && (isPersonalTechnician||isSupervisor||!isMaintenanceOperator&&session.role!=="Department") && (
+              <button type="button" className={view === "tickets" ? "active" : ""} aria-current={view === "tickets" ? "page" : undefined} onClick={() => { if (isPersonalTechnician || isSupervisor) navigateTo("tickets"); else openDepartments(); if (session.role === "GroupAdministrator") setSupervisorTicketInboxRequest((current) => current + 1); }}>
+                {isPersonalTechnician || isSupervisor ? <LifeBuoy /> : <Building2 />}<span>{isSupervisor ? "Mis tickets" : isPersonalTechnician ? "Soporte" : "Departamentos"}</span>
                 {unreadTicketNotifications > 0 && <em className="ticket-alert-badge">{unreadTicketNotifications > 99 ? "99+" : unreadTicketNotifications}</em>}
               </button>
             )}
-            {canOpenWarehouse && (
-              <button type="button" className={view === "warehouse" ? "active" : ""} aria-current={view === "warehouse" ? "page" : undefined} onClick={() => navigateTo("warehouse")}>
-                <Building2 /><span>Almacén</span>
-              </button>
+            {isWarehouseOperator&&<><button type="button" className={view==='createTicket'?'active':''} aria-current={view==='createTicket'?'page':undefined} onClick={()=>navigateTo('createTicket')}><LifeBuoy/><span>Crear ticket</span></button><button type="button" className={view==='tickets'?'active':''} aria-current={view==='tickets'?'page':undefined} onClick={()=>navigateTo('tickets')}><LifeBuoy/><span>Soporte de Almacén</span></button></>}
+            {session.role==='Department'&&!usesAdministrativeSidebar&&!isPersonalTechnician&&<><button type="button" className={view==='createTicket'?'active':''} aria-current={view==='createTicket'?'page':undefined} onClick={()=>navigateTo('createTicket')}><LifeBuoy/><span>Crear ticket</span></button>{session.permissions.canViewSupportDashboard&&<button type="button" className={view==='tickets'?'active':''} aria-current={view==='tickets'?'page':undefined} onClick={()=>{setDepartmentEntry(null);navigateTo('tickets')}}><LifeBuoy/><span>Mis tickets</span></button>}<DepartmentDocumentNavigation section={view==="managerFiles"?departmentDocumentSection:null} onSelect={section=>{setDepartmentDocumentSection(section);navigateTo("managerFiles")}} canWorkshop={managerDepartment!=="ADMINISTRATIVE"&&Boolean(session.permissions.canViewWorkshop&&session.permissions.canCreateMaintenanceMovements)}/></>}
+            {selectedSupportDepartment&&!usesAdministrativeSidebar&&!isPersonalTechnician&&!isSupervisor&&<>
+              <button type="button" className={view==='tickets'&&(!departmentEntry||departmentEntry.section==='support')?'active':''} aria-current={view==='tickets'&&(!departmentEntry||departmentEntry.section==='support')?'page':undefined} onClick={()=>openDepartmentSection('support')}><LifeBuoy/><span>Soporte</span></button>
+              <DepartmentDocumentNavigation section={view==="tickets"&&departmentEntry&&["files","forms","warehouse","workshop"].includes(departmentEntry.section)?departmentEntry.section as DepartmentDocumentSection:null} onSelect={openDepartmentSection} canWorkshop={selectedSupportDepartment!=="ADMINISTRATIVE"&&Boolean(session.permissions.canViewWorkshop&&session.permissions.canCreateMaintenanceMovements)}/>
+              <button type="button" className={view==='tickets'&&departmentEntry?.section==='transitions'?'active':''} aria-current={view==='tickets'&&departmentEntry?.section==='transitions'?'page':undefined} onClick={()=>openDepartmentSection('transitions')}><Building2/><span>Agencias en construcción</span></button>
+              {selectedSupportDepartment==='TECHNOLOGY'&&session.permissions.canManageAgencies&&<button type="button" className={view==='tickets'&&departmentEntry?.section==='agencies'?'active':''} aria-current={view==='tickets'&&departmentEntry?.section==='agencies'?'page':undefined} onClick={()=>openDepartmentSection('agencies')}><MapPin/><span>Actualizar agencias</span></button>}
+            </>}
+            {usesAdministrativeSidebar && <AdministrativeNavigation section={view==="reception"?administrativeSection:null} canSupport={session.permissions.canCreateTickets} canAudit={Boolean(session.permissions.canManageDepartment)||session.email.toLowerCase().replace("@grupotejeda.local","")==="emma.mendoza"} canInventory={Boolean(session.permissions.canManageDepartment&&session.permissions.canManageAdministrativeAssets)} onSelect={section=>{setAdministrativeSection(section);navigateTo("reception")}}/>}
+            {isAdministrator&&<button type="button" className={view==="incidentReports"?"active":""} aria-current={view==="incidentReports"?"page":undefined} onClick={()=>navigateTo("incidentReports")}><FileSignature/><span>Formularios</span></button>}
+            {!isAdministrator&&!isSupervisor&&incidentOperator&&<button type="button" className={view==="incidentReports"?"active":""} aria-current={view==="incidentReports"?"page":undefined} onClick={()=>navigateTo("incidentReports")} title="Todos los informes de incidentes creados por supervisores"><FileText/><span>Incidentes</span></button>}
+            {isSupervisor && (
+              <>
+                <button type="button" className={view === "reception" ? "active" : ""} aria-current={view === "reception" ? "page" : undefined} onClick={() => navigateTo("reception")}>
+                  <FileSignature /><span>Recepción</span>
+                </button>
+                <button type="button" className={view === "incidentReports" ? "active" : ""} aria-current={view === "incidentReports" ? "page" : undefined} onClick={() => navigateTo("incidentReports")}>
+                  <FileText /><span>Incidentes</span>
+                </button>
+              </>
             )}
-            {canOpenWorkshop && (
-              <button type="button" className={view === "workshop" ? "active" : ""} aria-current={view === "workshop" ? "page" : undefined} onClick={() => navigateTo("workshop")}>
-                <Settings /><span>Taller</span>
-              </button>
-            )}
-            {isAdministrator && session.permissions.canManageAudits && (
+            {(isAdministrator && session.permissions.canManageAudits || session.permissions.canManageDepartment) && (
               <button type="button" className={view === "systemAudit" ? "active" : ""} aria-current={view === "systemAudit" ? "page" : undefined} onClick={() => navigateTo("systemAudit")}>
                 <ScrollText /><span>Operación</span>
               </button>
             )}
-            {canOpenLiveQueue && (
+            {canOpenLiveQueue && (isAdministrator || selectedSupportDepartment || session.supportDepartment) && (
               <button type="button" className={view === "queue" ? "active" : ""} aria-current={view === "queue" ? "page" : undefined} onClick={() => navigateTo("queue")}>
                 <Monitor /><span>Cola en vivo</span>
               </button>
             )}
-          </nav>
+          </nav>)}
         </div>
       </header>
       <main
@@ -1225,7 +1594,30 @@ export default function App() {
             <strong>Completa el cambio de contraseña</strong>
             <span>Guarda una contraseña personal en la ventana abierta para activar todas las funciones y notificaciones.</span>
           </section>
-        ) : (view === "tickets" && canOpenTicketWorkspace) ||
+        ) : view === "home" ? (
+          <PortalHome
+            displayName={session.displayName}
+            modules={homeModules}
+            unreadTickets={unreadTicketNotifications}
+            unreadMessages={unreadChatNotifications}
+          />
+        ) : view === "incidentReports" && canViewIncidentReports ? (
+          <Suspense fallback={<Loading/>}><AdministrativeRequests session={session} department={isSupervisor?'SUPERVISION':isAdministrator?undefined:'CALL_CENTER'} incidentOnly={!isAdministrator}/></Suspense>
+        ) : view === "locations" ? (
+          <Suspense fallback={<Loading/>}><AgencyLocations key={session.id}/></Suspense>
+        ) : view === "storage" && isAdministrator ? (
+          <Suspense fallback={<Loading/>}><StorageMigrationPanel/></Suspense>
+        ) : view === "executiveReports" && isAdministrator ? (
+          <Suspense fallback={<Loading/>}><ExecutiveReports/></Suspense>
+        ) : view === "workshop" && canOpenWorkshop ? (
+          <Suspense fallback={<Loading/>}><WorkshopWorkspace session={session}/></Suspense>
+        ) : view === "tickets" && isWarehouseOperator ? (
+          <Suspense fallback={<Loading/>}><WarehouseSupport session={session}/></Suspense>
+        ) : view === "createTicket" && (session.role === "Department" || isWarehouseOperator) ? (
+          <Suspense fallback={<Loading/>}><WarehouseSupport session={session} createOnly/></Suspense>
+        ) : view === "warehouseQueue" && canOpenWarehouseQueue ? (
+          <Suspense fallback={<Loading/>}><WarehouseLiveQueuePage session={session}/></Suspense>
+        ) : ((view === "tickets" || session.role === "Department" && view === "managerSupport") && canOpenTicketWorkspace) ||
         (view === "warehouse" && canOpenWarehouse) ||
         (view === "workshop" && canOpenWorkshop) ? (
           <Suspense fallback={<Loading />}>
@@ -1236,17 +1628,45 @@ export default function App() {
               navigationTarget={supportNavigation}
               supervisorInboxRequestKey={supervisorTicketInboxRequest}
               maintenanceEntry={view === "warehouse" ? "WAREHOUSE" : view === "workshop" ? "WORKSHOP" : null}
+              departmentEntry={view === "tickets" ? departmentEntry : null}
+              onDepartmentChange={(department) => {
+                setSelectedSupportDepartment(department);
+                if (!department) setDepartmentEntry(null);
+              }}
+              onOpenMaintenanceDepartment={canOpenWarehouse && canOpenWorkshop ? (area) => {
+                setSelectedSupportDepartment(null);
+                setDepartmentEntry(null);
+                navigateTo(area === "WAREHOUSE" ? "warehouse" : "workshop");
+              } : undefined}
             />
           </Suspense>
-        ) : ((view === "systemAudit" && isAdministrator) || (view === "queue" && canOpenLiveQueue)) ? (
+        ) : scopedManager&&['managerSupport','managerFiles','managerQueue','managerAudit'].includes(view) ? (
+          <Suspense fallback={<Loading/>}>{view==='managerSupport'?<ManagerDepartmentSupport name={managerDepartmentName}/>:view==='managerFiles'?<DepartmentWorkspace session={session} departmentCode={managerDepartment!} section={scopedManager?"files":departmentDocumentSection}/>:<OperationsCenter mode={view==='managerQueue'?'queue':'audit'} scopedManager departmentScope={managerDepartment!} departmentAuditScope={view==='managerAudit'?managerDepartment:null} onSessionExpired={()=>expireIfUnauthorized({status:401})} onOpenTicket={()=>navigateTo('managerSupport')}/>}</Suspense>
+        ) : usesAdministrativeSidebar && view==='reception' ? (
+          <Suspense fallback={<Loading/>}><AdministrativePortal session={session} departmentCode={managerDepartment!} section={administrativeSection} onSessionExpired={()=>expireIfUnauthorized({status:401})}/></Suspense>
+        ) : session.role==='Department' && !['queue','systemAudit'].includes(view) ? (
+          <Suspense fallback={<Loading/>}>{scopedManager?<ManagerDepartmentSupport name={managerDepartmentName}/>:<DepartmentWorkspace session={session} departmentCode={managerDepartment!} section={scopedManager?"files":departmentDocumentSection}/>}</Suspense>
+        ) : (view === "reception" || session.role === "Administrative") && (isSupervisor || session.role === "Administrative") ? (
+          <Suspense fallback={<Loading />}>
+            <AdministrativePortal session={session} onSessionExpired={()=>expireIfUnauthorized({status:401})} section={session.role==="Administrative"?administrativeSection:undefined} onSectionChange={session.role==="Administrative"?setAdministrativeSection:undefined} />
+          </Suspense>
+        ) : ((view === "systemAudit" && (isAdministrator || session.permissions.canManageDepartment)) || (view === "queue" && canOpenLiveQueue)) ? (
           <Suspense fallback={<Loading />}>
             <OperationsCenter
               mode={view === "queue" ? "queue" : "audit"}
-              teamScope={view==="queue"?technologyQueueTeam:null}
+              globalManager={isAdministrator}
+              directoryScope={isAdministrator?selectedSupportDepartment:null}
+              teamScope={!isAdministrator&&(session.supportTeam==='CALL_CENTER'||session.supportTeam==='TECHNICAL_FAILURE')?session.supportTeam:null}
+              departmentScope={!isAdministrator ? (isWarehouseOperator?'WAREHOUSE':session.supportDepartment || selectedSupportDepartment || null) : null}
+              departmentAuditScope={view==='systemAudit'?(isAdministrator?'ALL':isWarehouseOperator?'WAREHOUSE':session.supportTeam==='WORKSHOP'?'WORKSHOP':session.supportTeam==='CALL_CENTER'||session.supportTeam==='TECHNICAL_FAILURE'?session.supportTeam:session.supportDepartment||null):null}
               onSessionExpired={() => expireIfUnauthorized({status:401})}
               onOpenTicket={openTicketFromOperations}
             />
           </Suspense>
+        ) : view === "users" && isAdministrator && session.permissions.canManageUsers ? (
+          <Suspense fallback={<Loading/>}><UsersPermissionsWorkspace session={session} onClose={()=>navigateTo('dashboard')}/></Suspense>
+        ) : view === "audit" && !session.permissions.canAudit && session.permissions.canViewFieldAudits ? (
+          <Suspense fallback={<Loading />}><AdminPanel key="field-audit-reader" session={session} initialSection="audits" onSessionExpired={() => expireIfUnauthorized({status:401})}/></Suspense>
         ) : view === "audit" && session.permissions.canAudit ? (
           <div
             className={`form-wrap audit-wrap${reportAgencyOpen ? " incident-audit-wrap" : ""}`}
@@ -1308,8 +1728,8 @@ export default function App() {
                           <small>
                             {item.pending}{" "}
                             {item.pending === 1
-                              ? "agencia pendiente"
-                              : "agencias pendientes"}
+                              ? "agencia disponible"
+                              : "agencias disponibles"}
                           </small>
                         </span>
                         <ChevronRight className="arrow" />
@@ -1318,7 +1738,7 @@ export default function App() {
                   </div>
                 )}
                 {!loading && filtered.length === 0 && (
-                  <Empty text="No hay grupos pendientes dentro de tu alcance." />
+                  <Empty text="No hay grupos disponibles dentro de tu alcance." />
                 )}
               </Panel>
             )}
@@ -1327,7 +1747,7 @@ export default function App() {
                 title="Selecciona la agencia"
                 subtitle={
                   <>
-                    Agencias pendientes del grupo <strong>{group}</strong>.
+                    Agencias disponibles del grupo <strong>{group}</strong>. Las ya auditadas permanecen aquí para próximas visitas.
                   </>
                 }
                 back={() => {
@@ -1360,6 +1780,11 @@ export default function App() {
                         <span>
                           <strong>{item.terminal}</strong>
                           <small>Código {item.codigo}</small>
+                          <small>
+                            {item.auditCount
+                              ? `${item.auditCount} ${item.auditCount === 1 ? "auditoría completada" : "auditorías completadas"}${item.lastAuditedAt ? ` · Última ${deviceDate(item.lastAuditedAt).toLocaleDateString("es-DO")}` : ""}`
+                              : "Sin auditorías realizadas"}
+                          </small>
                         </span>
                         <ChevronRight className="arrow" />
                       </button>
@@ -1367,7 +1792,7 @@ export default function App() {
                   </div>
                 )}
                 {!loading && filtered.length === 0 && (
-                  <Empty text="No quedan agencias pendientes en este grupo." />
+                  <Empty text="No hay agencias disponibles en este grupo." />
                 )}
               </Panel>
             )}
@@ -1384,7 +1809,7 @@ export default function App() {
                 </Suspense>
               ) : (
                 <div className="agency-audit-workspace">
-                  {session.role === "GroupAdministrator" &&
+                  {(session.role === "GroupAdministrator" || session.role === "Administrator") &&
                     step === "details" &&
                     agency && (
                     <button
@@ -1394,7 +1819,7 @@ export default function App() {
                     >
                       <LifeBuoy />
                       <span>
-                        <strong>Reportar incidencia</strong>
+                        <strong>Reportar incidencia en mi agencia</strong>
                         <small>
                           {agency.terminal} · {agency.codigo}
                         </small>
@@ -1402,7 +1827,7 @@ export default function App() {
                       <ChevronRight />
                     </button>
                   )}
-                  <EmployeeAuditForm
+                  <Suspense fallback={<Loading/>}><EmployeeAuditForm
                     agency={agency}
                     group={group}
                     onBack={() => setStep("agency")}
@@ -1410,7 +1835,7 @@ export default function App() {
                       setResult(data);
                       setStep("success");
                     }}
-                  />
+                  /></Suspense>
                 </div>
               ))}
             {step === "success" && result && (
@@ -1426,10 +1851,24 @@ export default function App() {
           </Suspense>
         )}
         {equipmentCode&&<Suspense fallback={<p>Abriendo seguimiento…</p>}><EquipmentTracking initialCode={equipmentCode!} onClose={()=>{const url=new URL(window.location.href);url.searchParams.delete("equipment");window.history.replaceState(null,"",url);setEquipmentCode(null);}}/></Suspense>}
-        <footer>© 2026 Oficina Virtual · Control seguro y confidencial · Web V330</footer>
+        <footer>© 2026 Oficina Virtual · Control seguro y confidencial · Web V528</footer>
       </main>
       </div>
+      <nav className="portal-mobile-dock" aria-label="Accesos principales">
+        <button type="button" className={view === "home" ? "active" : ""} onClick={() => navigateTo("home")}><Home/><span>Inicio</span></button>
+        {homeModules.slice(0, 5).map(({ id, title, icon: Icon, onSelect }) => (
+          <button type="button" key={id} className={
+            id === "forms" && view === "incidentReports" ||
+            id === "warehouse" && view === "warehouse" ||
+            id === "workshop" && view === "workshop" ||
+            id === "reports" && (view === "executiveReports" || view === "dashboard") ||
+            id === "users" && view === "users" ||
+            id === "support" && view === "tickets" ? "active" : ""
+          } onClick={onSelect}><Icon/><span>{title.split(" ")[0]}</span></button>
+        ))}
+      </nav>
       {pushPromptOpen&&<div className="push-permission-backdrop"><section className="push-permission-card" role="dialog" aria-modal="true" aria-label="Activar notificaciones"><BellRing/><h2>Activa las notificaciones del teléfono</h2><p>Recibe avisos de tickets y asignaciones aunque no tengas la página abierta.</p><button type="button" onClick={()=>void subscribePhonePush().catch(error=>window.alert(error.message))}>Activar notificaciones</button><button type="button" className="secondary" onClick={()=>{setPushPromptOpen(false);localStorage.setItem('push-prompt-dismissed','1');}}>Ahora no</button></section></div>}
+      {isAdministrator&&adminVoiceWarehouse&&<Suspense fallback={<Loading/>}><WarehouseRequestComposer session={session} department="ADMINISTRATIVE" agencies={[]} initialVoiceBatch={adminVoiceWarehouse} autoSubmitVoice onClose={()=>setAdminVoiceWarehouse(null)} onSaved={()=>{const total=adminVoiceWarehouse.targets.length;setAdminVoiceWarehouse(null);setView('warehouse');const spoken=new SpeechSynthesisUtterance(total===1?'Listo. La solicitud a Almacén fue creada correctamente.':`Listo. Se crearon ${total} solicitudes a Almacén, una para cada agencia.`);spoken.lang='es-DO';window.speechSynthesis?.speak(spoken);window.dispatchEvent(new Event('support-live-refresh'));}}/></Suspense>}
       {!!notificationToasts.length && (
         <aside className="notification-toast-stack" aria-live="assertive" aria-atomic="false" aria-label="Notificaciones nuevas en pantalla">
           {notificationToasts.map((toast) => (
@@ -1487,7 +1926,8 @@ export default function App() {
           ))}
         </aside>
       )}
-      {notificationCenterOpen && (
+      {warehouseNotificationId!==null&&<Suspense fallback={<p>Cargando solicitud…</p>}><WarehouseNotificationDocument id={warehouseNotificationId} session={session} onClose={()=>setWarehouseNotificationId(null)}/></Suspense>}
+      {notificationCenterOpen && createPortal((
         <div
           className="notification-center-backdrop"
           role="presentation"
@@ -1517,6 +1957,7 @@ export default function App() {
                 <X />
               </button>
             </header>
+            {usesWarehouseAlert&&<div className="notification-summary"><button type="button" onClick={async()=>{try{if(!notificationAudio.current)notificationAudio.current=new AudioContext();await notificationAudio.current.resume();playWarehouseAlert(notificationAudio.current);}catch{window.alert('El navegador no permitió activar el audio. Revisa el permiso de sonido de esta página.');}}}><BellRing/>Activar y probar alerta de Almacén</button><small>Alerta fuerte de tres tonos. Ajusta el volumen del dispositivo.</small></div>}
             <div className="notification-summary">
               {visibleCenterItems.some(item=>!item.isRead) ? (notificationCenterKind === "TICKET" ? <Bell /> : <MessageCircle />) : <CheckCircle2 />}
               <span>
@@ -1540,7 +1981,7 @@ export default function App() {
               {notificationCenterKind === "TICKET" && <section className="notification-table-section">
                 <header>
                   <span>
-                    <LifeBuoy /> Tickets
+                    <LifeBuoy /> {receivesWarehouseNotifications?'Tickets y solicitudes de Almacén':'Tickets'}
                   </span>
                   <strong>{ticketNotificationItems.length}</strong>
                 </header>
@@ -1588,10 +2029,10 @@ export default function App() {
             </div>
           </section>
         </div>
-      )}
+      ), document.body)}
       {session.role === "GroupAdministrator" &&
         session.permissions.canUseSupportChat && (
-          <SupportChat
+          <Suspense fallback={<Loading/>}><SupportChat
             session={session}
             onSessionExpired={() => expireIfUnauthorized({status:401})}
             openConversationId={
@@ -1600,18 +2041,22 @@ export default function App() {
                 : null
             }
             openRequestKey={supportNavigation?.requestKey}
-          />
+          /></Suspense>
         )}
       {(profileOpen || session.mustChangePassword) && (
-        <ProfileSettings
+        <Suspense fallback={<Loading/>}><ProfileSettings
           session={session}
           forced={session.mustChangePassword}
           onClose={() => setProfileOpen(false)}
           onSession={(updated) => {
+            if ('persistentSessionToken' in updated) {
+              localStorage.removeItem(persistentSessionStorageKey);
+              rememberPersistentSession(updated);
+            }
             setSession(updated);
-            if (!updated.mustChangePassword) setProfileOpen(false);
+            if (session.mustChangePassword && !updated.mustChangePassword) setProfileOpen(false);
           }}
-        />
+        /></Suspense>
       )}
     </div>
   );

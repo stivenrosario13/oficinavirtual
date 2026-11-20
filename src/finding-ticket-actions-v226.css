@@ -53,3 +53,10 @@
   .ticket-cancel-panel{grid-template-columns:36px 1fr;padding:12px}
   .ticket-cancel-panel>svg{width:18px;height:18px;padding:8px}
 }
+
+.finding-card-auditor{display:flex;margin-top:9px;padding-top:9px;border-top:1px solid #285674;align-items:center;gap:8px;color:#dff6ff;font-size:11px;font-weight:700;line-height:1.4}.finding-card-auditor>svg{flex:0 0 auto;width:18px;height:18px;padding:5px;box-sizing:content-box;border:1px solid #27759a;border-radius:9px;background:#0d3c59;color:#72ddff}.finding-card-auditor>span{display:grid!important;gap:1px!important;padding:0!important}.finding-card-auditor strong{color:#fff!important;font-size:11px!important}.finding-card-auditor em{color:#73d9f6;font-size:9px;font-style:normal;font-weight:800}
+.finding-audit-answer{display:grid!important;gap:3px!important;margin-top:9px;padding:9px!important;border:1px solid #2b6786;border-radius:9px;background:#0b2941}.finding-audit-answer b{color:#6fddff;font-size:9px}.finding-audit-answer em{margin-bottom:4px;color:#effaff;font-size:10px;font-style:normal;line-height:1.45}
+@media(max-width:760px){
+  .finding-ticket-card{grid-template-areas:"code priority" "agency agency" "detail detail" "group actions"!important}
+  .finding-ticket-card>span:nth-child(4){display:block!important;grid-area:detail!important;color:#d4e7f3!important;font-size:11px!important;line-height:1.45!important}
+}

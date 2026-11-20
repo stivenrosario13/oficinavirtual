@@ -1,0 +1,25 @@
+ACTUALIZACION V482 - REPORTE EJECUTIVO GLOBAL HISTORICO
+
+CAMBIOS
+1. Reportes ejecutivos ahora abre directamente como consolidado historico global. No limita los resultados al dia de generacion.
+2. Incluye el total de todos los tickets creados, abiertos, en proceso, resueltos y cerrados.
+3. Desglosa Tecnologia, Call Center, Averia Tecnica, tecnicos, soportes y todos los departamentos.
+4. Incluye todos los hallazgos por supervisor de origen, tecnico, soporte, departamento y estado.
+5. Incluye todas las solicitudes recibidas por Almacen, agrupadas por departamento y estado.
+6. Incluye auditorias completas, pendientes y en revision por grupo, ademas del detalle de todas las agencias y el supervisor que completo cada una.
+7. La pantalla y el PDF indican claramente Historico completo y Todos los registros.
+8. La seccion continua disponible exclusivamente para el Administrador principal.
+
+INSTALACION EN MONSTERASP
+1. Haz una copia de seguridad de la publicacion y configuracion actuales.
+2. Deten el sitio y el Application Pool.
+3. Extrae este ZIP en la misma carpeta donde aplicaste la actualizacion anterior. Incluye las dos rutas habituales de publicacion.
+4. Reemplaza los archivos de la aplicacion. Conserva App_Data, uploads, logs, archivos .env, configuracion de conexion y la base de datos existentes.
+5. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V482.exe. Sube web.config al final.
+6. Inicia el sitio y el Application Pool. Comprueba V482 en /api/version y /version-web.json.
+7. Cierra sesion, recarga con Ctrl+F5 y entra como Administrador principal.
+8. Abre Reporte ejecutivo global y descarga el PDF. Los totales se calculan con todo el historial existente.
+
+CONTENIDO
+Interfaz compilada, API .NET 8, dependencias e instrucciones. No requiere ejecutar SQL manualmente.
+El paquete conserva la configuracion privada de almacenamiento del formato habitual. Guardalo como archivo privado.

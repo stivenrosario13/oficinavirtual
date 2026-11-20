@@ -1,0 +1,23 @@
+ACTUALIZACION V467 - ROBOT CONVERSACIONAL AUTONOMO - MONSTERASP
+
+CAMBIOS V467
+1. “Oficina Virtual” inicia una conversación por voz con el Administrador principal.
+2. El robot busca agencias por código completo, código parcial, nombre y grupo.
+3. Si falta un dato, formula la pregunta en voz alta y escucha la respuesta.
+4. En tickets, si no se indica otra área asume Tecnología y pregunta la falla faltante.
+5. Cuando tiene agencia, área y falla crea el ticket automáticamente y anuncia su número.
+6. Para Almacén pregunta artículos o cantidades faltantes y envía la solicitud automáticamente.
+7. Ya no es necesario llenar el formulario ni pulsar Crear o Enviar.
+8. El cuadro de texto y Procesar comando quedan como alternativa si el navegador no reconoce la voz.
+9. Solo el Administrador principal puede ver o usar este robot.
+
+INSTALACION
+1. Detén el sitio y el Application Pool en MonsterASP.
+2. Extrae el ZIP conservando su estructura y reemplaza la publicación anterior.
+3. No borres App_Data, uploads ni la base de datos del servidor.
+4. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V467.exe.
+5. Inicia el sitio y confirma V467 en /api/version y /version-web.json.
+6. Abre por HTTPS, permite micrófono y sonido, y recarga con Ctrl+F5.
+
+SEGURIDAD
+Este paquete contiene configuración privada de almacenamiento. No lo compartas públicamente.

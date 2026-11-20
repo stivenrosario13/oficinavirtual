@@ -1,0 +1,6 @@
+import {FileSignature,FolderOpen,LifeBuoy,ScrollText,Warehouse} from 'lucide-react';
+export type AdministrativeSection='forms'|'warehouse'|'support'|'files'|'audit'|'inventory';
+export default function AdministrativeNavigation({section,onSelect,canSupport,canAudit,canInventory=false}:{section:AdministrativeSection|null;onSelect:(section:AdministrativeSection)=>void;canSupport:boolean;canAudit:boolean;canInventory?:boolean}){
+ const links=[{key:'support',label:'Soporte',icon:LifeBuoy,show:canSupport},{key:'files',label:'Archivos y comunicaciones',icon:FolderOpen,show:true},{key:'forms',label:'Formularios administrativos',icon:FileSignature,show:true},{key:'warehouse',label:'Solicitudes a Almacén',icon:Warehouse,show:true},{key:'audit',label:'Auditoría operativa',icon:ScrollText,show:canAudit}] as const;
+ return <>{links.filter(item=>item.show).map(({key,label,icon:Icon})=><button key={key} type="button" title={label} className={section===key?'active':''} aria-current={section===key?'page':undefined} onClick={()=>onSelect(key)}><Icon/><span>{label}</span></button>)}{canInventory&&<button type="button" title="Inventario administrativo" className={section==='inventory'?'active':''} aria-current={section==='inventory'?'page':undefined} onClick={()=>onSelect('inventory')}><Warehouse/><span>Inventario administrativo</span></button>}</>;
+}

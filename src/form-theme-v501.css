@@ -1,0 +1,39 @@
+/* V501 · Controles uniformes en todos los formularios de la Oficina Virtual. */
+#root .office-shell :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]),select,textarea) {
+  border: 1px solid #477a98 !important;
+  background: #071b2f !important;
+  color: #f4fbff !important;
+  -webkit-text-fill-color: #f4fbff !important;
+  caret-color: #72e2f5;
+  color-scheme: dark;
+  box-shadow: none;
+}
+
+#root .office-shell :is(input,textarea)::placeholder {
+  color: #8eb0c4 !important;
+  -webkit-text-fill-color: #8eb0c4 !important;
+  opacity: 1;
+}
+
+#root .office-shell select option {
+  background: #0b2238;
+  color: #f4fbff;
+}
+
+#root .office-shell :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]),select,textarea):focus {
+  border-color: #72dff3 !important;
+  outline: 2px solid rgba(92, 210, 239, .3) !important;
+  outline-offset: 1px;
+}
+
+#root .office-shell input:-webkit-autofill,
+#root .office-shell input:-webkit-autofill:hover,
+#root .office-shell input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #071b2f inset !important;
+  -webkit-text-fill-color: #f4fbff !important;
+}
+
+#root .office-shell :is(.adw-dialog,.ticket-modal,.mw-form-panel,.native-doc-modal) label,
+#root .office-shell :is(.adw-dialog,.ticket-modal,.mw-form-panel,.native-doc-modal) legend {
+  color: #d9edf7 !important;
+}

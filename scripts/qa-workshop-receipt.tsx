@@ -1,0 +1,2 @@
+import React from 'react';import {createRoot} from 'react-dom/client';import WorkshopWarehouseRequests from '../src/components/vite/WorkshopWarehouseRequests';import WarehouseRepairedInventory from '../src/components/vite/WarehouseRepairedInventory';
+createRoot(document.getElementById('root')!).render(location.search.includes('repaired')?<WarehouseRepairedInventory department="TECHNOLOGY"/>:<WorkshopWarehouseRequests department="TECHNOLOGY"/>);

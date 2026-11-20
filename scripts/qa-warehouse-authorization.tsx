@@ -1,0 +1,14 @@
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import SentWarehouseRequestHistory from '../src/components/vite/SentWarehouseRequestHistory';
+import WarehousePdfRequests from '../src/components/vite/WarehousePdfRequests';
+import {DocumentSystemModule} from '../src/components/vite/DocumentSystemModule';
+import type {PortalSession} from '../src/lib/session';
+import '../src/vite.css';
+import '../src/theme-system.css';
+import '../src/components/vite/maintenanceWorkflow.css';
+import '../src/components/vite/maintenanceCommunications.css';
+import '../src/components/vite/maintenanceModern.css';
+const args=new URLSearchParams(location.search);
+const session={authenticated:true,id:args.get('user')||'ana.rodriguez',role:args.has('legacy')?'Technology':'Warehouse',supportTeam:args.has('legacy')?'WAREHOUSE':null,permissions:{canAuthorizeWarehouseRequests:!args.has('denied'),canDecideDocuments:true}} as PortalSession;
+createRoot(document.getElementById('root')!).render(<main className="ops-modern"><section className="mc-hub">{args.has('history')?<SentWarehouseRequestHistory department="GENERAL_SERVICES" query=""/>:args.has('documents')?<DocumentSystemModule session={session} tab="communications" channel="requirements" title="Solicitudes" description="QA" initialView="departments"/>:<WarehousePdfRequests session={session} department="TECHNOLOGY"/>}</section></main>);

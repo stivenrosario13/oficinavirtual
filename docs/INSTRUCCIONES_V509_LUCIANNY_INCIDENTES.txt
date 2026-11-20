@@ -1,0 +1,23 @@
+ACTUALIZACION V509 - PERMISOS DE INFORMES DE INCIDENTES
+
+Contenido de esta version:
+- lucianny.gonzalez puede ver todos los informes de incidentes disponibles para Administración.
+- Lucianny puede recibir y sellar el informe.
+- Después de recibirlo, puede aprobar o rechazar cada ticket individualmente.
+- En tickets aprobados puede registrar el monto a pagar.
+- Conserva los mismos permisos operativos que Yessica Mercedes para este formulario.
+- El administrador principal conserva acceso completo.
+- Los supervisores pueden crear y consultar sus informes, pero no pueden autorizar.
+- Se mantienen eliminados los espacios de entrega y recibido exclusivamente en el informe de incidentes.
+
+INSTALACION EN MONSTERASP
+1. Realice una copia de seguridad del sitio y de la base de datos.
+2. Detenga temporalmente el sitio o utilice app_offline.htm durante la sustitucion.
+3. Extraiga el ZIP completo en la raiz del sitio y reemplace todos los archivos.
+4. El paquete incluye las rutas raiz y wwwroot para compatibilidad con el panel.
+5. Confirme que web.config apunta a RegistroAgencias.SqlServer.V509.exe.
+6. Inicie el sitio y compruebe /api/version: V509-WEB-20261113-1350.
+7. Inicie sesion con lucianny.gonzalez y abra Informes de incidentes.
+8. Confirme que puede recibir el informe y decidir cada ticket.
+
+El usuario lucianny.gonzalez debe conservar el perfil Administrativo.

@@ -1,0 +1,22 @@
+ACTUALIZACION V512 - PERMISOS COMPLETOS DE INCIDENTES PARA LUCIANNY
+
+Correccion definitiva:
+- lucianny.gonzalez conserva acceso global a todos los informes de incidentes existentes y futuros.
+- Puede recibir y sellar el informe.
+- Puede recibir con firma y actualizar la firma recibida.
+- Puede aprobar o rechazar individualmente cada ticket.
+- Puede registrar y editar el monto de cada ticket aprobado.
+- Al completar las decisiones, el informe queda autorizado o rechazado y el PDF muestra el sello correspondiente.
+- Estos permisos prevalecen aunque la cuenta conserve un rol tecnico, de Call Center o permisos historicos desactivados.
+- Yessica conserva el mismo flujo.
+- Los supervisores permanecen sin permiso para autorizar.
+
+INSTALACION EN MONSTERASP
+1. Haga una copia de seguridad del sitio y de la base de datos.
+2. Detenga temporalmente el sitio o use app_offline.htm durante la sustitucion.
+3. Extraiga el ZIP completo en la raiz y reemplace todos los archivos.
+4. El paquete contiene las rutas raiz y wwwroot.
+5. Confirme que web.config apunta a RegistroAgencias.SqlServer.V512.exe.
+6. Inicie el sitio y compruebe /api/version: V512-WEB-20261113-1426.
+7. Lucianny debe cerrar sesion y volver a entrar para renovar sus permisos de sesion.
+8. Abra Formularios administrativos, seleccione un informe, reciba y selle; luego apareceran Aprobar y Rechazar en cada ticket.

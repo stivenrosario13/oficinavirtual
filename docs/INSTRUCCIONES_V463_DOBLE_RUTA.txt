@@ -1,0 +1,20 @@
+ACTUALIZACION V463 - EXPLORADOR MODERNO DE ARCHIVOS - MONSTERASP
+
+CAMBIOS V463
+1. Las carpetas aparecen únicamente en el árbol lateral, nunca mezcladas con los archivos.
+2. El árbol permite expandir y contraer subcarpetas y resalta la carpeta activa.
+3. La ruta actual permanece visible y marcada sobre la biblioteca.
+4. Los archivos tienen iconos y colores distintos para PDF, Excel, Word, imágenes, texto y otros formatos.
+5. Las vistas Todos, Compartidos y Papelera muestran archivos, no tarjetas de carpetas.
+6. Se conservan todos los cambios acumulados hasta V462.
+
+INSTALACION
+1. Detén el sitio y el Application Pool en MonsterASP.
+2. Extrae el ZIP conservando su estructura.
+3. Copia el contenido en la raíz publicada. El paquete incluye también wwwroot para instalaciones de doble ruta.
+4. No borres App_Data, uploads ni la base de datos del servidor.
+5. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V463.exe.
+6. Inicia el sitio y confirma V463 en /api/version y /version-web.json.
+
+SEGURIDAD
+Este paquete contiene configuración privada de almacenamiento. No lo compartas públicamente.

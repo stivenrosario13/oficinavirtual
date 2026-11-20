@@ -1,0 +1,22 @@
+ACTUALIZACION V513 - CONTROLES Y PERMISOS REALES PARA LUCIANNY
+
+Correccion aplicada:
+- El sistema repara en SQL los permisos de lucianny.gonzalez al iniciar.
+- La reparacion ocurre despues del perfil Call Center y se garantiza en cada inicio.
+- Se activan canViewDocuments, canReceiveDocuments, canSignDocuments y canDecideDocuments.
+- La pantalla reconoce la cuenta aunque el correo use otro dominio o venga precedido por un dominio de Windows.
+- Lucianny ve directamente Recibir y sellar en cada informe pendiente.
+- Despues de recibir, ve Aprobar y Rechazar junto a cada ticket.
+- Aprobar solicita el monto; Rechazar solicita el motivo.
+- Al terminar todas las decisiones, el informe queda autorizado o rechazado y actualiza su PDF.
+- Funciona también con informes antiguos que tengan un indicador de permiso incorrecto.
+- Los supervisores continúan sin permiso para autorizar.
+
+INSTALACION
+1. Respalde el sitio y la base de datos.
+2. Detenga el sitio y sustituya todos los archivos con el contenido del ZIP.
+3. El paquete incluye la estructura para raíz y wwwroot.
+4. Confirme que web.config apunta a RegistroAgencias.SqlServer.V513.exe.
+5. Inicie el sitio y espere unos segundos para que se repare la cuenta en SQL.
+6. Confirme /api/version: V513-WEB-20261113-1440.
+7. Lucianny debe cerrar sesión, volver a entrar y hacer una actualización forzada del navegador.

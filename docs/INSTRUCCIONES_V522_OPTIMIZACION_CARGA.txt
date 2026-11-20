@@ -1,0 +1,22 @@
+ACTUALIZACIÓN V522 · OPTIMIZACIÓN DE CARGA
+==========================================
+
+1. Realice copia de seguridad del sitio y la base de datos.
+2. Detenga temporalmente la aplicación en MonsterASP.
+3. Extraiga el ZIP y cargue todo su contenido en la raíz del sitio.
+4. No elimine App_Data, cargas, logs ni configuraciones privadas.
+5. Inicie la aplicación y confirme /api/version: V522-WEB-20261116-1530.
+6. Cierre sesión, pulse Ctrl+F5 e inicie sesión nuevamente.
+
+OPTIMIZACIONES PRINCIPALES
+- Los estilos pesados de Chat, Auditoría GPS y Centro de Operaciones se cargan
+  solamente cuando el usuario abre esas secciones.
+- El resultado de auditoría y la recuperación de contraseña quedan bajo demanda.
+- La hoja global inicial se redujo aproximadamente un 29.5% comprimida.
+- La descarga crítica combinada se redujo aproximadamente un 18.9%.
+- Excel, PDF, QR y escáner continúan separados del ingreso normal.
+- Se conservan todos los diseños, permisos y funciones de V521 y anteriores.
+
+EJECUTABLE
+- RegistroAgencias.SqlServer.V522.exe
+

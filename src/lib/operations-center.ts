@@ -7,6 +7,8 @@ export type OperationsTicketHistory = {
   comment?: string | null;
   fromDepartment?: string | null;
   toDepartment?: string | null;
+  fromTeam?: string | null;
+  toTeam?: string | null;
   createdAt: string;
 };
 
@@ -28,10 +30,13 @@ export type OperationsTicket = {
   ticketType: "SUPPORT" | "INTERNAL";
   assignedTeam?: "CALL_CENTER" | "TECHNICAL_FAILURE" | "TECHNICIANS" | null;
   assignedTechnicianName?: string | null;
+  resolvedByName?: string | null;
   history?: OperationsTicketHistory[] | null;
 };
 
 export type OperationsAuditEvent = {
+  reference?: string;
+  module?: string;
   id: string;
   ticketId: string;
   ticketNumber: number;
@@ -54,12 +59,14 @@ export const departmentLabels: Record<string, string> = {
   TECHNOLOGY: "Tecnología",
   GENERAL_SERVICES: "Servicios Generales",
   HUMAN_RESOURCES: "Recursos Humanos",
+  ADMINISTRATIVE: "Departamento Administrativo",
 };
 
 export const departmentPrefixes: Record<string, string> = {
   TECHNOLOGY: "TEC",
   GENERAL_SERVICES: "SG",
   HUMAN_RESOURCES: "RRHH",
+  ADMINISTRATIVE: "ADM",
 };
 
 export const technologyAreaLabels: Record<string, string> = {
@@ -90,9 +97,24 @@ export function operationalQueueStart(now = new Date()) {
   return start;
 }
 
+export function operationalQueueWindow(dateValue?:string,now=new Date()){
+  const date=dateValue||`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+  const [year,month,day]=date.split("-").map(Number);
+  return{start:new Date(year,month-1,day,7,30,0,0),end:new Date(year,month-1,day,22,0,0,0)};
+}
+
 export function ticketsInOperationalQueue<T extends Pick<OperationsTicket, "createdAt">>(tickets: T[], now = new Date()) {
-  const cutoff = operationalQueueStart(now).getTime();
-  return tickets.filter((ticket) => deviceTimestamp(ticket.createdAt) >= cutoff);
+  const {start,end}=operationalQueueWindow(undefined,now),current=now.getTime();
+  if(current<start.getTime()||current>=end.getTime())return [];
+  return tickets.filter((ticket) => {const created=deviceTimestamp(ticket.createdAt);return created>=start.getTime()&&created<end.getTime()});
+}
+
+export function ticketResultForOperationalDate(ticket:OperationsTicket,dateValue:string){
+  const {start,end}=operationalQueueWindow(dateValue),created=deviceTimestamp(ticket.createdAt);
+  if(created<start.getTime()||created>=end.getTime())return null;
+  const completion=(ticket.history||[]).filter(event=>["RESOLVED","CLOSED"].includes(event.action.toUpperCase())).map(event=>deviceTimestamp(event.createdAt)).filter(value=>value>=start.getTime()&&value<=end.getTime()).sort((a,b)=>a-b)[0];
+  const fallback=["RESOLVED","CLOSED"].includes(ticket.status)&&deviceTimestamp(ticket.updatedAt)>=start.getTime()&&deviceTimestamp(ticket.updatedAt)<=end.getTime()?deviceTimestamp(ticket.updatedAt):0;
+  return{result:(completion||fallback)?"COMPLETED" as const:"PENDING" as const,completedAt:completion||fallback||null};
 }
 
 export const turnCode = (ticket: Pick<OperationsTicket, "assignedDepartment" | "assignedTeam" | "ticketNumber">) =>
@@ -168,9 +190,9 @@ export function buildTicketAuditEvents(tickets: OperationsTicket[]): OperationsA
         action: event.action.toUpperCase(),
         actorName: event.actorName || "Sistema",
         comment: event.comment || null,
-        fromDepartment: event.fromDepartment || null,
-        toDepartment: event.toDepartment || null,
-        department: event.toDepartment || ticket.assignedDepartment,
+        fromDepartment: event.fromTeam || event.fromDepartment || null,
+        toDepartment: event.toTeam || event.toDepartment || null,
+        department: event.toTeam || event.toDepartment || ticket.assignedTeam || ticket.assignedDepartment,
         subject: ticket.subject,
         agency: `${ticket.codigo} · ${ticket.terminal}`,
         group: ticket.grupo,

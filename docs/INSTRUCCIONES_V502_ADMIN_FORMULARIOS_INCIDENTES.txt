@@ -1,0 +1,30 @@
+ACTUALIZACION V502 - FORMULARIOS ADMINISTRATIVOS E INCIDENTES
+=============================================================
+
+CORRECCIONES
+- El administrador principal tiene una bandeja global de Formularios
+  administrativos y puede ver los creados por cualquier usuario, incluidos
+  los informes de supervisores como Steven.
+- Los supervisores conservan su bandeja específica de informes de incidentes.
+- La pantalla y el formulario de incidentes fueron reorganizados para
+  escritorio y móvil.
+- Todos los sellos administrativos quedan exclusivamente en la primera hoja.
+- Si existen más páginas, contienen solamente la continuación de los detalles
+  de los tickets y el pie institucional.
+- Se conservan las decisiones independientes, rechazos y montos por ticket.
+
+INSTALACION
+1. Haz copia de seguridad del sitio y la base de datos.
+2. No borres App_Data, uploads, logs ni la configuración privada existente.
+3. Extrae el ZIP en la raíz del sitio y permite reemplazar archivos.
+4. Reinicia la aplicación desde MonsterASP.
+5. Abre una ventana privada y confirma V502-WEB-20261112-1845.
+
+VALIDACION
+1. Inicia como administrador principal y abre Formularios administrativos.
+2. Confirma que aparece el informe creado por el supervisor Steven.
+3. Abre un informe con suficientes tickets para dos páginas.
+4. Confirma que los sellos están en la página 1 y la página 2 solo muestra
+   detalles de tickets.
+
+No requiere migración SQL y conserva los formularios existentes.

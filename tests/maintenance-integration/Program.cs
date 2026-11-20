@@ -13,7 +13,7 @@ try{
  await Exec(conn,"""
  CREATE TABLE agencies(id char(36) PRIMARY KEY,grupo nvarchar(120));
  CREATE TABLE admin_user_groups(user_id nvarchar(80),group_name nvarchar(120));
- CREATE TABLE maintenance_movements(id uniqueidentifier PRIMARY KEY,agency_id char(36),ticket_id uniqueidentifier,department varchar(40),technician_user_id nvarchar(80),technician_name nvarchar(160),movement_type varchar(40),equipment_type nvarchar(100),component_type nvarchar(100),failure_cause nvarchar(200),serial_number nvarchar(120),quantity int,notes nvarchar(2000),created_by_user_id nvarchar(80),created_by_name nvarchar(160),created_at datetime2 DEFAULT SYSUTCDATETIME(),operational_area varchar(20),document_number varchar(40) UNIQUE,qr_token nvarchar(200) UNIQUE,delivered_by_name nvarchar(160),received_by_name nvarchar(160),destination_name nvarchar(200),occurred_at datetime2);
+ CREATE TABLE maintenance_movements(id uniqueidentifier PRIMARY KEY,agency_id char(36),ticket_id uniqueidentifier,department varchar(40),technician_user_id nvarchar(80),technician_name nvarchar(160),movement_type varchar(40),equipment_type nvarchar(100),component_type nvarchar(100),failure_cause nvarchar(200),serial_number nvarchar(120),quantity int,notes nvarchar(2000),created_by_user_id nvarchar(80),created_by_name nvarchar(160),created_at datetime2 DEFAULT SYSUTCDATETIME(),operational_area varchar(20),document_number varchar(40) UNIQUE,qr_token nvarchar(200) UNIQUE,delivered_by_name nvarchar(160),received_by_name nvarchar(160),destination_name nvarchar(200),signature_data nvarchar(max),occurred_at datetime2);
  CREATE TABLE maintenance_requisitions(id uniqueidentifier PRIMARY KEY,requisition_number varchar(40),department varchar(40),product_name nvarchar(160),quantity_requested int,priority varchar(20),status varchar(20),notes nvarchar(2000),requested_by_name nvarchar(160),created_at datetime2 DEFAULT SYSUTCDATETIME(),updated_at datetime2,CONSTRAINT CK_maintenance_requisition_status CHECK(status IN('PENDING','ORDERED','PARTIAL','FULFILLED','CANCELLED')));
  INSERT INTO maintenance_movements(id,document_number,department,operational_area,movement_type,technician_user_id,agency_id,equipment_type,serial_number,quantity,created_by_user_id,created_by_name,qr_token,delivered_by_name,failure_cause,occurred_at) VALUES('11111111-1111-1111-1111-111111111111','DEMO-001','TECHNOLOGY','WAREHOUSE','ENTRY','tech',NULL,N'Equipo de prueba',N'SERIAL-DEMO',1,N'creator',N'Creador',N'REAL-MNT|ALM-20260910-000001-DEMO1',N'Remitente',N'Recepción de prueba',SYSUTCDATETIME());
  INSERT INTO maintenance_requisitions(id,requisition_number,department,product_name,quantity_requested,priority,status,requested_by_name) VALUES('22222222-2222-2222-2222-222222222222','REQ-DEMO','TECHNOLOGY','Equipo de prueba',1,'MEDIUM','PENDING','Solicitante');
@@ -21,6 +21,9 @@ try{
  var db=new Database();var ct=CancellationToken.None;var id=Guid.Parse("11111111-1111-1111-1111-111111111111");
  var initial=JsonDocument.Parse((await db.MaintenanceDocument(id,"warehouse","Technology","WAREHOUSE",ct))!);
  Check(!initial.RootElement.TryGetProperty("receivedAt",out _),"Opening PDF does not mark receipt");
+ await Exec(conn,"UPDATE maintenance_movements SET signature_data='LEGACY-MOVEMENT' WHERE id='11111111-1111-1111-1111-111111111111';");
+ var movementSignature=JsonDocument.Parse((await db.MaintenanceDocument(id,"warehouse","Technology","WAREHOUSE",ct))!);
+ Check(movementSignature.RootElement.GetProperty("signatureData").GetString()=="LEGACY-MOVEMENT","Document fetch preserves the legacy movement signature without requiring it in the list");
  Check(await db.MaintenanceDocument(id,"other","GeneralServices",null,ct)==null,"Other department cannot read document");
  Check(!(await db.MarkMaintenanceDocument(id,new("RECEIVE"),"other","GeneralServices",null,"Other","other",ct)).Ok,"Other department cannot receive");
  Check(!(await db.MarkMaintenanceDocument(id,new("RECEIVE",12,200),"warehouse","Technology","WAREHOUSE","Receiver","receiver.login",ct)).Ok,"Receipt is blocked until both parties sign");
@@ -62,6 +65,14 @@ try{
  Check(await db.MaintenanceTemplateFile(templateId,"Technology","WAREHOUSE",ct)!=null,"Warehouse retains access for recovery");
  Check(await db.ArchiveMaintenanceTemplate(templateId,false,"Publisher",ct)&&await db.MaintenanceTemplateFile(templateId,"Technology",null,ct)!=null,"Archive restoration preserves file");
  var docOwner=new DocumentActor("owner","Technology","","Owner","owner.real");var otherDept=new DocumentActor("other","GeneralServices","","Other","other.real");var recipient=new DocumentActor("recipient","Technology","","Recipient","recipient.real");var warehouse=new DocumentActor("warehouse","Technology","WAREHOUSE","Warehouse","warehouse.real");
+ var requester=docOwner with{WarehouseRequestOnly=true};
+ var ownRequest=new InstitutionalFile{OwnerUserName=docOwner.Id,Department=docOwner.Department,Area="communications",Channel="requirements",RecipientDepartment="Almacén",WarehouseRequest=new("SOL-ALM-QA",Guid.NewGuid(),"1","QA","QA","","","MEDIUM",[])};
+ Check(ownRequest.Accessible(requester),"Requester can read own warehouse request");
+ ownRequest.OwnerUserName="someone-else";ownRequest.SentUtc=DateTime.UtcNow;ownRequest.Status="pending";
+ Check(!ownRequest.Accessible(requester),"Requester cannot read a colleague's warehouse request");
+ Check(!ownRequest.Accessible(warehouse with{WarehouseRequestOnly=true}),"Requester cannot use warehouse role to bypass ownership");
+ ownRequest.OwnerUserName=docOwner.Id;ownRequest.WarehouseRequest=null;
+ Check(!ownRequest.Accessible(requester),"Requester cannot access general documents even when owner");
  var fid=await db.InstitutionalUpload(new(){Title="Archivo privado",OwnerUserName=docOwner.Id,OwnerDisplayName=docOwner.Name,Department=docOwner.Department,OriginalFileName="test.pdf",ContentType="application/pdf",Size=5},"%PDF-"u8.ToArray(),ct);
  Check(await db.InstitutionalDetail(fid,otherDept,ct)==null,"Other department cannot read unshared files");
  Check(await db.InstitutionalBytes(fid,otherDept,ct)==null,"Other department cannot download unshared bytes");

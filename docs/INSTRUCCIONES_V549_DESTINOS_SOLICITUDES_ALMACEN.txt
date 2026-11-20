@@ -1,0 +1,20 @@
+ACTUALIZACIÓN V549 · DESTINOS DE SOLICITUDES A ALMACÉN · MONSTERASP
+
+ALCANCE ÚNICO
+- Los usuarios administrativos pueden solicitar a Almacén para una agencia.
+- Pueden crear solicitudes para varias agencias; se genera una solicitud y un PDF por agencia.
+- Pueden solicitar para su propio departamento sin seleccionar una agencia.
+
+CONTENIDO DEL ZIP
+- Actualización incremental exclusivamente de la interfaz web.
+- Incluye doble ruta para funcionar al extraer en la raíz del sitio de MonsterASP.
+- No reemplaza DLL, web.config, appsettings, .env, App_Data, uploads, logs ni Data.
+
+INSTALACIÓN
+1. Conserve la copia de seguridad habitual del sitio.
+2. Extraiga el ZIP en la raíz del sitio y permita reemplazar los archivos incluidos.
+3. No elimine archivos ni carpetas existentes.
+4. Inicie sesión con un usuario administrativo.
+5. Abra Solicitudes a Almacén y pulse Nueva solicitud.
+6. Confirme las opciones Para una agencia, Para varias agencias y Para mi departamento.
+

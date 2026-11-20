@@ -1,0 +1,54 @@
+/* The viewer owns its layout so opening a document directly never depends on
+   styles loaded by another document module or a previous navigation. */
+.native-doc-detail{display:flex;flex-direction:column;gap:20px;min-width:0;width:100%}
+.native-doc-detail .native-doc-detail-toolbar{display:flex;flex-direction:column;align-items:stretch;gap:20px;padding:22px;border:1px solid #31556e;border-radius:16px;background:#10283d;color:#e6f4fb;box-sizing:border-box}
+.native-doc-detail .native-doc-detail-toolbar>.document-heading-row{display:flex;flex:0 0 auto;align-items:flex-start;gap:18px;min-width:0;width:100%;order:0}
+.native-doc-detail .document-heading-row>button{flex:none}
+.native-doc-detail .document-heading-copy{display:grid;gap:8px;min-width:0;flex:1}
+.native-doc-detail .native-doc-detail-toolbar h2{margin:0;color:#fff!important;font-size:clamp(20px,1.6vw,25px);line-height:1.35;overflow-wrap:anywhere}
+.native-doc-detail .native-doc-detail-toolbar small{font-size:11px;font-weight:750;letter-spacing:.08em;color:#75d7e9}
+.native-doc-detail .native-doc-detail-toolbar p{margin:0;color:#b5cad9;font-size:13px;line-height:1.5}
+.native-doc-detail .native-doc-detail-toolbar>.document-action-bar{display:flex;flex:0 0 auto;align-items:center;flex-wrap:wrap;gap:10px;min-width:0;width:100%;order:0;padding-top:18px;border-top:1px solid #31556e}
+.native-doc-detail .native-doc-detail-toolbar button,.native-doc-detail .native-doc-detail-toolbar a{display:inline-flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box;min-height:42px;max-width:100%;padding:10px 14px;border:1px solid #42647b;border-radius:9px;background:#173c51;color:#e8f8ff;white-space:normal;text-align:center;font:inherit;font-size:12px;font-weight:650;line-height:1.4;text-decoration:none;cursor:pointer}
+.native-doc-detail .native-doc-detail-toolbar button.primary{background:#147b9b;border-color:#54c6e8;color:#fff}
+.native-doc-detail .native-doc-detail-toolbar button:disabled{opacity:.5;cursor:not-allowed}
+.native-doc-detail .native-doc-detail-toolbar svg{flex:none;width:18px;height:18px}
+.native-doc-detail .id-document-workspace{min-width:0;overflow:hidden;border:1px solid #31556e;border-radius:16px;background:#0b1e30}
+.native-doc-detail .id-document-viewer-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:20px;padding:20px;border-bottom:1px solid #31556e;background:#102b42}
+.native-doc-detail .id-document-viewer-header>div:first-child{display:grid;gap:8px;min-width:0;flex:1 1 300px}
+.native-doc-detail .id-document-viewer-header small{font-size:10px;font-weight:800;letter-spacing:.12em;color:#75d7e9}
+.native-doc-detail .id-document-viewer-header strong{font-size:15px;line-height:1.5;color:#fff}
+.native-doc-detail .id-document-viewer-header span{font-size:12px;line-height:1.5;color:#b5cad9}
+.native-doc-detail .id-document-zoom{display:flex;flex:0 1 auto;align-items:center;justify-content:center;gap:8px;min-width:0;max-width:100%;padding:8px;border:1px solid #31556e;border-radius:10px;background:#0a2034}
+.native-doc-detail .id-document-zoom label{display:flex;align-items:center;gap:8px;min-width:0;margin:0}
+.native-doc-detail .id-document-zoom input{width:110px;min-width:50px;max-width:100%;padding:0;accent-color:#35bce0}
+.native-doc-detail .id-document-zoom output{min-width:42px;font-size:12px;color:#e6f4fb;text-align:center}
+.native-doc-detail .id-document-zoom button{display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:none;width:auto;min-width:38px;min-height:38px;padding:8px;border:1px solid #42647b;border-radius:8px;background:#173c51;color:#e8f8ff;cursor:pointer}
+.native-doc-detail .id-document-zoom svg{width:18px;height:18px}
+.native-doc-detail .id-document-zoom button:disabled{opacity:.45;cursor:not-allowed}
+.native-doc-detail .id-document-workspace>.native-doc-detail-body{display:block;min-width:0;padding:0;background:#071928}
+.id-pdf{display:flex;flex-direction:column;gap:0;min-width:0;width:100%}
+.id-pdf>nav{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:12px;padding:14px 18px;border-bottom:1px solid #31556e;background:#0d253b}
+.id-pdf>nav>button{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 14px;border:1px solid #42647b;border-radius:8px;background:#173c51;color:#e8f8ff;font:inherit;font-size:12px;cursor:pointer}
+.id-pdf>nav>button:disabled{opacity:.45;cursor:not-allowed}
+.id-pdf>nav>span{padding:0 4px;color:#c7dce9;font-size:12px;white-space:nowrap}
+.id-pdf-scroll{min-width:0;width:100%;max-height:80vh;min-height:430px;overflow:auto;padding:20px 0;background:#071928;box-sizing:border-box}
+.id-pdf-stage{box-sizing:border-box;min-height:100%;padding:0 12px;margin:0 auto}
+.id-pdf-paper{position:relative;margin:0 auto;background:#fff;box-shadow:0 8px 30px #0005}
+.id-pdf-paper canvas{display:block;width:100%;height:auto}
+.id-pdf-loading,.id-pdf-error{margin:0;padding:16px 20px;color:#c7dce9;background:#10283d}
+.native-doc-detail button:focus-visible,.id-pdf>nav>button:focus-visible{outline:3px solid #75d7e9;outline-offset:3px}
+@media(max-width:760px){
+ .native-doc-detail .native-doc-detail-toolbar{padding:16px;gap:16px}
+ .native-doc-detail .native-doc-detail-toolbar>.document-heading-row{flex-direction:column;gap:14px}
+ .native-doc-detail .native-doc-detail-toolbar>.document-action-bar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ .native-doc-detail .document-action-bar>button,.native-doc-detail .document-action-bar>a{width:100%;min-width:0}
+ .native-doc-detail .id-document-viewer-header{padding:16px;align-items:stretch;flex-direction:column;gap:16px}
+ .native-doc-detail .id-document-viewer-header>div:first-child{flex:0 1 auto}
+ .native-doc-detail .id-document-zoom{width:100%;box-sizing:border-box;gap:6px}
+ .native-doc-detail .id-document-zoom label{flex:1;justify-content:center}
+ .native-doc-detail .id-document-zoom input{width:100%;min-width:35px}
+ .native-doc-detail .id-document-zoom label>span{display:none}
+ .native-doc-detail .id-document-zoom .fit{font-size:0;gap:0}
+ .id-pdf>nav{gap:8px;padding:12px}
+}

@@ -1,0 +1,25 @@
+ACTUALIZACION V485 - REPORTES DE TALLER Y CARPETAS COMPARTIDAS
+
+CAMBIOS PRINCIPALES
+- Taller incluye reportes de entradas y salidas, equipos sin reparacion y movimientos.
+- Cada reporte permite seleccionar un rango independiente Desde/Hasta y descargar el PDF.
+- El reporte ejecutivo global incluye Taller en Totales por area.
+- Las carpetas pueden compartirse con hasta 20 cuentas activas.
+- El selector permite buscar personas de cualquier departamento o perfil, incluidos administradores.
+- Los destinatarios seleccionados pueden ver y trabajar con la carpeta y sus subcarpetas.
+
+INSTALACION EN MONSTER ASP
+1. Conserva una copia de seguridad y detiene el sitio y el Application Pool.
+2. Extrae el ZIP sobre la publicacion actual y acepta reemplazar los archivos.
+3. No elimines ni reemplaces manualmente App_Data, uploads, logs, .env ni la base de datos.
+4. Confirma que web.config apunte a .\RegistroAgencias.SqlServer.V485.exe y subelo al final.
+5. Inicia el sitio y comprueba V485 en /api/version.
+6. Cierra sesion, vuelve a entrar y recarga el navegador con Ctrl+F5.
+
+COMPROBACIONES
+- En Taller deben aparecer los tres tipos de reporte y los calendarios Desde/Hasta.
+- En Reporte ejecutivo global debe aparecer Taller dentro de Totales por area.
+- En Archivos y comunicaciones, Administrar acceso debe mostrar cuentas de cualquier departamento.
+- Debe permitir seleccionar como maximo 20 personas y mostrar el contador de seleccion.
+
+No requiere ejecutar SQL manualmente. El paquete contiene configuracion privada de almacenamiento; no lo compartas publicamente.

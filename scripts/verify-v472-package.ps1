@@ -1,0 +1,11 @@
+$ErrorActionPreference='Stop'
+$root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$zip=Get-ChildItem -LiteralPath (Join-Path $root 'outputs') -Filter 'ACTUALIZACION_V472_COMPLETA_PRIVADA_MONSTERASP_*.zip'|Sort-Object LastWriteTime -Descending|Select-Object -First 1
+if(!$zip){throw 'No se encontró el paquete V472'}
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archive=[IO.Compression.ZipFile]::OpenRead($zip.FullName)
+function Read-Entry([string]$name){$entry=$archive.GetEntry($name);if(!$entry){throw "Falta $name"};$reader=[IO.StreamReader]::new($entry.Open());try{$reader.ReadToEnd()}finally{$reader.Dispose()}}
+try{foreach($prefix in @('','wwwroot/')){$version=(Read-Entry ($prefix+'wwwroot/version-web.json'))|ConvertFrom-Json;if($version.release-ne'V472'-or$version.voiceOperations-ne'visual-agency-options-multi-agency-voice-batches-v472'){throw 'Marcadores V472 incorrectos'};$config=Read-Entry ($prefix+'web.config');if($config-notmatch'RegistroAgencias.SqlServer.V472.exe'){throw 'Ejecutable incorrecto'};$xml=[xml]$config;$credential=$xml.SelectSingleNode("//environmentVariable[@name='STORAGE_KEY']");if(!$credential-or[string]::IsNullOrWhiteSpace($credential.GetAttribute('value'))){throw 'Falta almacenamiento privado'};$scripts=($archive.Entries|Where-Object {$_.FullName-like($prefix+'wwwroot/assets/*.js')}|ForEach-Object {Read-Entry $_.FullName})-join"`n";foreach($marker in @('Agencias encontradas','Solicitud por agencias','continuemos con la otra','crear solicitudes','MULTI_AGENCY')){if(!$scripts.Contains($marker)){throw "Falta marcador: $marker"}};if(!$archive.GetEntry($prefix+'RegistroAgencias.SqlServer.V472.dll')-or!$archive.GetEntry($prefix+'RegistroAgencias.SqlServer.V472.exe')){throw 'Falta API V472'}};if($archive.Entries.FullName|Where-Object {$_-match'(^|/)(\.env[^/]*|appsettings[^/]*|app_offline\.htm)$|(^|/)(App_Data|uploads|logs|node_modules)/'}){throw 'Contenido no permitido'}}finally{$archive.Dispose()}
+$hash=(Get-FileHash -LiteralPath $zip.FullName -Algorithm SHA256).Hash
+Set-Content -LiteralPath ($zip.FullName+'.sha256.txt') -Value "$hash  $($zip.Name)" -Encoding ascii
+[pscustomobject]@{Zip=$zip.FullName;MB=[Math]::Round($zip.Length/1MB,2);SHA256=$hash;VisualAgencyOptions='verified';MultiAgencyVoice='verified';PerAgencyArticles='verified';SeparateRequests='verified';Release='V472'}|ConvertTo-Json

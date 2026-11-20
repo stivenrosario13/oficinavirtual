@@ -1,0 +1,13 @@
+$ErrorActionPreference='Stop'
+$root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'));Set-Location $root
+$stamp=Get-Date -Format 'yyyyMMddHHmmss';$publish=Join-Path $root "outputs/_publish_v526_inicio_completo_$stamp";$zip=Join-Path $root "outputs/V526_INICIO_COMPLETO_SIN_SIDEBAR_TARJETAS_ANCHAS_ACTIVIDAD_REGION_MAS_V525_DOBLE_RUTA_MONSTERASP_$stamp.zip"
+& npm run build;if($LASTEXITCODE-ne 0){throw 'Error compilando V526.'}
+& dotnet publish api/RegistroAgencias.Api.csproj -c Release -o $publish --no-self-contained;if($LASTEXITCODE-ne 0){throw 'Error publicando V526.'}
+Copy-Item -LiteralPath (Join-Path $root 'api/web.config') -Destination (Join-Path $publish 'web.config') -Force
+Copy-Item -LiteralPath (Join-Path $root 'docs/INSTRUCCIONES_V526_INICIO_COMPLETO.txt') -Destination $publish -Force
+$files=@(Get-ChildItem -LiteralPath $publish -Recurse -File)
+if($files|Where-Object {$_.Name-match '^\.env|^appsettings|^app_offline\.htm$' -or $_.FullName.Contains('\App_Data\') -or $_.FullName.Contains('\uploads\') -or $_.FullName.Contains('\logs\')}){throw 'Archivos privados encontrados.'}
+Add-Type -AssemblyName System.IO.Compression;Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archive=[IO.Compression.ZipFile]::Open($zip,[IO.Compression.ZipArchiveMode]::Create);try{foreach($prefix in @('','wwwroot/')){foreach($file in $files){$name=$prefix+$file.FullName.Substring($publish.Length+1).Replace('\','/');[void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,$file.FullName,$name,[IO.Compression.CompressionLevel]::Optimal)}}}finally{$archive.Dispose()}
+$archive=[IO.Compression.ZipFile]::OpenRead($zip);try{$names=@($archive.Entries.FullName);if(($names|Select-Object -Unique).Count-ne$names.Count){throw 'Entradas duplicadas.'};foreach($file in $files){foreach($prefix in @('','wwwroot/')){$name=$prefix+$file.FullName.Substring($publish.Length+1).Replace('\','/');if(!$archive.GetEntry($name)){throw "Falta $name"}}};foreach($prefix in @('','wwwroot/')){foreach($required in @('web.config','RegistroAgencias.SqlServer.V526.dll','RegistroAgencias.SqlServer.V526.exe','wwwroot/index.html','wwwroot/version-web.json','INSTRUCCIONES_V526_INICIO_COMPLETO.txt')){if(!$archive.GetEntry($prefix+$required)){throw "Falta $prefix$required"}}}}finally{$archive.Dispose()}
+$hash=(Get-FileHash $zip -Algorithm SHA256).Hash;[IO.File]::WriteAllText($zip+'.sha256.txt',"$hash  $([IO.Path]::GetFileName($zip))`r`n",[Text.Encoding]::ASCII);[pscustomobject]@{Zip=$zip;Bytes=(Get-Item $zip).Length;Files=$files.Count*2;SHA256=$hash}|ConvertTo-Json

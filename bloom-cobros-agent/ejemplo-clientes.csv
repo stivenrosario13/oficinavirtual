@@ -1,0 +1,5 @@
+id,contrato,cedula,nombre,apellido,telefono,balance,mensualidad,fecha de pago,estatus,sector,localidad,consentimiento whatsapp,no contactar
+1,C-1001,00100000001,Ana,Pérez,8095550101,1560,1560,25/09/2026,Activo,Naco,Santo Domingo,si,no
+2,C-1002,00100000002,Luis,Ramírez,8295550102,0,1200,25/09/2026,Activo,Los Mina,Santo Domingo,si,no
+3,C-1003,00100000003,María,Santos,8495550103,3200,1600,15/08/2026,Legal,Santiago,Santiago,si,no
+4,C-1004,00100000004,Carlos,Reyes,8095550104,1800,1800,20/09/2026,Cortado,Herrera,Santo Domingo,no,no

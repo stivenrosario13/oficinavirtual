@@ -1,0 +1,35 @@
+ACTUALIZACION V470 - OFICINA VIRTUAL POR PALABRA CLAVE Y TURNOS ORDENADOS - MONSTERASP
+
+CAMBIOS V470
+1. El micrófono ya no se enciende automáticamente al entrar al sistema.
+2. El Administrador principal debe pulsar una sola vez el botón del robot para autorizar y dejar preparada la palabra clave.
+3. Después de esa autorización, el asistente permanece silencioso y solo abre la conversación al escuchar exactamente “Oficina Virtual” o “Hola Oficina Virtual”.
+4. Frases parecidas, conversaciones ambientales, ruidos y resultados incompletos no activan el robot.
+5. También admite una orden completa: “Oficina Virtual, créame un ticket...” o “Oficina Virtual, crea una solicitud a Almacén...”.
+6. La conversación funciona por turnos: el robot termina toda su respuesta y solamente después vuelve a escuchar al usuario.
+7. La voz del robot y los sonidos durante su respuesta ya no interrumpen ni adelantan la conversación.
+8. Conserva la validación estricta de agencias, nombres, grupos, áreas, fallas activas, detalles, inventario y cantidades.
+9. Si falta un dato o existe una coincidencia ambigua, pregunta y espera la respuesta antes de crear el registro.
+10. Conserva la lectura de códigos de agencia por pares y pronuncia también el nombre de la agencia.
+11. Solo el Administrador principal puede ver y utilizar Oficina Virtual.
+
+USO INICIAL
+1. Entra al sistema: el micrófono permanecerá apagado.
+2. Pulsa una vez el icono del robot y concede permiso al micrófono si el navegador lo solicita.
+3. El robot quedará “En espera de Oficina Virtual” sin abrir la conversación.
+4. Di “Oficina Virtual”. El asistente responderá y, cuando termine de hablar, mostrará “Ahora te escucho”.
+5. Habla únicamente cuando el robot haya terminado su respuesta.
+
+NOTA DEL NAVEGADOR
+Por seguridad, un sitio web no puede encender el micrófono por sí solo al cargar la página. La pulsación inicial es obligatoria para autorizar la palabra clave. Después de autorizarla, la llamada “Oficina Virtual” activa la conversación como asistente de voz mientras la sesión y la pestaña permanezcan disponibles.
+
+INSTALACION
+1. Detén el sitio y el Application Pool en MonsterASP.
+2. Extrae el ZIP conservando su estructura y reemplaza la publicación anterior.
+3. No borres App_Data, uploads ni la base de datos del servidor.
+4. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V470.exe.
+5. Inicia el sitio y confirma V470 en /api/version y /version-web.json.
+6. Abre por HTTPS, permite micrófono y sonido, y recarga con Ctrl+F5.
+
+SEGURIDAD
+Este paquete contiene configuración privada de almacenamiento. No lo compartas públicamente.

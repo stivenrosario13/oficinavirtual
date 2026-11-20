@@ -1,0 +1,22 @@
+V535 - V520 + PREGUNTA Y RESPUESTA DE AUDITORIA DE CAMPO
+=========================================================
+
+CAMBIOS PUNTUALES
+- Cada hallazgo muestra la pregunta exacta de Auditoría de campo.
+- Debajo muestra la respuesta registrada: Sí o No.
+- Para averías, la respuesta incluye también la clasificación seleccionada.
+- La pregunta y respuesta aparecen en pantalla y en el PDF descargado.
+- Se conservan los logos, el diseño institucional y los saltos de página.
+- Se mantiene la base visual V520 y la resistencia del endpoint de notificaciones.
+
+INSTALACION
+1. Reemplace completamente la versión anterior por el contenido de este ZIP.
+2. Si MonsterASP publica desde wwwroot, utilice la copia completa incluida en wwwroot.
+3. No elimine App_Data, uploads, logs, appsettings ni variables privadas.
+4. Reinicie el sitio y abra con Ctrl+F5.
+
+VERIFICACION
+- Confirme la versión V535-WEB-20261116-2106.
+- Abra un hallazgo en Reporte ejecutivo global.
+- Verifique “Pregunta de Auditoría de campo” y “Respuesta registrada en Auditoría de campo”.
+- Descargue el PDF y confirme que contiene los mismos dos datos.

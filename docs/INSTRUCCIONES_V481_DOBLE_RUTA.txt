@@ -1,0 +1,24 @@
+ACTUALIZACION V481 - GPS DE AUDITORIA Y REPORTES EJECUTIVOS EN PDF
+
+CAMBIOS
+1. La auditoria de campo acepta la mejor coordenada GPS valida disponible y conserva su precision real, incluso cuando la señal del dispositivo supera 100 metros.
+2. La correccion aplica a todos los supervisores, incluido robert.medina del grupo Hondo Valle, sin excepciones por usuario.
+3. La foto se conserva si el GPS tarda o falla y permite usar Reintentar GPS. Los permisos de ubicacion desactivados y las coordenadas invalidas continúan bloqueados.
+4. La comparacion entre fotos considera el margen de incertidumbre informado por cada lectura GPS, evitando rechazos falsos sin eliminar la validacion geografica.
+5. Se agrega Reportes ejecutivos, visible exclusivamente para el Administrador principal.
+6. Permite consultar y descargar reportes Diario, Semanal y Global en PDF profesional con la identidad visual del sistema.
+7. Incluye tickets de Tecnologia, Call Center y Averia Tecnica, casos solucionados, hallazgos, solicitudes de Almacen y auditorias completadas, pendientes y en revision por grupo y agencia.
+
+INSTALACION EN MONSTERASP
+1. Haz una copia de seguridad de la publicacion y configuracion actuales.
+2. Deten el sitio y el Application Pool.
+3. Extrae este ZIP en la misma carpeta donde aplicaste la actualizacion anterior, conservando toda su estructura. Incluye las dos rutas habituales de publicacion.
+4. Reemplaza los archivos de la aplicacion. Conserva App_Data, uploads, logs, archivos .env, configuracion de conexion y la base de datos existentes.
+5. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V481.exe. Sube web.config al final de la transferencia.
+6. Inicia el sitio y el Application Pool. Comprueba V481 en /api/version y /version-web.json.
+7. Cierra sesion, recarga con Ctrl+F5 y vuelve a entrar. En el telefono confirma que el navegador tenga permiso de Camara y Ubicacion.
+8. Con el Administrador principal abre Reportes ejecutivos, selecciona el periodo y descarga el PDF.
+
+CONTENIDO
+Interfaz compilada, API .NET 8, dependencias e instrucciones. No requiere ejecutar SQL manualmente para este cambio.
+El paquete conserva la configuracion privada de almacenamiento del formato habitual. Guardalo como archivo privado.

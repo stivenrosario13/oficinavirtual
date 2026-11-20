@@ -1,0 +1,316 @@
+/* V521 · Capa visual final y coherente para toda la Oficina Virtual. */
+:root {
+  --pro-bg: #020d19;
+  --pro-bg-soft: #041525;
+  --pro-surface: #071d32;
+  --pro-surface-2: #0a2944;
+  --pro-surface-3: #0d3556;
+  --pro-border: #285d7c;
+  --pro-border-soft: #1b435f;
+  --pro-text: #f4fbff;
+  --pro-muted: #a8c8da;
+  --pro-subtle: #789bb0;
+  --pro-accent: #55d9ff;
+  --pro-primary: #1595c8;
+  --pro-primary-strong: #0874a7;
+  --pro-success: #35d3a0;
+  --pro-warning: #ffc56e;
+  --pro-danger: #ff7890;
+  --pro-radius: 14px;
+  --pro-radius-sm: 10px;
+  --pro-shadow: 0 16px 42px rgb(0 0 0 / 32%);
+  --pro-shadow-soft: 0 8px 24px rgb(0 0 0 / 22%);
+  --pro-control-height: 44px;
+  font-family: Inter, "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  color-scheme: dark;
+}
+
+html { background: var(--pro-bg); }
+body {
+  min-width: 320px;
+  background:
+    radial-gradient(circle at 82% -12%, rgb(22 142 197 / 17%), transparent 31%),
+    radial-gradient(circle at -8% 72%, rgb(27 107 151 / 12%), transparent 28%),
+    linear-gradient(155deg, var(--pro-bg), var(--pro-bg-soft) 55%, #03111f);
+  color: var(--pro-text);
+  font-size: 14px;
+  line-height: 1.55;
+  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: rgb(85 217 255 / 28%); color: #fff; }
+* { scrollbar-width: thin; scrollbar-color: #277ea7 #041525; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: #041525; }
+*::-webkit-scrollbar-thumb { border: 2px solid #041525; border-radius: 999px; background: #277ea7; }
+
+:where(h1, h2, h3, h4, strong, b) { color: var(--pro-text); }
+:where(p, small, .muted, [class*="description"], [class*="subtitle"]) { color: var(--pro-muted); }
+h1 { font-size: clamp(28px, 3vw, 42px); line-height: 1.08; letter-spacing: -.035em; }
+h2 { font-size: clamp(22px, 2vw, 30px); line-height: 1.15; letter-spacing: -.025em; }
+h3 { font-size: clamp(17px, 1.3vw, 21px); line-height: 1.25; }
+h4 { font-size: 15px; line-height: 1.3; }
+p { font-size: 13px; line-height: 1.65; }
+small { font-size: 11px; line-height: 1.5; }
+
+.office-shell .workspace,
+.workspace {
+  width: min(1540px, 100%) !important;
+  margin-inline: auto !important;
+  padding: clamp(20px, 2.2vw, 34px) !important;
+}
+
+.site-header {
+  min-height: 76px;
+  border-bottom: 1px solid rgb(85 217 255 / 22%) !important;
+  background: linear-gradient(110deg, rgb(3 17 31 / 96%), rgb(7 36 60 / 96%) 58%, rgb(9 56 87 / 94%)) !important;
+  box-shadow: 0 12px 36px rgb(0 0 0 / 38%) !important;
+  backdrop-filter: blur(18px) saturate(1.2);
+}
+.site-header-inner { width: min(1540px, 100%) !important; min-height: 76px; gap: 18px !important; padding-inline: clamp(16px, 2vw, 30px) !important; }
+.site-brand { gap: 12px !important; }
+.site-brand > span strong { font-size: 14px !important; letter-spacing: .01em; }
+.site-brand > span small { color: var(--pro-accent) !important; font-size: 9px !important; font-weight: 850; letter-spacing: .12em; }
+.site-header .main-nav { gap: 7px !important; }
+.site-header .main-nav button {
+  min-height: 42px !important;
+  padding: 9px 13px !important;
+  border: 1px solid transparent !important;
+  border-radius: 11px !important;
+  color: var(--pro-muted) !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+.site-header .main-nav button:hover { border-color: var(--pro-border) !important; background: rgb(11 48 78 / 74%) !important; color: #fff !important; }
+.site-header .main-nav button.active { border-color: #55d9ff55 !important; background: linear-gradient(145deg, #0e6695, #1599ca) !important; color: #fff !important; box-shadow: 0 9px 23px rgb(0 0 0 / 32%) !important; }
+
+:where(.panel,.dashboard-card,.support-home-hero,.support-department-portal,.support-section-card,
+.ticket-navigation-card-grid > button,.department-primary-grid > button,.report-module-selector > button,
+.report-panel,.service-report-block,.automatic-findings,.maintenance-board,.technician-picker,
+.admin-ticket-control,.notification-center,.profile-settings,.user-department-cards > button,
+.personnel-kind-cards > button,.ticket-card,.finding-table-card,.agency-transition-card,
+.warehouse-pdf-management,.mc-side-panel,.mc-department-folders,.ops-guide,.ops-actions) {
+  border: 1px solid var(--pro-border) !important;
+  border-radius: var(--pro-radius) !important;
+  background: linear-gradient(150deg, rgb(10 41 68 / 97%), rgb(6 27 47 / 98%)) !important;
+  box-shadow: inset 0 1px rgb(255 255 255 / 4%), var(--pro-shadow-soft) !important;
+}
+
+:where(.panel,.report-panel,.automatic-findings,.maintenance-board,.technician-picker,
+.support-department-portal,.warehouse-pdf-management) > header {
+  padding: clamp(16px, 1.6vw, 24px) !important;
+  border-bottom: 1px solid var(--pro-border-soft) !important;
+  background: linear-gradient(105deg, rgb(13 53 86 / 86%), rgb(8 34 57 / 42%)) !important;
+}
+
+:where(.support-section-grid,.ticket-navigation-card-grid,.department-primary-grid,.report-module-selector,
+.user-department-cards,.personnel-kind-cards,.dashboard-grid,.stat-grid,.ticket-metrics,.mc-summary) {
+  gap: 14px !important;
+}
+:where(.support-section-grid > button,.ticket-navigation-card-grid > button,.department-primary-grid > button,
+.report-module-selector > button,.user-department-cards > button,.personnel-kind-cards > button) {
+  min-height: 118px !important;
+  padding: 18px !important;
+  border-radius: var(--pro-radius) !important;
+  text-align: left;
+}
+:where(.support-section-grid > button,.ticket-navigation-card-grid > button,.department-primary-grid > button,
+.report-module-selector > button,.user-department-cards > button,.personnel-kind-cards > button):hover {
+  transform: translateY(-3px) !important;
+  border-color: var(--pro-accent) !important;
+  box-shadow: 0 18px 40px rgb(0 0 0 / 38%), 0 0 0 1px rgb(85 217 255 / 12%) !important;
+}
+:where(.support-section-grid,.ticket-navigation-card-grid,.department-primary-grid,.report-module-selector,
+.user-department-cards,.personnel-kind-cards) strong { font-size: 14px !important; line-height: 1.35 !important; }
+:where(.support-section-grid,.ticket-navigation-card-grid,.department-primary-grid,.report-module-selector,
+.user-department-cards,.personnel-kind-cards) small { color: var(--pro-muted) !important; font-size: 11px !important; line-height: 1.55 !important; }
+
+button,
+.primary,
+.secondary,
+[role="button"] {
+  min-height: var(--pro-control-height);
+  border-radius: var(--pro-radius-sm) !important;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+}
+button:not(:disabled):active { transform: translateY(1px); }
+.primary,
+button.primary,
+.report-action-button {
+  border: 1px solid #64dcff77 !important;
+  background: linear-gradient(135deg, var(--pro-primary-strong), var(--pro-primary)) !important;
+  color: #fff !important;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 28%) !important;
+}
+.primary:hover:not(:disabled), button.primary:hover:not(:disabled), .report-action-button:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-2px);
+  box-shadow: 0 13px 28px rgb(0 0 0 / 36%) !important;
+}
+button:disabled { opacity: .56 !important; cursor: not-allowed; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid rgb(85 217 255 / 34%) !important;
+  outline-offset: 3px !important;
+}
+
+label { color: #dceff8; font-size: 11px; font-weight: 800; letter-spacing: .015em; }
+:where(input,select,textarea) {
+  width: 100%;
+  min-height: var(--pro-control-height);
+  border: 1px solid var(--pro-border) !important;
+  border-radius: var(--pro-radius-sm) !important;
+  background: #051a2e !important;
+  color: #fff !important;
+  font-family: inherit;
+  font-size: 13px !important;
+  line-height: 1.45;
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 28%) !important;
+}
+textarea { min-height: 104px; padding-block: 12px !important; resize: vertical; }
+:where(input,select,textarea)::placeholder { color: #789db3 !important; opacity: 1; }
+:where(input,select,textarea):hover:not(:disabled) { border-color: #3b82a7 !important; }
+:where(input,select,textarea):focus { border-color: var(--pro-accent) !important; background: #08243d !important; box-shadow: 0 0 0 4px rgb(85 217 255 / 10%), inset 0 1px 3px rgb(0 0 0 / 24%) !important; }
+fieldset { border: 1px solid var(--pro-border-soft) !important; border-radius: var(--pro-radius) !important; background: rgb(4 21 37 / 46%); }
+legend { padding-inline: 8px; color: var(--pro-accent); font-size: 11px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
+
+:where(.admin-table,.audit-table,.agency-progress-table,.service-report-table,.resolved-report-table,
+.personnel-performance-table,.finding-table,[class*="table-wrap"]) {
+  overflow: auto;
+  border: 1px solid var(--pro-border-soft) !important;
+  border-radius: var(--pro-radius) !important;
+  background: #05182a !important;
+  box-shadow: var(--pro-shadow-soft) !important;
+}
+table { width: 100%; border-collapse: separate; border-spacing: 0; }
+th { padding: 12px 14px !important; background: #0d3555 !important; color: #dff5ff !important; font-size: 10px !important; font-weight: 900 !important; letter-spacing: .055em; text-align: left; text-transform: uppercase; }
+td { padding: 12px 14px !important; border-bottom: 1px solid var(--pro-border-soft) !important; color: #d8edf7; font-size: 12px; vertical-align: middle; }
+tbody tr { transition: background-color .18s ease; }
+tbody tr:hover { background: rgb(22 142 197 / 8%); }
+
+:where(.status,.badge,.pill,[class*="status-badge"],[class*="status-pill"]) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 9px;
+  border-radius: 999px !important;
+  font-size: 9px !important;
+  font-weight: 900 !important;
+  letter-spacing: .04em;
+}
+
+:where(.ticket-modal-backdrop,.audit-modal-backdrop,.new-user-modal-backdrop,.profile-settings-backdrop,
+.warehouse-request-backdrop,.native-doc-modal-backdrop,.administrative-form-backdrop) {
+  padding: clamp(14px, 3vw, 40px) !important;
+  background: rgb(0 8 16 / 78%) !important;
+  backdrop-filter: blur(16px) saturate(.82) !important;
+}
+:where(.ticket-modal,.support-config-modal,.maintenance-modal,.new-user-dialog,.user-manager-modal,
+.profile-settings,.audit-detail-modal,.warehouse-request-composer,.native-doc-modal,.administrative-form-modal) {
+  overflow: auto;
+  border: 1px solid #397696 !important;
+  border-radius: 18px !important;
+  background: linear-gradient(150deg, #092943, #05182b) !important;
+  box-shadow: 0 34px 100px rgb(0 0 0 / 68%) !important;
+}
+:where(.ticket-modal,.support-config-modal,.maintenance-modal,.new-user-dialog,.user-manager-modal,
+.profile-settings,.audit-detail-modal,.warehouse-request-composer,.native-doc-modal,.administrative-form-modal) > header {
+  position: sticky;
+  z-index: 15;
+  top: 0;
+  padding: 16px 20px !important;
+  border-bottom: 1px solid var(--pro-border) !important;
+  background: rgb(7 29 50 / 94%) !important;
+  backdrop-filter: blur(15px);
+}
+
+:where(.empty,.ticket-empty,.personnel-empty,.report-module-empty,.ops-empty) {
+  min-height: 170px;
+  padding: 28px !important;
+  border: 1px dashed #367494 !important;
+  border-radius: var(--pro-radius) !important;
+  background: linear-gradient(145deg, rgb(6 26 45 / 74%), rgb(9 39 64 / 72%)) !important;
+  color: var(--pro-muted);
+  text-align: center;
+}
+
+.mc-summary article,
+.ops-metrics article,
+.access-summary article,
+.ticket-report-summary article {
+  min-height: 94px;
+  padding: 16px !important;
+  border: 1px solid var(--pro-border-soft) !important;
+  border-radius: var(--pro-radius) !important;
+  background: linear-gradient(145deg, #0a2a46, #071d32) !important;
+  box-shadow: var(--pro-shadow-soft);
+}
+.mc-summary article strong,
+.ops-metrics article > strong,
+.access-summary article strong,
+.ticket-report-summary article strong { font-size: clamp(23px, 2vw, 32px) !important; line-height: 1 !important; }
+
+.page-heading,
+.dashboard-title,
+.support-home-hero,
+.support-department-hero,
+.ticket-hero,
+.mc-page-heading,
+.ops-heading {
+  gap: 18px !important;
+}
+.page-heading p,
+.dashboard-title p,
+.support-home-hero p,
+.ticket-hero p,
+.mc-page-heading p,
+.ops-heading p { max-width: 780px; color: var(--pro-muted) !important; font-size: 13px !important; }
+
+@media (max-width: 980px) {
+  .office-shell .workspace, .workspace { padding: 20px 16px 28px !important; }
+  :where(.ticket-report-filters,.report-filter-grid,.fields-grid,.two-col,.user-edit-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  :where(.support-section-grid,.ticket-navigation-card-grid,.department-primary-grid,.report-module-selector,.user-department-cards,.personnel-kind-cards) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+
+@media (max-width: 760px) {
+  :root { --pro-radius: 13px; --pro-radius-sm: 10px; --pro-control-height: 46px; }
+  body { padding-bottom: calc(82px + env(safe-area-inset-bottom)); font-size: 15px; }
+  .site-header { min-height: 64px; }
+  .site-header-inner { min-height: 64px !important; }
+  .office-shell .workspace, .workspace { padding: 14px 10px 24px !important; }
+  h1 { font-size: clamp(26px, 8vw, 34px) !important; }
+  h2 { font-size: clamp(21px, 6vw, 27px) !important; }
+  p { font-size: 13px; }
+  small { font-size: 11px; }
+  :where(.support-section-grid,.ticket-navigation-card-grid,.department-primary-grid,.report-module-selector,
+  .user-department-cards,.personnel-kind-cards,.dashboard-grid,.stat-grid,.ticket-metrics,.mc-summary,
+  .ticket-report-filters,.report-filter-grid,.fields-grid,.two-col,.user-edit-grid) { grid-template-columns: 1fr !important; }
+  :where(.support-section-grid > button,.ticket-navigation-card-grid > button,.department-primary-grid > button,
+  .report-module-selector > button,.user-department-cards > button,.personnel-kind-cards > button) { min-height: 104px !important; padding: 15px !important; }
+  :where(.page-heading,.dashboard-title,.support-home-hero,.support-department-hero,.ticket-hero,.mc-page-heading,.ops-heading) { align-items: stretch !important; flex-direction: column !important; }
+  :where(.ticket-modal-backdrop,.audit-modal-backdrop,.new-user-modal-backdrop,.profile-settings-backdrop,
+  .warehouse-request-backdrop,.native-doc-modal-backdrop,.administrative-form-backdrop) { padding: 0 !important; }
+  :where(.ticket-modal,.support-config-modal,.maintenance-modal,.new-user-dialog,.user-manager-modal,
+  .profile-settings,.audit-detail-modal,.warehouse-request-composer,.native-doc-modal,.administrative-form-modal) {
+    width: 100% !important;
+    max-width: none !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+  :where(.admin-table,.audit-table,.agency-progress-table,.service-report-table,.resolved-report-table,
+  .personnel-performance-table,.finding-table,[class*="table-wrap"]) { border-radius: 12px !important; -webkit-overflow-scrolling: touch; }
+  th, td { min-width: 118px; padding: 11px 12px !important; }
+  button, .primary, .secondary, [role="button"] { min-height: 46px; }
+  :where(input,select,textarea) { font-size: 16px !important; }
+  .site-header .main-nav button { font-size: 9px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}

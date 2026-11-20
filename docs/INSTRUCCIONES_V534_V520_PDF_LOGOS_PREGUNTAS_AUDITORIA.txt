@@ -1,0 +1,21 @@
+V534 - V520 + LOGOS + PREGUNTAS REALES DE AUDITORIA DE CAMPO
+================================================================
+
+CAMBIOS PUNTUALES
+- El PDF muestra el logo REAL y la identidad Grupo Tejeda - Oficina Virtual en todas las páginas.
+- Cada hallazgo presenta literalmente la pregunta respondida en Auditoría de campo.
+- Los hallazgos por avería indican la opción exacta seleccionada por el supervisor.
+- Los demás hallazgos explican que la respuesta “No” activó la regla automática.
+- Se conserva el PDF visual validado, los saltos de página y el diseño base V520.
+- Se mantiene la tolerancia del endpoint de notificaciones frente a fuentes SQL opcionales.
+
+INSTALACION
+1. Reemplace completamente la versión anterior por el contenido de este ZIP.
+2. Si MonsterASP publica desde wwwroot, utilice la copia completa incluida en wwwroot.
+3. No elimine App_Data, uploads, logs, appsettings ni variables privadas.
+4. Reinicie el sitio y abra con Ctrl+F5.
+
+VERIFICACION
+- Confirme la versión V534-WEB-20261116-2059.
+- Descargue el PDF detallado desde Reporte ejecutivo global.
+- Verifique el logo, la pregunta de Auditoría de campo y el motivo de creación de cada hallazgo.

@@ -1,0 +1,69 @@
+ACTUALIZACION V452 - PAQUETE PRIVADO PARA MONSTERASP
+
+CORRECCION V452: SOLICITUDES DE ALMACEN
+Se restauran los estilos existentes de las tarjetas, resumenes, filtros y vistas
+de solicitudes al entrar directamente. No depende de abrir otra seccion primero.
+Se conserva el inventario corregido de V451 y las funciones de las solicitudes.
+
+Este paquete incluye interfaz y API. Contiene la clave de tu almacenamiento
+privado dentro de web.config: no lo publiques ni lo compartas.
+
+INSTALACION
+1. Guarda una copia de los archivos actuales y del web.config activo.
+2. Deten el sitio desde MonsterASP.
+3. Abre la carpeta que contiene el web.config ACTIVO. Extrae aqui el ZIP y
+   reemplaza los archivos. No crees una carpeta con el nombre del ZIP.
+   Se conserva la doble ruta de los paquetes anteriores (raiz y wwwroot).
+4. Conserva App_Data, uploads, appsettings y las variables del servidor.
+   El web.config del paquete incluye STORAGE_KEY y STORAGE_ENABLED.
+   Si tu web.config anterior contiene OTRAS variables personalizadas, conserva
+   esas entradas dentro de environmentVariables en el archivo actualizado.
+5. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V452.exe.
+6. Inicia el sitio. Abre /api/version y /version-web.json: ambos deben indicar V452.
+7. Recarga con Ctrl+F5 e inicia sesion.
+
+ALMACENAMIENTO
+- Se incluye la clave local existente, comprobada con una consulta de lectura
+  al proveedor (HTTP 200). No se cambia de cuenta de almacenamiento.
+- Al arrancar se conserva un respaldo privado en App_Data/storage-credentials.json,
+  fuera de wwwroot. No borres App_Data en futuras actualizaciones.
+- La configuracion explicita del servidor tiene prioridad al cambiar la clave.
+- En Almacenamiento pulsa Actualizar estado. Comprueba que aparezca el inventario
+  del proveedor y que la cola continue transfiriendo los archivos pendientes.
+- El estado de configuracion no equivale a una verificacion de carga y descarga.
+  Se mantienen las pruebas y los controles existentes del servicio.
+
+INVENTARIO CORREGIDO
+- Se aplican los 134 articulos de Inventario corregido.xlsx al consultar Almacen.
+- Total del saldo base: 65,144 unidades. Rollo Papel Para Sumadora: 0, confirmado
+  por el propietario. Las demas cantidades coinciden con el Excel.
+- La actualizacion se ejecuta una sola vez, dentro de una transaccion SQL.
+- Conserva movimientos, solicitudes, reservas e historial. Los articulos retirados
+  quedan inactivos, no se borran. Se guarda el catalogo anterior para recuperacion.
+- Se conservan los codigos coincidentes; articulos nuevos reciben un codigo propio.
+- La cantidad del Excel se convierte en el nuevo saldo base. Las reservas pendientes
+  se descuentan al mostrar disponibilidad; los movimientos posteriores siguen contando.
+- Reiniciar la pagina o el servidor no vuelve a sobrescribir las cantidades.
+
+CALL CENTER
+- Abre un ticket interno de Call Center y pulsa Compartir y escalar.
+- Puedes enviarlo a Averia Tecnica o seleccionar un supervisor activo.
+- En Tickets transferidos hay dos tarjetas: supervisores y Averia Tecnica.
+- El mismo ticket conserva su historial y refleja la resolucion de su responsable.
+  Call Center puede consultar el resultado y la evidencia sin reasignar el caso.
+
+CARGA Y FUNCIONES ANTERIORES
+- Consultas de soporte independientes, directorios reutilizados y concurrencia limitada.
+- Un reintento ante errores temporales de lectura, dentro del tiempo limite original.
+- Guardar y enviar no se repiten automaticamente.
+- Las estadisticas de documentos no descargan firmas e imagenes para contar registros.
+- Se mantienen fotos optimizadas, PDF bajo demanda, coordenadas, regiones,
+  cambio de contrasena con cierre de otras sesiones y cola dentro de Almacen.
+- Una interrupcion real del servidor o de Internet puede seguir produciendo errores.
+  Los fallos persistentes se identifican y permiten reintentar sin borrar datos cargados.
+
+RECUPERACION
+Deten el sitio y restaura los archivos y web.config anteriores si es necesario.
+Conserva siempre App_Data y los datos actuales. Restaurar archivos NO revierte
+el inventario: su catalogo anterior queda en warehouse_catalog_snapshots para
+una recuperacion controlada, sin perder movimientos posteriores.

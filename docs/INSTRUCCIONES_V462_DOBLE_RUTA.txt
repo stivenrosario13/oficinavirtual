@@ -1,0 +1,19 @@
+ACTUALIZACION V462 - ALMACEN PROFESIONAL - MONSTERASP
+
+CAMBIOS V462
+1. El Control diario y la Tabla diaria de solicitudes de Almacén tienen una opción propia en el sidebar.
+2. La portada de Almacén central queda enfocada en la selección de departamentos.
+3. El panel Estado de la solicitud permanece fijo mientras las solicitudes se desplazan con scrollbar.
+4. El editor de formularios de Almacén usa el fondo oscuro institucional y letras blancas.
+5. Se conservan las restricciones y funciones acumuladas hasta V461.
+
+INSTALACION
+1. Detén el sitio y el Application Pool en MonsterASP.
+2. Extrae el ZIP conservando su estructura.
+3. Copia el contenido en la raíz publicada. El paquete incluye también wwwroot para instalaciones de doble ruta.
+4. No borres App_Data, uploads ni la base de datos del servidor.
+5. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V462.exe.
+6. Inicia el sitio y confirma V462 en /api/version y /version-web.json.
+
+SEGURIDAD
+Este paquete contiene configuración privada de almacenamiento. No lo compartas públicamente.

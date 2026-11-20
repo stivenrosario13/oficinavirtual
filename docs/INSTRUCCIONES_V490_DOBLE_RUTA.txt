@@ -1,0 +1,20 @@
+ACTUALIZACION V490 - ABRIR DOCUMENTOS DESDE EL MENU CONTEXTUAL
+
+CAMBIOS
+- Se quitaron los botones visibles de cada archivo.
+- Todas las opciones vuelven a aparecer con clic derecho.
+- Abrir usa Excel, Word o PowerPoint para sus formatos mediante el protocolo oficial de Microsoft Office.
+- Abrir con permite intentar la aplicacion correspondiente o descargar el archivo con su formato original.
+- PDF, imagenes y texto conservan la vista previa del navegador.
+- Los enlaces temporales para Office vencen a los 2 minutos y solo se generan para usuarios autorizados.
+- Se mantienen los dos calendarios Desde y Hasta del reporte de mantenimiento.
+
+INSTALACION
+1. Deten el sitio o grupo de aplicaciones.
+2. Extrae el ZIP y reemplaza todos los archivos de las dos rutas.
+3. Sube web.config al final; debe apuntar a .\RegistroAgencias.SqlServer.V490.exe.
+4. Inicia el sitio y confirma V490 en /api/version.
+5. Cierra sesion, vuelve a entrar y actualiza la pagina.
+
+NOTA
+El navegador no puede enumerar todas las aplicaciones instaladas en Windows. Para formatos sin protocolo registrado, el archivo se descarga y Windows decide la aplicacion al abrirlo desde Descargas.

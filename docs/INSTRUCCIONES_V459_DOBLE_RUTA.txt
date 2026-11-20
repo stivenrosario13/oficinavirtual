@@ -1,0 +1,22 @@
+ACTUALIZACION V459 - EDICION Y BUSQUEDA DE ALMACEN - MONSTERASP
+
+CAMBIOS V459
+- Diorly Abreu y Ana Rodríguez ven el botón directo "Editar formulario" en cada solicitud de Almacén que todavía admite cambios.
+- El editor se abre directamente desde la tarjeta y permite sustituir artículos únicamente por productos con existencia disponible.
+- El editor incorpora búsqueda por nombre, código, grupo, división o almacén.
+- El buscador general encuentra por formulario, artículo, código de producto, agencia, grupo, remitente, ticket y número de solicitud, ignorando mayúsculas y acentos.
+- El bloque de Préstamos de fin de semana usa el fondo azul institucional, letras blancas y botones integrados al diseño de la página.
+- Se conservan la corrección GPS V458 y todos los cambios anteriores.
+
+INSTALACION
+1. Guarda una copia de los archivos actuales y del web.config ACTIVO.
+2. Detén el sitio desde MonsterASP.
+3. Extrae el ZIP en la carpeta del web.config ACTIVO y reemplaza los archivos, sin crear una carpeta adicional.
+4. Conserva App_Data, uploads, appsettings y las demás variables personalizadas del servidor.
+5. El web.config ACTIVO debe apuntar a .\RegistroAgencias.SqlServer.V459.exe.
+6. Inicia el sitio y confirma V459 en /api/version y /version-web.json.
+7. Recarga con Ctrl+F5. Diorly y Ana deben cerrar sesión e iniciar nuevamente si todavía conservan una sesión anterior.
+
+PRIVACIDAD
+Este ZIP contiene la clave privada de almacenamiento en web.config. No lo publiques ni lo compartas.
+No incluye .env, appsettings, App_Data, uploads, logs ni bases de datos.

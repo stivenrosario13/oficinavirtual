@@ -1,0 +1,18 @@
+ACTUALIZACIÓN V544 PARA MONSTERASP
+
+Esta entrega conserva byte por byte los 28 archivos CSS del diseño original V539/V536.
+
+ÚNICO CAMBIO FUNCIONAL
+- Agrega los tres formularios dentro del modal "Nueva solicitud".
+- No agrega tarjetas, bloques ni estilos a la pantalla principal.
+- El formulario de prestaciones no incluye los campos "Solicitado por Recursos Humanos" ni "Solicitado por Administración".
+- La solicitud de prestaciones está disponible para Recursos Humanos y Administración.
+- Las entregas de cheques en blanco y firmados están disponibles para Administración.
+
+INSTALACIÓN
+1. Detén temporalmente el sitio o el grupo de aplicaciones.
+2. Extrae el ZIP sobre la carpeta principal publicada, donde están la DLL y la carpeta wwwroot.
+3. Reemplaza los archivos existentes.
+4. Reinicia el sitio.
+
+No se incluyen web.config, appsettings, .env, Data, App_Data, uploads ni logs.

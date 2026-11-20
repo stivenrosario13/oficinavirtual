@@ -1,0 +1,21 @@
+ACTUALIZACION V479 - PERFIL ADMINISTRATIVO UNICO POR DEPARTAMENTO - MONSTERASP
+
+CAMBIOS V479
+1. Se conserva un solo perfil llamado "Administrativo".
+2. Al crear o editar un usuario con ese perfil, el administrador puede seleccionar cualquier departamento.
+3. Administración, Tecnología y los demás departamentos reciben exactamente las mismas secciones y permisos del perfil Administrativo original.
+4. Cada cuenta queda limitada al departamento seleccionado y no recibe permisos de administrador principal.
+5. El selector de departamento ya no se bloquea al escoger el perfil Administrativo.
+6. Las cuentas creadas con el nombre provisional "Administrativo departamental" se reconocen como Administrativo.
+7. La base de datos amplía de forma segura el alcance departamental permitido al iniciar V479.
+
+INSTALACION
+1. Detén el sitio y el Application Pool en MonsterASP.
+2. Extrae el ZIP conservando su estructura y reemplaza la publicación anterior.
+3. No borres App_Data, uploads ni la base de datos del servidor.
+4. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V479.exe.
+5. Inicia el sitio y confirma V479 en /api/version y /version-web.json.
+6. Recarga el navegador con Ctrl+F5.
+
+SEGURIDAD
+Este paquete contiene configuración privada de almacenamiento. No lo compartas públicamente.

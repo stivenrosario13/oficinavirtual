@@ -1,0 +1,21 @@
+ACTUALIZACIÓN V519 · REGRESO CORRECTO EN INFORMES DE INCIDENTES
+================================================================
+
+1. Realice copia de seguridad del sitio y la base de datos.
+2. Detenga temporalmente la aplicación en MonsterASP.
+3. Extraiga el ZIP y cargue todo su contenido en la raíz del sitio.
+4. No elimine App_Data, cargas, logs ni configuraciones privadas.
+5. Inicie la aplicación y confirme /api/version: V519-WEB-20261114-1057.
+6. Cierre sesión, pulse Ctrl+F5 e inicie sesión nuevamente.
+
+CORRECCIÓN
+- Al abrir directamente el formulario de incidentes desde su bandeja, el botón
+  “Volver” regresa a esa misma bandeja y conserva su diseño institucional.
+- Ya no abre incorrectamente el catálogo general con una presentación diferente.
+- Si el formulario se abrió desde el catálogo, “Volver” sí retorna al catálogo.
+- Incluye todos los cambios V518: fecha individual, monto de compensación,
+  reportes por grupo, períodos Diario/7/15/30, Excel/PDF y permisos restringidos.
+
+EJECUTABLE
+- RegistroAgencias.SqlServer.V519.exe
+

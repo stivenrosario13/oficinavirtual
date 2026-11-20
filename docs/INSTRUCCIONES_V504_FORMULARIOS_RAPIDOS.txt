@@ -1,0 +1,21 @@
+ACTUALIZACION V504 - FORMULARIOS ADMINISTRATIVOS RAPIDOS
+========================================================
+
+- La bandeja solicita un resumen ligero y deja firmas, historial y archivos pesados
+  para el momento en que se abre un formulario.
+- La consulta SQL se recompila según el perfil autenticado para evitar planes lentos
+  en la vista global del administrador principal.
+- Al regresar a la sección se muestra inmediatamente el último listado disponible y
+  se actualiza en segundo plano sin vaciar la pantalla.
+- Mientras ocurre la primera consulta se muestra un indicador real; ya no aparecen
+  contadores falsos en cero.
+- Abrir, editar, aprobar, rechazar, descargar e imprimir siguen cargando el detalle
+  completo y conservan todas las correcciones V501 a V503.
+
+INSTALACION
+1. Conserva App_Data, uploads, logs y la configuración privada existente.
+2. Extrae el ZIP en la raíz del sitio y permite reemplazar archivos.
+3. Reinicia la aplicación desde MonsterASP.
+4. Abre una ventana privada y confirma V504-WEB-20261112-1915.
+
+No requiere migración SQL.

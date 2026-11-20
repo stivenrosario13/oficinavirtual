@@ -1,4 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
+<ItemGroup><Compile Include="../../api/WorkshopStockExit.cs" Link="WorkshopStockExit.cs"/></ItemGroup>
+<ItemGroup><Compile Include="../../api/WarehouseWithdrawalSchema.cs" Link="WarehouseWithdrawalSchema.cs"/></ItemGroup>
 <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
-<ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App"/><PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.3"/><Compile Include="../../api/WorkshopWorkflow.cs" Link="WorkshopWorkflow.cs"/></ItemGroup>
-</Project>
+<ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App"/><PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.3"/><Compile Include="../../api/WorkshopWorkflow.cs" Link="WorkshopWorkflow.cs"/><Compile Include="../../api/WorkshopIntake.cs" Link="WorkshopIntake.cs"/><Compile Include="../../api/WorkshopWarehouseReceipt.cs" Link="WorkshopWarehouseReceipt.cs"/></ItemGroup>
+<ItemGroup><Compile Include="../../api/WarehouseRepairedInventory.cs" Link="WarehouseRepairedInventory.cs"/><Compile Include="../../api/WorkshopFiscalizedImport.cs" Link="WorkshopFiscalizedImport.cs"/><Content Include="../../api/Data/workshop-fiscalized-20260930.json" Link="Data/workshop-fiscalized-20260930.json" CopyToOutputDirectory="Always"/></ItemGroup><ItemGroup><Compile Include="../../api/WorkshopAvailableInventory.cs" Link="WorkshopAvailableInventory.cs"/></ItemGroup><ItemGroup><Compile Include="../../api/StorageService.cs" Link="StorageService.cs"/></ItemGroup></Project>

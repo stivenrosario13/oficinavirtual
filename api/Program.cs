@@ -1,690 +1,5142 @@
-using System.Data;
-using System.Security.Cryptography;
-using System.Text;
-using System.Security.Claims;
-using System.Collections.Concurrent;
-using System.Threading.Channels;
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.IO.Compression;
+using System.Linq;
+using System.Net.Http;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Security.Principal;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.RateLimiting;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Data.SqlClient;
-using System.Threading.RateLimiting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
-LoadEnv(Path.Combine(Directory.GetCurrentDirectory(), ".env.local"));
-var builder = WebApplication.CreateBuilder(args);
-var dataProtectionPath=Environment.GetEnvironmentVariable("DATA_PROTECTION_KEYS_PATH");
-if(string.IsNullOrWhiteSpace(dataProtectionPath))dataProtectionPath=Path.Combine(builder.Environment.ContentRootPath,"App_Data","DataProtection-Keys");
-Directory.CreateDirectory(dataProtectionPath);
-builder.Services.AddDataProtection().SetApplicationName("GrupoTejeda.OficinaVirtual").PersistKeysToFileSystem(new DirectoryInfo(dataProtectionPath));
-builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
-builder.Services.Configure<FormOptions>(x => x.MultipartBodyLengthLimit = 50L * 1024 * 1024);
-builder.Services.AddResponseCompression(options => {
-    options.EnableForHttps = true;
-    options.Providers.Add<BrotliCompressionProvider>();
-    options.Providers.Add<GzipCompressionProvider>();
-    options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(new[] { "application/json", "image/svg+xml" });
-});
-builder.Services.Configure<BrotliCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest);
-builder.Services.Configure<GzipCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest);
-builder.Services.AddSingleton<Database>();
-builder.Services.AddSingleton<Tokens>();
-builder.Services.AddSingleton<LiveNotificationBroker>();
-builder.Services.AddSingleton<PwaPushService>();
-builder.Services.AddHostedService(provider=>provider.GetRequiredService<PwaPushService>());
-builder.Services.AddSingleton<SupportPresenceTracker>();
-builder.Services.AddSingleton<LicenseGuard>();
-builder.Services.AddHttpClient("license-server", client => { client.Timeout = TimeSpan.FromSeconds(10); client.DefaultRequestHeaders.UserAgent.ParseAdd("RegistroAgencias-LicenseClient/1.0"); });
-builder.Services.AddHttpClient("geocoder", client => { client.Timeout = TimeSpan.FromSeconds(12); client.DefaultRequestHeaders.UserAgent.ParseAdd(Environment.GetEnvironmentVariable("GEOCODER_USER_AGENT")??"GrupoTejedaAuditorias/2026"); client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("es-DO,es;q=0.9"); });
-builder.Services.AddRateLimiter(options => {
-    options.RejectionStatusCode=StatusCodes.Status429TooManyRequests;
-    options.OnRejected=async(context,ct)=>{context.HttpContext.Response.Headers.RetryAfter="60";await context.HttpContext.Response.WriteAsJsonAsync(new{error="Demasiadas solicitudes. Espera un minuto y vuelve a intentarlo.",code="RATE_LIMITED"},ct);};
-    options.AddPolicy("login",context=>RateLimitPartition.GetFixedWindowLimiter(ClientKey(context),_=>new FixedWindowRateLimiterOptions{PermitLimit=8,Window=TimeSpan.FromMinutes(1),QueueLimit=0,AutoReplenishment=true}));
-    options.AddPolicy("sensitive-write",context=>RateLimitPartition.GetFixedWindowLimiter(ClientKey(context),_=>new FixedWindowRateLimiterOptions{PermitLimit=60,Window=TimeSpan.FromMinutes(1),QueueLimit=0,AutoReplenishment=true}));
-});
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options => { options.Cookie.Name = "oficina_admin"; options.Cookie.HttpOnly = true; options.Cookie.SameSite = SameSiteMode.Strict; options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; options.Cookie.MaxAge = TimeSpan.FromDays(3650); options.ExpireTimeSpan = TimeSpan.FromDays(3650); options.SlidingExpiration = true; options.Events.OnRedirectToLogin = c => { c.Response.StatusCode = 401; c.Response.Headers.CacheControl="no-store"; return c.Response.WriteAsJsonAsync(new { error="Tu sesión no está activa. Inicia sesión nuevamente.", code="SESSION_REQUIRED" }); }; });
-builder.Services.AddAuthorization(options => {
-    options.AddPolicy("PortalUser", policy => policy.RequireRole("Administrator", "Viewer", "GroupAdministrator", "Fiscalizador", "Technology", "GeneralServices", "HumanResources"));
-    options.AddPolicy("PanelView", policy => policy.RequireRole("Administrator", "Viewer", "GroupAdministrator", "Fiscalizador"));
-    options.AddPolicy("PanelManage", policy => policy.RequireRole("Administrator"));
-    options.AddPolicy("FieldAudit", policy => policy.RequireRole("Administrator", "GroupAdministrator"));
-    options.AddPolicy("TicketCreate", policy => policy.RequireAssertion(context=>HasPermission(context.User,"canCreateTickets")));
-    options.AddPolicy("TicketResolve", policy => policy.RequireAssertion(context=>HasPermission(context.User,"canResolveTickets")));
-    options.AddPolicy("TicketRouting", policy => policy.RequireAssertion(context=>HasPermission(context.User,"canAssignTickets")));
-    options.AddPolicy("SupportTechnician", policy => policy.RequireAssertion(context=>HasPermission(context.User,"canViewSupportFindings")));
-    options.AddPolicy("SupportDashboard", policy => policy.RequireRole("Administrator", "Technology", "GeneralServices", "HumanResources"));
-    options.AddPolicy("SupportConfiguration", policy => policy.RequireAssertion(context=>HasPermission(context.User,"canConfigureSupport")));
-    options.AddPolicy("SupportChat", policy => policy.RequireAssertion(context=>HasPermission(context.User,"canUseSupportChat")));
-    options.AddPolicy("SupportChatManage", policy => policy.RequireAssertion(context=>HasPermission(context.User,"canManageSupportChat")));
-    options.AddPolicy("SupportChatModerate", policy => policy.RequireAssertion(context=>HasPermission(context.User,"canModerateSupportChat")));
-    options.AddPolicy("SupportChatDelete", policy => policy.RequireAssertion(context=>HasPermission(context.User,"canDeleteSupportConversations")));
-    options.AddPolicy("TicketNotifications", policy => policy.RequireAssertion(context=>HasPermission(context.User,"canViewTicketNotifications")));
-    options.AddPolicy("UserAdministration", policy => policy.RequireAssertion(context=>HasPermission(context.User,"canManageUsers")));
-    options.AddPolicy("AuditManagement", policy => policy.RequireAssertion(context=>HasPermission(context.User,"canManageAudits")));
-    options.AddPolicy("TicketDeletion", policy => policy.RequireAssertion(context=>HasPermission(context.User,"canDeleteSupportTickets")));
-    options.AddPolicy("AgencyDirectoryManage", policy => policy.RequireAssertion(context=>HasPermission(context.User,"canManageAgencies")));
-});
-var app = builder.Build();
-app.MapMaintenanceDocumentEndpoints();
-app.MapWorkshopEndpoints();
-app.MapMaintenanceTemplateEndpoints();
-app.MapInstitutionalDocumentEndpoints();
-
-app.Use(async (context,next)=>{context.Response.Headers["X-Content-Type-Options"]="nosniff";context.Response.Headers["X-Frame-Options"]="DENY";context.Response.Headers["Referrer-Policy"]="no-referrer";context.Response.Headers["Permissions-Policy"]="camera=(self), microphone=(self), geolocation=(self), payment=(), usb=(), serial=()";context.Response.Headers["Content-Security-Policy"]="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; frame-src 'self' https://www.openstreetmap.org; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https://nominatim.openstreetmap.org; worker-src 'self' blob:";context.Response.Headers["Cross-Origin-Opener-Policy"]="same-origin";context.Response.Headers["X-Permitted-Cross-Domain-Policies"]="none";context.Response.Headers["X-Application-Release"]="V330";if(context.Request.IsHttps)context.Response.Headers["Strict-Transport-Security"]="max-age=31536000; includeSubDomains";context.Response.OnStarting(()=>{var path=context.Request.Path.Value??"";if(context.Response.ContentType?.Contains("text/html",StringComparison.OrdinalIgnoreCase)==true||path.Equals("/release-guard.js",StringComparison.OrdinalIgnoreCase)||path.Equals("/version-web.json",StringComparison.OrdinalIgnoreCase)){context.Response.Headers.CacheControl="no-store, no-cache, must-revalidate";context.Response.Headers.Pragma="no-cache";context.Response.Headers.Expires="0";}return Task.CompletedTask;});await next();});
-app.UseResponseCompression();
-app.Use((context,next)=>{context.Response.Headers["X-Application-Release"]="V330";return next();});
-app.UseDefaultFiles();
-app.UseStaticFiles(new StaticFileOptions {
-    OnPrepareResponse = context => {
-        var path = context.Context.Request.Path.Value ?? "";
-        if (path.StartsWith("/assets/", StringComparison.OrdinalIgnoreCase))
-            context.Context.Response.Headers.CacheControl = "public,max-age=31536000,immutable";
-    }
-});
-// Capture database failures during session refresh as well as endpoint execution.
-app.Use(async (context, next) => {
-    try { await next(); }
-    catch (AgencyConflict) { context.Response.StatusCode = 409; await context.Response.WriteAsJsonAsync(new { error = "Esta agencia ya fue registrada por otra persona." }); }
-    catch (SqlException error) { Console.Error.WriteLine(error); var diagnostic=Database.DescribeConnectionError(error);context.Response.StatusCode=503;await context.Response.WriteAsJsonAsync(new{error=diagnostic.Message,code=diagnostic.Code}); }
-    catch (InvalidOperationException error) when(error.Message.StartsWith("MSSQL_CONFIG:",StringComparison.Ordinal)) { Console.Error.WriteLine(error);context.Response.StatusCode=503;await context.Response.WriteAsJsonAsync(new{error=error.Message["MSSQL_CONFIG:".Length..],code="MSSQL_CONFIG"}); }
-    catch (Exception error) { Console.Error.WriteLine(error); context.Response.StatusCode = 500; await context.Response.WriteAsJsonAsync(new { error = "Ocurrió un error inesperado." }); }
-});
-
-app.Use(async(context,next)=>{if(IsUnsafeMethod(context.Request.Method)&&IsCrossSiteRequest(context.Request)){context.Response.StatusCode=403;await context.Response.WriteAsJsonAsync(new{error="Solicitud de otro sitio bloqueada.",code="CROSS_SITE_REQUEST_BLOCKED"});return;}await next();});
-app.UseRateLimiter();
-app.Use(async (context,next)=>{
-    var path=context.Request.Path.Value??"";
-    if(!path.StartsWith("/api/",StringComparison.OrdinalIgnoreCase)||path is "/api/health" or "/api/version" or "/api/license/status"){await next();return;}
-    var license=await context.RequestServices.GetRequiredService<LicenseGuard>().Check(context.RequestAborted);
-    if(license.AllowsUse){await next();return;}
-    context.Response.StatusCode=423;
-    await context.Response.WriteAsJsonAsync(new{error=license.Message,code=license.Code,status=license.Status,expiresAt=license.ExpiresAt,checkedAt=license.CheckedAt});
-});
-app.UseAuthentication();
-app.Use(async (context,next)=>{
-    var path=context.Request.Path.Value??"";
-    var refreshSession=context.User.Identity?.IsAuthenticated==true&&path.StartsWith("/api/",StringComparison.OrdinalIgnoreCase)&&path is not "/api/health" and not "/api/version" and not "/api/admin/login";
-    if(refreshSession&&Guid.TryParse(context.User.FindFirstValue(ClaimTypes.NameIdentifier),out var userId)){
-        var account=await context.RequestServices.GetRequiredService<Database>().Account(userId,context.RequestAborted);
-        if(account is null){await context.SignOutAsync();context.Response.StatusCode=401;await context.Response.WriteAsJsonAsync(new{error="La cuenta fue desactivada o ya no existe."});return;}
-        var updatedPermissions=System.Text.Json.JsonSerializer.Serialize(AccountPermissions(account));var changed=context.User.FindFirstValue(ClaimTypes.Role)!=account.Role||context.User.FindFirstValue("must_change_password")!=(account.MustChangePassword?"true":"false")||context.User.FindFirstValue("avatar_url")!=(account.AvatarUrl??"")||context.User.FindFirstValue("display_name")!=account.DisplayName||context.User.Identity?.Name!=account.Email||context.User.FindFirstValue("support_team")!=(account.SupportTeam??"")||context.User.FindFirstValue("permissions_json")!=updatedPermissions;
-        if(changed)await SignInAccount(context,account);
-    }
-    await next();
-});
-app.UseAuthorization();
-
-app.Use(async (context,next)=>{
-    var path=context.Request.Path.Value??"";
-    var allowed=path is "/api/admin/session" or "/api/admin/logout" or "/api/account/password" or "/api/account/avatar"||path.StartsWith("/api/account/avatar/",StringComparison.OrdinalIgnoreCase)||path.StartsWith("/api/push/",StringComparison.OrdinalIgnoreCase);
-    if(context.User.Identity?.IsAuthenticated==true&&context.User.FindFirstValue("must_change_password")=="true"&&path.StartsWith("/api/",StringComparison.OrdinalIgnoreCase)&&!allowed){context.Response.StatusCode=403;await context.Response.WriteAsJsonAsync(new{error="Debes cambiar tu contraseña temporal antes de continuar.",code="PASSWORD_CHANGE_REQUIRED"});return;}
-    await next();
-});
-
-app.MapGet("/api/health", async (Database db, CancellationToken ct) => {
-    var health = await db.Health(ct);
-    return health.Ok ? Results.Ok(new { ok = true, service = "registro-agencias-dotnet", database = "sql-server-2025", connectionMode = health.Mode }) : Results.Json(new { ok = false, error = health.Message, code = health.Code }, statusCode: 503);
-});
-app.MapGet("/api/version", () => Results.Ok(new { version = "2026.09.12.330", release = "V330", design = "modern-live-queue-controls-V307", dataMode = "mssql-direct-assignment-with-group-scope", databaseConnection = "sql-server-2025-monster-internal-public-fallback", assembly = System.Reflection.Assembly.GetExecutingAssembly().GetName().Name, supportTickets = "call-center-navigation-without-serial-capture-v324", maintenance = "warehouse-request-equipment-flow-and-inventory-dispatch-v330", workshopTracking = "scanner-tolerant-qr-and-receipt-delivery-v300", agencyTransitions = "department-only-visible-completed-evidence-v304", supportNotifications = "device-local-time-v322", supportChat = "device-local-time-and-role-safe-mobile-chat-v321", supportReports = "ticket-type-and-area-scoped-real-statistics-v306", supportCatalog = "technology-cpu-failure-V300", permissions = "support-resolution-and-admin-user-recovery-v326", liveUpdates = "daily-live-queue-cycle-0730-v327", loginStability = "server-side-transient-db-retry-and-persistent-cookie-fallback-v328", userAdministrationStability = "inactive-account-reactivation-and-double-submit-guard-v329", deployment = "monster-staged-hot-swap-no-app-offline-v330", portal = "original-mobile-responsive-layout-v306", dashboard = "modernized-live-queue-v307", ticketData = "sonadora-address-location-sync-v323", responsiblePicker = "field-technicians-restored-for-support-team-assignment-v310", userAdministration = "safe-user-deactivation-v311", fieldAuditPhotos = "authenticated-profile-access-token-recovery-v323" }));
-app.MapGet("/api/license/status", async (LicenseGuard guard,CancellationToken ct) => {var license=await guard.Check(ct);return Results.Ok(new{enabled=guard.Enabled,allowed=license.AllowsUse,status=license.Status,code=license.Code,message=license.Message,expiresAt=license.ExpiresAt,checkedAt=license.CheckedAt,usingGracePeriod=license.UsingGracePeriod,signatureVerified=license.SignatureVerified});});
-app.MapGet("/api/geocode/reverse", async Task<IResult> (double? lat, double? lng, IHttpClientFactory clients, CancellationToken ct) => {
-    if (lat is null or < -90 or > 90 || lng is null or < -180 or > 180) return Results.UnprocessableEntity(new { error = "Las coordenadas no son válidas." });
-    var latitude=lat.Value.ToString("0.########",System.Globalization.CultureInfo.InvariantCulture);var longitude=lng.Value.ToString("0.########",System.Globalization.CultureInfo.InvariantCulture);
-    var client=clients.CreateClient("geocoder");string direccion="",sector="",municipio="",provincia="",displayName="";var sources=new List<string>();
-    try{
-      var arcUrl=$"https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?location={longitude}%2C{latitude}&f=json&langCode=es&featureTypes=PointAddress%2CStreetAddress%2CStreetName";
-      using var response=await client.GetAsync(arcUrl,ct);
-      if(response.IsSuccessStatusCode){using var document=System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));var root=document.RootElement;if(root.TryGetProperty("address",out var address)){direccion=Pick(address,"Address","ShortLabel","Match_addr");sector=Pick(address,"Sector","Neighborhood","District");municipio=Pick(address,"City","Subregion");provincia=Pick(address,"Region");displayName=Pick(address,"LongLabel","Match_addr");sources.Add("ArcGIS");}}
-    }catch(Exception error) when(!ct.IsCancellationRequested){Console.Error.WriteLine($"ArcGIS reverse geocode: {error.Message}");}
-    if(string.IsNullOrWhiteSpace(direccion)||string.IsNullOrWhiteSpace(sector)||string.IsNullOrWhiteSpace(municipio)||string.IsNullOrWhiteSpace(provincia))try{
-      var osmUrl=$"https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat={latitude}&lon={longitude}&zoom=18&addressdetails=1&layer=address&accept-language=es";
-      using var response=await client.GetAsync(osmUrl,ct);
-      if(response.IsSuccessStatusCode){using var document=System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));var root=document.RootElement;if(root.TryGetProperty("address",out var address)){var road=Pick(address,"road","pedestrian","residential","footway");var number=Pick(address,"house_number");var osmAddress=string.Join(" ",new[]{road,number}.Where(x=>!string.IsNullOrWhiteSpace(x))).Trim();if(string.IsNullOrWhiteSpace(osmAddress))osmAddress=Pick(root,"name","display_name").Split(',')[0].Trim();direccion=First(direccion,osmAddress);sector=First(sector,Pick(address,"suburb","neighbourhood","quarter","residential","hamlet","village"));municipio=First(municipio,Pick(address,"city","town","municipality","city_district","county"));provincia=First(provincia,Pick(address,"state","region","state_district"));displayName=First(displayName,Pick(root,"display_name"));sources.Add("OpenStreetMap");}}
-    }catch(Exception error) when(!ct.IsCancellationRequested){Console.Error.WriteLine($"OpenStreetMap reverse geocode: {error.Message}");}
-    if(string.IsNullOrWhiteSpace(sector))try{
-      if(sources.Contains("OpenStreetMap"))await Task.Delay(1100,ct);
-      var areaUrl=$"https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat={latitude}&lon={longitude}&zoom=15&addressdetails=1&accept-language=es";
-      using var response=await client.GetAsync(areaUrl,ct);
-      if(response.IsSuccessStatusCode){using var document=System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));var root=document.RootElement;if(root.TryGetProperty("address",out var address)){sector=First(sector,Pick(address,"suburb","neighbourhood","quarter","city_district","village","hamlet","town","municipality"));municipio=First(municipio,Pick(address,"city","town","municipality","county"));provincia=First(provincia,Pick(address,"state","region","state_district"));displayName=First(displayName,Pick(root,"display_name"));if(!sources.Contains("OpenStreetMap"))sources.Add("OpenStreetMap");}}
-    }catch(Exception error) when(!ct.IsCancellationRequested){Console.Error.WriteLine($"OpenStreetMap area reverse geocode: {error.Message}");}
-    if(string.IsNullOrWhiteSpace(municipio)||string.IsNullOrWhiteSpace(provincia))try{
-      var cloudUrl=$"https://api.bigdatacloud.net/data/reverse-geocode-client?latitude={latitude}&longitude={longitude}&localityLanguage=es";
-      using var response=await client.GetAsync(cloudUrl,ct);
-      if(response.IsSuccessStatusCode){using var document=System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));var root=document.RootElement;municipio=First(municipio,Pick(root,"city","locality"));provincia=First(provincia,Pick(root,"principalSubdivision"));displayName=First(displayName,string.Join(", ",new[]{Pick(root,"locality"),Pick(root,"principalSubdivision"),Pick(root,"countryName")}.Where(x=>!string.IsNullOrWhiteSpace(x))));sources.Add("BigDataCloud");}
-    }catch(Exception error) when(!ct.IsCancellationRequested){Console.Error.WriteLine($"BigDataCloud reverse geocode: {error.Message}");}
-    if(string.IsNullOrWhiteSpace(direccion)&&string.IsNullOrWhiteSpace(sector)&&string.IsNullOrWhiteSpace(municipio)&&string.IsNullOrWhiteSpace(provincia))return Results.Json(new{error="Los servicios de dirección no respondieron para esta coordenada. Vuelve a intentarlo."},statusCode:502);
-    return Results.Ok(new{direccion,sector,municipio,provincia,displayName,complete=!string.IsNullOrWhiteSpace(direccion)&&!string.IsNullOrWhiteSpace(sector)&&!string.IsNullOrWhiteSpace(municipio)&&!string.IsNullOrWhiteSpace(provincia),source=string.Join(" + ",sources)});
-}).RequireAuthorization("FieldAudit");
-app.MapGet("/api/groups", async (HttpContext context,Database db,CancellationToken ct) => {var scope=UserScope(context);return Results.Ok(new { groups = await db.Groups(scope.UserId,scope.Role,ct) });}).RequireAuthorization("PortalUser");
-app.MapGet("/api/group", async (HttpContext context,Database db,CancellationToken ct) => {var scope=UserScope(context);return Results.Ok(new { groups = await db.Groups(scope.UserId,scope.Role,ct) });}).RequireAuthorization("PortalUser");
-app.MapGet("/api/panel/groups", async (HttpContext context,Database db,CancellationToken ct) => {var scope=UserScope(context);return Results.Ok(new { groups = await db.PanelGroups(scope.UserId,scope.Role,ct) });}).RequireAuthorization("PanelView");
-app.MapGet("/api/agencies", async (string? grupo,HttpContext context,Database db,CancellationToken ct) => {if(string.IsNullOrWhiteSpace(grupo))return Results.UnprocessableEntity(new { error = "Debes indicar un grupo." });var scope=UserScope(context);return Results.Ok(new { agencies = await db.Agencies(grupo.Trim(),scope.UserId,scope.Role,ct) });}).RequireAuthorization("PortalUser");
-app.MapGet("/api/panel/agencies", async (string? grupo,HttpContext context,Database db,CancellationToken ct) => {if(string.IsNullOrWhiteSpace(grupo))return Results.UnprocessableEntity(new { error = "Debes indicar un grupo." });var scope=UserScope(context);return Results.Ok(new { agencies = await db.PanelAgencies(grupo.Trim(),scope.UserId,scope.Role,ct) });}).RequireAuthorization("PanelView");
-app.MapPost("/api/admin/login", async (AdminLogin login, HttpContext context, Database db, CancellationToken ct) => {
-    var email=NormalizeLogin(login.Email);var password=login.Password??"";
-    if(string.IsNullOrWhiteSpace(email)||string.IsNullOrWhiteSpace(password))return Results.Json(new{error="Escribe el usuario y la contraseña."},statusCode:401);
-    AdminIdentity? account=null;
-    try{account=await RetryDatabaseAsync(()=>db.AuthenticateUser(email,password,ct),ct,"login");}catch(SqlException error) when(error.Number is 207 or 208){Console.Error.WriteLine("Se usará el acceso principal configurado porque no está instalada la gestión avanzada de usuarios: "+error.Message);}
-    if(account is null){var legacyEmail=Environment.GetEnvironmentVariable("ADMIN_EMAIL")?.Trim().ToLowerInvariant();var legacyPassword=Environment.GetEnvironmentVariable("ADMIN_PASSWORD");if(!string.IsNullOrWhiteSpace(legacyEmail)&&!string.IsNullOrWhiteSpace(legacyPassword)&&Fixed(email,legacyEmail)&&Fixed(password,legacyPassword))account=new("legacy-admin",legacyEmail,"Administrador principal","Administrator",false,null,[],null);}
-    if(account is null)return Results.Json(new{error="Credenciales incorrectas o usuario desactivado."},statusCode:401);
-    await SignInAccount(context,account);
-    string? persistentSessionToken=null;
-    try{persistentSessionToken=await RetryDatabaseAsync(()=>db.CreatePersistentLoginToken(account.Id,ct),ct,"token persistente");}
-    catch(SqlException error) when(!ct.IsCancellationRequested){Console.Error.WriteLine("No se pudo guardar el token persistente; se conserva la cookie de sesión: "+error.Message);}
-    catch(InvalidOperationException error) when(!ct.IsCancellationRequested&&error.Message.StartsWith("MSSQL_CONFIG:",StringComparison.Ordinal)){Console.Error.WriteLine("No se pudo guardar el token persistente; se conserva la cookie de sesión: "+error.Message);}
-    return Results.Ok(SessionPayload(account,persistentSessionToken));
-}).RequireRateLimiting("login");
-app.MapPost("/api/admin/session/restore",async(PersistentSessionInput body,HttpContext context,Database db,CancellationToken ct)=>{var account=await db.RestorePersistentLogin(body.Token,ct);if(account is null)return Results.Json(new{error="La sesión guardada ya no es válida."},statusCode:401);await SignInAccount(context,account);return Results.Ok(SessionPayload(account));}).RequireRateLimiting("login");
-app.MapPost("/api/admin/logout", async (PersistentSessionInput? body,HttpContext context,Database db,CancellationToken ct) => {await db.RevokePersistentLogin(body?.Token,ct);await context.SignOutAsync();return Results.Ok(new{ok=true});});
-app.MapGet("/api/admin/session", (HttpContext context) => context.User.Identity?.IsAuthenticated==true?Results.Ok(SessionPayloadFromContext(context)):Results.Ok(new{authenticated=false}));
-app.MapGet("/api/dashboard", async (HttpContext context,Database db,CancellationToken ct) => {var scope=UserScope(context);return Results.Ok(await db.Dashboard(scope.UserId,scope.Role,ct));}).RequireAuthorization("PanelView");
-app.MapGet("/api/admin/audits/{profileId:guid}", async (Guid profileId,HttpContext context,Database db,CancellationToken ct) => {var scope=UserScope(context);var detail=await db.AuditDetail(profileId,scope.UserId,scope.Role,ct);return detail is null?Results.NotFound(new{error="No encontramos esta auditoría o no pertenece a tus grupos."}):Results.Ok(detail); }).RequireAuthorization("PanelView");
-app.MapGet("/api/tickets/agencies", async (HttpContext context,Database db,CancellationToken ct) => {var scope=UserScope(context);return Results.Ok(new{agencies=await db.TicketAgencies(scope.UserId,scope.Role,ct)});}).RequireAuthorization("PortalUser");
-app.MapPut("/api/technology/agencies/{id:guid}",async(Guid id,AgencyDirectoryUpdate body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{var validation=ValidateAgencyDirectoryUpdate(body);if(validation is not null)return Results.UnprocessableEntity(new{error=validation});var updated=await db.UpdateAgencyDirectory(id,body,context.User.Identity?.Name??"Usuario",ct);if(!updated)return Results.NotFound(new{error="Agencia no encontrada."});broker.Publish("agency-directory-updated");return Results.Ok(new{ok=true});}).RequireAuthorization("AgencyDirectoryManage").RequireRateLimiting("sensitive-write");
-app.MapPost("/api/technology/agencies/import",async(AgencyDirectoryImport body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{var validation=ValidateAgencyDirectoryImport(body);if(validation is not null)return Results.UnprocessableEntity(new{error=validation});var result=await db.ImportAgencyDirectory(body.Agencies!,body.FileName,context.User.Identity?.Name??"Usuario",ct);if(result.Created>0)broker.Publish("agency-directory-updated");return Results.Ok(result);}).RequireAuthorization("AgencyDirectoryManage").RequireRateLimiting("sensitive-write");
-app.MapGet("/api/support/catalog",async(Database db,CancellationToken ct)=>Results.Ok(new{departments=await db.SupportCatalog(ct)})).RequireAuthorization("PortalUser");
-app.MapPut("/api/admin/support/departments/{code}",async(string code,SupportDepartmentInput body,Database db,CancellationToken ct)=>{body=body with{Code=code.ToUpperInvariant()};await db.UpsertSupportDepartment(body,ct);return Results.Ok(new{ok=true});}).RequireAuthorization("SupportConfiguration");
-app.MapPost("/api/admin/support/categories",async(SupportCategoryInput body,Database db,CancellationToken ct)=>{await db.UpsertSupportCategory(null,body,ct);return Results.Ok(new{ok=true});}).RequireAuthorization("SupportConfiguration");
-app.MapPut("/api/admin/support/categories/{id:guid}",async(Guid id,SupportCategoryInput body,Database db,CancellationToken ct)=>{await db.UpsertSupportCategory(id,body,ct);return Results.Ok(new{ok=true});}).RequireAuthorization("SupportConfiguration");
-app.MapDelete("/api/admin/support/categories/{id:guid}",async(Guid id,Database db,CancellationToken ct)=>await db.DeleteSupportCategory(id,ct)?Results.Ok(new{ok=true}):Results.NotFound()).RequireAuthorization("SupportConfiguration");
-app.MapGet("/api/tickets", async (HttpContext context,Database db,CancellationToken ct) => {var scope=UserScope(context);return Results.Ok(new{tickets=await db.Tickets(scope.UserId,scope.Role,HasPermission(context.User,"canAssignTickets"),context.User.FindFirstValue("support_team"),context.User.Identity?.Name,ct)});}).RequireAuthorization("PortalUser");
-app.MapGet("/api/tickets/technicians", async (Database db,CancellationToken ct) => Results.Ok(new{technicians=await db.SupportTechnicians(ct)})).RequireAuthorization("PortalUser");
-app.MapGet("/api/tickets/alerts", async (HttpContext context,Database db,CancellationToken ct) => {var scope=UserScope(context);return Results.Ok(new{count=await db.TicketAlerts(scope.UserId,scope.Role,HasPermission(context.User,"canAssignTickets"),context.User.FindFirstValue("support_team"),context.User.Identity?.Name,ct)});}).RequireAuthorization("PortalUser");
-app.MapGet("/api/tickets/notifications", async (HttpContext context,Database db,CancellationToken ct) => {var scope=UserScope(context);return Results.Ok(new{notifications=await db.ResolvedTicketNotifications(scope.UserId,scope.Role,HasPermission(context.User,"canAssignTickets"),context.User.FindFirstValue("support_team"),ct)});}).RequireAuthorization("TicketNotifications");
-app.MapGet("/api/push/public-key",(PwaPushService push)=>Results.Ok(new{publicKey=push.PublicKey,keySource=push.UsesPersistedFallbackKeys?"APP_DATA":"MONSTER_ENVIRONMENT"})).RequireAuthorization("PortalUser");
-app.MapPost("/api/push/subscriptions",async(PushSubscriptionInput body,HttpContext context,Database db,CancellationToken ct)=>{var endpoint=body.Endpoint?.Trim();var p256dh=body.Keys?.P256dh?.Trim();var auth=body.Keys?.Auth?.Trim();if(string.IsNullOrWhiteSpace(endpoint)||endpoint.Length>2048||string.IsNullOrWhiteSpace(p256dh)||string.IsNullOrWhiteSpace(auth)||p256dh.Length>512||auth.Length>512)return Results.UnprocessableEntity(new{error="La suscripción push no es válida."});var scope=UserScope(context);await db.SavePushSubscription(scope.UserId,endpoint,p256dh,auth,ct);return Results.Ok(new{ok=true});}).RequireAuthorization("PortalUser");
-app.MapMethods("/api/push/test",new[]{"GET","POST"},async(HttpContext context,PwaPushService push,CancellationToken ct)=>{var result=await push.SendTest(UserScope(context).UserId,ct);if(result.Sent>0)return Results.Ok(new{ok=true,sent=result.Sent,registered=result.Registered});if(result.Registered==0)return Results.Conflict(new{error="Este dispositivo todavía no está suscrito. Pulsa Activar notificaciones e inténtalo nuevamente.",code="PUSH_SUBSCRIPTION_REQUIRED"});return Results.Json(new{error=result.Error??"El proveedor no confirmó la notificación.",code="PUSH_DELIVERY_FAILED",registered=result.Registered},statusCode:502);}).RequireAuthorization("PortalUser");
-app.MapGet("/api/tickets/statistics", async (DateTime? from,DateTime? to,HttpContext context,Database db,CancellationToken ct) => {var scope=UserScope(context);return Results.Ok(await db.TicketStatistics(scope.UserId,scope.Role,HasPermission(context.User,"canAssignTickets"),context.User.FindFirstValue("support_team"),from,to,ct));}).RequireAuthorization("PortalUser");
-app.MapGet("/api/live/stream", async (HttpContext context,LiveNotificationBroker broker,CancellationToken ct) => {
-    context.Response.Headers.CacheControl="no-cache, no-transform";context.Response.Headers.Connection="keep-alive";context.Response.Headers["X-Accel-Buffering"]="no";context.Response.ContentType="text/event-stream";
-    var subscription=broker.Subscribe();
-    try{
-        await context.Response.WriteAsync("retry: 10000\n: connected\n\n",ct);await context.Response.Body.FlushAsync(ct);
-        var pendingRead=subscription.Reader.WaitToReadAsync(ct).AsTask();
-        while(!ct.IsCancellationRequested){
-            var heartbeat=Task.Delay(TimeSpan.FromSeconds(15),ct);var completed=await Task.WhenAny(pendingRead,heartbeat);
-            if(completed==pendingRead){if(!await pendingRead)break;while(subscription.Reader.TryRead(out var message))await context.Response.WriteAsync($"event: refresh\ndata: {message}\n\n",ct);pendingRead=subscription.Reader.WaitToReadAsync(ct).AsTask();}
-            else await context.Response.WriteAsync($": heartbeat {DateTimeOffset.UtcNow.ToUnixTimeSeconds()}\n\n",ct);
-            await context.Response.Body.FlushAsync(ct);
-        }
-    }catch(OperationCanceledException)when(ct.IsCancellationRequested){}
-    catch(IOException){}
-    catch(ObjectDisposedException){}
-    finally{broker.Unsubscribe(subscription.Id);}
-}).RequireAuthorization("PortalUser");
-app.MapGet("/api/tickets/findings", async (HttpContext context,Database db,CancellationToken ct) => {var scope=UserScope(context);return Results.Ok(new{findings=await db.AutomaticFindings(scope.UserId,scope.Role,context.User.FindFirstValue("support_team"),ct)});}).RequireAuthorization("SupportTechnician");
-app.MapPut("/api/tickets/findings/{id:guid}/assign", async (Guid id,FindingAssignment body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct) => {var scope=UserScope(context);if(!await db.AssignAutomaticFinding(id,body.AssignedTechnicianId,scope.Role,context.User.FindFirstValue("support_team"),ct))return Results.NotFound(new{error="Hallazgo no encontrado, fuera de tu departamento o sin permiso de asignación."});broker.Publish("finding-assigned");return Results.Ok(new{ok=true});}).RequireAuthorization("SupportTechnician");
-app.MapPut("/api/tickets/findings/{id:guid}/resolve", async (Guid id,HttpRequest request,HttpContext context,Database db,CancellationToken ct) => {
-    if(!request.HasFormContentType)return Results.UnprocessableEntity(new{error="Completa el seguimiento y adjunta las fotografías de evidencia."});
-    var form=await request.ReadFormAsync(ct);var diagnosis=form["diagnosis"].ToString().Trim();var resolution=form["resolution"].ToString().Trim();var verification=form["verification"].ToString().Trim();var recommendations=form["recommendations"].ToString().Trim();
-    if(diagnosis.Length is < 10 or > 2000)return Results.UnprocessableEntity(new{error="Describe el diagnóstico realizado (mínimo 10 caracteres)."});
-    if(resolution.Length is < 10 or > 3000)return Results.UnprocessableEntity(new{error="Describe el trabajo y la solución aplicada (mínimo 10 caracteres)."});
-    if(verification.Length is < 10 or > 2000)return Results.UnprocessableEntity(new{error="Explica cómo verificaste que la solución funciona."});
-    if(recommendations.Length>2000)return Results.UnprocessableEntity(new{error="Las recomendaciones superan 2,000 caracteres."});
-    if(form.Files.Count is < 1 or > 6)return Results.UnprocessableEntity(new{error="Adjunta entre 1 y 6 fotografías de evidencia."});
-    double? latitude=double.TryParse(form["latitude"],System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out var parsedLatitude)?parsedLatitude:null;double? longitude=double.TryParse(form["longitude"],System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out var parsedLongitude)?parsedLongitude:null;double? accuracy=double.TryParse(form["accuracyMeters"],System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out var parsedAccuracy)?parsedAccuracy:null;DateTime? locationCapturedAt=DateTime.TryParse(form["locationCapturedAt"],null,System.Globalization.DateTimeStyles.RoundtripKind,out var parsedCapturedAt)?parsedCapturedAt:null;
-    var allowed=new HashSet<string>(StringComparer.OrdinalIgnoreCase){"image/jpeg","image/jpg","image/png","image/webp"};var evidence=new List<FindingEvidenceUpload>();long totalBytes=0;
-    foreach(var file in form.Files){if(file.Length==0||file.Length>8*1024*1024||!allowed.Contains(file.ContentType))return Results.UnprocessableEntity(new{error="Cada evidencia debe ser JPG, PNG o WebP y pesar menos de 8 MB."});totalBytes+=file.Length;if(totalBytes>40*1024*1024)return Results.UnprocessableEntity(new{error="Las evidencias superan el límite total de 40 MB."});await using var input=file.OpenReadStream();using var buffer=new MemoryStream();await input.CopyToAsync(buffer,ct);var data=buffer.ToArray();if(!ValidEvidenceImage(data,file.ContentType))return Results.UnprocessableEntity(new{error="Una evidencia no contiene una imagen válida."});evidence.Add(new(Path.GetFileName(file.FileName),file.ContentType,data,latitude,longitude,accuracy,locationCapturedAt));}
-    var scope=UserScope(context);return await db.ResolveAutomaticFinding(id,diagnosis,resolution,verification,recommendations,scope.UserId,scope.Role,context.User.FindFirstValue("support_team"),context.User.FindFirstValue("display_name")??"Técnico",context.User.Identity?.Name??"",evidence,ct)?Results.Ok(new{ok=true,evidence=evidence.Count}):Results.NotFound(new{error="Hallazgo no encontrado, no asignado a tu usuario o fuera de tu departamento."});
-}).RequireAuthorization("SupportTechnician");
-app.MapGet("/api/tickets/findings/evidence/{evidenceId:guid}",async(Guid evidenceId,HttpContext context,Database db,CancellationToken ct)=>{var scope=UserScope(context);var photo=await db.FindingEvidencePhoto(evidenceId,scope.Role,ct);return photo is null?Results.NotFound():Results.File(photo.Value.Data,photo.Value.Mime,enableRangeProcessing:true);}).RequireAuthorization("SupportTechnician");
-app.MapPost("/api/tickets", async (HttpRequest request,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct) =>
+[CompilerGenerated]
+internal class Program
 {
-    var scope=UserScope(context);TicketCreate? body=null;var evidence=new List<TicketEvidenceUpload>();string? supervisorEscalationReason=null;
-    if(request.HasFormContentType)
-    {
-        var form=await request.ReadFormAsync(ct);
-        string? Text(string key){var value=form[key].ToString().Trim();return string.IsNullOrWhiteSpace(value)?null:value;}
-        var agencyId=Guid.TryParse(Text("agencyId"),out var parsedAgencyId)?parsedAgencyId:(Guid?)null;
-        var allowDuplicate=bool.TryParse(Text("allowDuplicate"),out var parsedAllowDuplicate)?parsedAllowDuplicate:(bool?)null;
-        body=new TicketCreate(agencyId,Text("category"),Text("assignedDepartment"),Text("priority"),Text("subject"),Text("description"),Text("ticketType"),Text("assignedTechnicianId"),Text("assignedTeam"),allowDuplicate);
-        supervisorEscalationReason=Text("supervisorEscalationReason");
-        if(scope.Role=="GroupAdministrator")
-        {
-            if(supervisorEscalationReason is null||supervisorEscalationReason.Length is < 15 or > 1000)return Results.UnprocessableEntity(new{error="Explica qué revisaste y por qué el caso no puede resolverse en la agencia (mínimo 15 caracteres)."});
-            var files=form.Files.GetFiles("evidence");if(files.Count is < 1 or > 4)return Results.UnprocessableEntity(new{error="Adjunta entre 1 y 4 fotografías que demuestren por qué el caso debe escalarse."});
-            var allowed=new HashSet<string>(StringComparer.OrdinalIgnoreCase){"image/jpeg","image/jpg","image/png","image/webp"};long totalBytes=0;
-            foreach(var file in files)
-            {
-                if(file.Length==0||file.Length>8*1024*1024||!allowed.Contains(file.ContentType))return Results.UnprocessableEntity(new{error="Cada evidencia debe ser JPG, PNG o WebP y pesar menos de 8 MB."});
-                totalBytes+=file.Length;if(totalBytes>24*1024*1024)return Results.UnprocessableEntity(new{error="Las evidencias superan el límite total de 24 MB."});
-                await using var input=file.OpenReadStream();using var buffer=new MemoryStream();await input.CopyToAsync(buffer,ct);var data=buffer.ToArray();
-                if(!ValidEvidenceImage(data,file.ContentType))return Results.UnprocessableEntity(new{error="Una evidencia no contiene una imagen válida."});
-                evidence.Add(new TicketEvidenceUpload(Path.GetFileName(file.FileName),file.ContentType,data));
-            }
-        }
-    }
-    else
-    {
-        if(scope.Role=="GroupAdministrator")return Results.UnprocessableEntity(new{error="Los supervisores deben justificar el escalamiento y adjuntar evidencia fotográfica."});
-        try{body=await request.ReadFromJsonAsync<TicketCreate>(cancellationToken:ct);}catch(System.Text.Json.JsonException){return Results.BadRequest(new{error="La información del ticket no tiene un formato válido."});}
-    }
-    if(body is null)return Results.BadRequest(new{error="Completa la información del ticket."});
-    var validation=ValidateTicket(body);if(validation is not null)return Results.UnprocessableEntity(new{error=validation});
-    try
-    {
-        var created=await db.CreateTicket(body,scope.UserId,scope.Role,context.User.FindFirstValue("display_name")??"Usuario",context.User.Identity?.Name??"",context.User.FindFirstValue("support_team"),HasPermission(context.User,"canAssignTickets"),evidence,supervisorEscalationReason,ct);
-        if(created is null)return Results.Forbid();broker.Publish("ticket-created");return Results.Json(created,statusCode:201);
-    }
-    catch(TicketDuplicateException duplicate){return Results.Conflict(new{error=$"Ya existe el ticket #{duplicate.TicketNumber} con esta avería para la agencia.",code="DUPLICATE_TICKET",duplicateTicketId=duplicate.TicketId,duplicateTicketNumber=duplicate.TicketNumber,duplicateStatus=duplicate.Status,duplicateSubject=duplicate.Subject});}
-}).DisableAntiforgery().RequireAuthorization("TicketCreate");
-app.MapPut("/api/tickets/{id:guid}", async (Guid id,TicketUpdate body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct) => {var validation=ValidateTicketUpdate(body);if(validation is not null)return Results.UnprocessableEntity(new{error=validation});var scope=UserScope(context);var result=await db.UpdateTicket(id,body,scope.UserId,scope.Role,context.User.FindFirstValue("display_name")??"Usuario",context.User.FindFirstValue("support_team"),HasPermission(context.User,"canAssignTickets"),ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("ticket-updated");return Results.Ok(new{ok=true});}).RequireAuthorization("PortalUser");
-app.MapPut("/api/tickets/{id:guid}/route",async(Guid id,TicketRoute body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{var validation=ValidateTicketRoute(body);if(validation is not null)return Results.UnprocessableEntity(new{error=validation});var scope=UserScope(context);var result=await db.RouteTicket(id,body,scope.UserId,scope.Role,context.User.FindFirstValue("display_name")??"Usuario",context.User.FindFirstValue("support_team"),ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("ticket-routed");return Results.Ok(new{ok=true});}).RequireAuthorization("TicketRouting");
-app.MapPut("/api/tickets/{id:guid}/share",async(Guid id,TicketShare body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{if(body.Departments is null||body.Departments.Count>10||(body.Comment?.Length??0)>1000)return Results.UnprocessableEntity(new{error="Selecciona hasta 10 departamentos y agrega un comentario de hasta 1,000 caracteres."});var scope=UserScope(context);var result=await db.ShareTicket(id,body,scope.UserId,scope.Role,context.User.FindFirstValue("display_name")??"Usuario",context.User.FindFirstValue("support_team"),ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("ticket-shared");return Results.Ok(new{ok=true});}).RequireAuthorization("TicketRouting");
-app.MapPost("/api/tickets/{id:guid}/resolve",async(Guid id,HttpRequest request,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{
-    if(!request.HasFormContentType)return Results.UnprocessableEntity(new{error="Completa la solución y adjunta la evidencia."});
-    var form=await request.ReadFormAsync(ct);var status=form["status"].ToString().Trim().ToUpperInvariant();if(string.IsNullOrWhiteSpace(status))status="RESOLVED";var resolution=form["resolution"].ToString().Trim();
-    if(status is not ("RESOLVED" or "CLOSED"))return Results.UnprocessableEntity(new{error="El estado final debe ser resuelto o cerrado."});
-    if(resolution.Length is < 10 or > 2000)return Results.UnprocessableEntity(new{error="Describe la solución aplicada (entre 10 y 2,000 caracteres)."});
-    if(form.Files.Count is < 1 or > 8)return Results.UnprocessableEntity(new{error="Adjunta entre 1 y 8 fotografías de evidencia."});
-    var replacementSerial=form["replacementSerial"].ToString().Trim();var removedSerial=form["removedSerial"].ToString().Trim();
-    if(replacementSerial.Length>120||removedSerial.Length>120)return Results.UnprocessableEntity(new{error="Los seriales del equipo deben tener hasta 120 caracteres."});
-    var serialTrace=(string.IsNullOrWhiteSpace(replacementSerial)?"":"\n\nSerial del equipo reemplazado: "+replacementSerial)+(string.IsNullOrWhiteSpace(removedSerial)?"":"\nSerial del equipo retirado: "+removedSerial);
-    if(resolution.Length+serialTrace.Length>2000)return Results.UnprocessableEntity(new{error="La solución y los seriales juntos deben tener hasta 2,000 caracteres."});
-    resolution+=serialTrace;
-    double? latitude=double.TryParse(form["latitude"],System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out var parsedLatitude)?parsedLatitude:null;
-    double? longitude=double.TryParse(form["longitude"],System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out var parsedLongitude)?parsedLongitude:null;
-    double? accuracy=double.TryParse(form["accuracyMeters"],System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out var parsedAccuracy)?parsedAccuracy:null;
-    DateTime? locationCapturedAt=DateTime.TryParse(form["locationCapturedAt"],null,System.Globalization.DateTimeStyles.RoundtripKind,out var parsedCapturedAt)?parsedCapturedAt:null;
-    var allowed=new HashSet<string>(StringComparer.OrdinalIgnoreCase){"image/jpeg","image/jpg","image/png","image/webp"};var evidence=new List<TicketEvidenceUpload>();long totalBytes=0;
-    foreach(var file in form.Files){if(file.Length==0||file.Length>8*1024*1024||!allowed.Contains(file.ContentType))return Results.UnprocessableEntity(new{error="Cada evidencia debe ser JPG, PNG o WebP y pesar menos de 8 MB."});totalBytes+=file.Length;if(totalBytes>64*1024*1024)return Results.UnprocessableEntity(new{error="Las evidencias superan el límite total de 64 MB."});await using var input=file.OpenReadStream();using var buffer=new MemoryStream();await input.CopyToAsync(buffer,ct);var data=buffer.ToArray();if(!ValidEvidenceImage(data,file.ContentType))return Results.UnprocessableEntity(new{error="Una evidencia no contiene una imagen válida."});evidence.Add(new(Path.GetFileName(file.FileName),file.ContentType,data));}
-    evidence=evidence.Select(item=>item with{Latitude=latitude,Longitude=longitude,AccuracyMeters=accuracy,LocationCapturedAt=locationCapturedAt}).ToList();
-    var scope=UserScope(context);var result=await db.ResolveTicket(id,status,resolution,evidence,scope.UserId,scope.Role,context.User.FindFirstValue("display_name")??"Usuario",context.User.FindFirstValue("support_team"),HasPermission(context.User,"canAssignTickets"),HasPermission(context.User,"canResolveTickets"),ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("ticket-resolved");return Results.Ok(new{ok=true,evidence=evidence.Count});
-}).RequireAuthorization("PortalUser").DisableAntiforgery();
-app.MapGet("/api/tickets/evidence/{evidenceId:guid}",async(Guid evidenceId,HttpContext context,Database db,CancellationToken ct)=>{var scope=UserScope(context);var photo=await db.TicketEvidencePhoto(evidenceId,scope.UserId,scope.Role,HasPermission(context.User,"canAssignTickets"),context.User.FindFirstValue("support_team"),ct);return photo is null?Results.NotFound():Results.File(photo.Value.Data,photo.Value.Mime,enableRangeProcessing:true);}).RequireAuthorization("PortalUser");
-app.MapGet("/api/agency-transitions",async(HttpContext context,Database db,CancellationToken ct)=>{var scope=UserScope(context);var rows=await db.AgencyTransitions(scope.Role,ct);return rows is null?Results.Forbid():Results.Ok(new{projects=rows});}).RequireAuthorization("PortalUser");
-app.MapPost("/api/agency-transitions",async(AgencyTransitionCreate body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{if(body.AgencyId is null||body.ProjectType is not ("CONSTRUCTION" or "RESTRUCTURING")||(body.Notes?.Length??0)>2000)return Results.UnprocessableEntity(new{error="Selecciona la agencia, el tipo de proceso y agrega notas de hasta 2,000 caracteres."});var scope=UserScope(context);var result=await db.CreateAgencyTransition(body,scope.UserId,scope.Role,context.User.FindFirstValue("display_name")??"Usuario",ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("agency-transition-created");return Results.Ok(new{ok=true});}).RequireAuthorization("PortalUser");
-app.MapPut("/api/agency-transitions/{id:guid}/stage",async(Guid id,AgencyTransitionStageUpdate body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{if(body.Status is not ("IN_PROGRESS" or "COMPLETED")||(body.Notes?.Length??0)>2000)return Results.UnprocessableEntity(new{error="Selecciona un estado válido y agrega notas de hasta 2,000 caracteres."});var scope=UserScope(context);var result=await db.UpdateAgencyTransitionStage(id,body,scope.UserId,scope.Role,context.User.FindFirstValue("display_name")??"Usuario",ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("agency-transition-updated");return Results.Ok(new{ok=true});}).RequireAuthorization("PortalUser");
-app.MapPut("/api/agency-transitions/{id:guid}/status",async(Guid id,AgencyTransitionStatusUpdate body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{if(body.Status is not ("ACTIVE" or "PENDING")||(body.Reason?.Length??0)>1000||(body.Status=="PENDING"&&(body.Reason?.Trim().Length??0)<5))return Results.UnprocessableEntity(new{error="Para dejar el proceso pendiente, indica un motivo de al menos 5 caracteres."});var scope=UserScope(context);var result=await db.UpdateAgencyTransitionStatus(id,body,scope.UserId,scope.Role,context.User.FindFirstValue("display_name")??"Usuario",ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("agency-transition-status-updated");return Results.Ok(new{ok=true});}).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
-app.MapPut("/api/agency-transitions/{id:guid}/stages/{stageId:guid}",async(Guid id,Guid stageId,AgencyTransitionStageEdit body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{if((body.Notes?.Length??0)>2000)return Results.UnprocessableEntity(new{error="La descripción admite hasta 2,000 caracteres."});var scope=UserScope(context);var result=await db.EditAgencyTransitionStage(id,stageId,body,scope.UserId,scope.Role,context.User.FindFirstValue("display_name")??"Usuario",ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("agency-transition-edited");return Results.Ok(new{ok=true});}).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
-app.MapPut("/api/agency-transitions/{id:guid}/stages/{stageId:guid}/progress/{progressId:guid}/assignment",async(Guid id,Guid stageId,Guid progressId,AgencyTransitionAssignmentUpdate body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{if(body.AssignmentType is not ("TECHNICIAN" or "CONTRACTOR")||(body.ContractorName?.Length??0)>160)return Results.UnprocessableEntity(new{error="Selecciona un técnico o escribe un contratista válido."});var scope=UserScope(context);var result=await db.AssignAgencyTransitionProgress(id,stageId,progressId,body,scope.UserId,scope.Role,context.User.FindFirstValue("display_name")??"Usuario",ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("agency-transition-record-assigned");return Results.Ok(new{ok=true});}).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
-app.MapPost("/api/agency-transitions/{id:guid}/stages/{stageId:guid}/progress/{progressId:guid}/evidence",async(Guid id,Guid stageId,Guid progressId,HttpRequest request,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>
-{
-    if(!request.HasFormContentType)return Results.UnprocessableEntity(new{error="Toma una fotografía con la cámara y el GPS activado."});
-    var form=await request.ReadFormAsync(ct);
-    if(form.Files.Count is <1 or >4)return Results.UnprocessableEntity(new{error="Adjunta entre 1 y 4 fotografías de evidencia."});
-    double? latitude=double.TryParse(form["latitude"],System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out var parsedLatitude)?parsedLatitude:null;
-    double? longitude=double.TryParse(form["longitude"],System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out var parsedLongitude)?parsedLongitude:null;
-    double? accuracy=double.TryParse(form["accuracyMeters"],System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out var parsedAccuracy)?parsedAccuracy:null;
-    DateTime? locationCapturedAt=DateTime.TryParse(form["locationCapturedAt"],null,System.Globalization.DateTimeStyles.RoundtripKind,out var parsedCapturedAt)?parsedCapturedAt:null;
-    if(latitude is null or < -90 or > 90||longitude is null or < -180 or > 180||(latitude==0&&longitude==0)||accuracy is null or <=0||locationCapturedAt is null)
-        return Results.UnprocessableEntity(new{error="No se recibió una ubicación GPS válida. Activa la ubicación y toma la foto nuevamente."});
-    if(locationCapturedAt.Value.ToUniversalTime()<DateTime.UtcNow.AddHours(-2)||locationCapturedAt.Value.ToUniversalTime()>DateTime.UtcNow.AddMinutes(10))
-        return Results.UnprocessableEntity(new{error="La ubicación GPS no es reciente. Toma la fotografía nuevamente desde este formulario."});
-    var allowed=new HashSet<string>(StringComparer.OrdinalIgnoreCase){"image/jpeg","image/jpg","image/png","image/webp"};
-    var files=new List<AgencyTransitionEvidenceUpload>();long totalBytes=0;
-    foreach(var file in form.Files)
-    {
-        if(file.Length==0||file.Length>8*1024*1024||!allowed.Contains(file.ContentType))return Results.UnprocessableEntity(new{error="Cada evidencia debe ser JPG, PNG o WebP y pesar menos de 8 MB."});
-        totalBytes+=file.Length;if(totalBytes>32*1024*1024)return Results.UnprocessableEntity(new{error="Las evidencias superan el límite total de 32 MB."});
-        await using var input=file.OpenReadStream();using var buffer=new MemoryStream();await input.CopyToAsync(buffer,ct);var data=buffer.ToArray();
-        if(!ValidEvidenceImage(data,file.ContentType))return Results.UnprocessableEntity(new{error="Una evidencia no contiene una imagen válida."});
-        files.Add(new(Path.GetFileName(file.FileName),file.ContentType,data,latitude,longitude,accuracy,locationCapturedAt));
-    }
-    var scope=UserScope(context);var result=await db.AddAgencyTransitionEvidence(id,stageId,progressId,files,scope.UserId,scope.Role,context.User.FindFirstValue("display_name")??"Usuario",ct);
-    if(!result.Ok)return TicketActionResponse(result);broker.Publish("agency-transition-evidence-added");return Results.Ok(new{ok=true,evidence=files.Count,gpsVerified=true,latitude,longitude,accuracyMeters=accuracy});
-}).RequireAuthorization("PortalUser").DisableAntiforgery().RequireRateLimiting("sensitive-write");
-app.MapGet("/api/agency-transitions/evidence/{evidenceId:guid}",async(Guid evidenceId,HttpContext context,Database db,CancellationToken ct)=>{var scope=UserScope(context);var photo=await db.AgencyTransitionEvidencePhoto(evidenceId,scope.Role,ct);return photo is null?Results.NotFound():Results.File(photo.Value.Data,photo.Value.Mime,enableRangeProcessing:true);}).RequireAuthorization("PortalUser");
-app.MapDelete("/api/agency-transitions/{id:guid}/stages/{stageId:guid}/progress/{progressId:guid}/evidence/{evidenceId:guid}",async(Guid id,Guid stageId,Guid progressId,Guid evidenceId,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{var scope=UserScope(context);var result=await db.DeleteAgencyTransitionEvidence(id,stageId,progressId,evidenceId,scope.Role,ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("agency-transition-evidence-deleted");return Results.Ok(new{ok=true});}).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
-app.MapPut("/api/agency-transitions/{id:guid}/stages/{stageId:guid}/progress/{progressId:guid}",async(Guid id,Guid stageId,Guid progressId,AgencyTransitionProgressUpdate body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{if((body.Note?.Length??0)>2000||body.Status is not (null or "IN_PROGRESS" or "COMPLETED")||(string.IsNullOrWhiteSpace(body.Note)&&body.Status is null))return Results.UnprocessableEntity(new{error="Indica el texto actualizado o el estado del registro."});var scope=UserScope(context);var result=await db.UpdateAgencyTransitionProgress(id,stageId,progressId,body,scope.UserId,scope.Role,context.User.FindFirstValue("display_name")??"Usuario",ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("agency-transition-progress-updated");return Results.Ok(new{ok=true});}).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
-app.MapDelete("/api/agency-transitions/{id:guid}/stages/{stageId:guid}/progress/{progressId:guid}",async(Guid id,Guid stageId,Guid progressId,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{var scope=UserScope(context);var result=await db.DeleteAgencyTransitionProgress(id,stageId,progressId,scope.UserId,scope.Role,context.User.FindFirstValue("display_name")??"Usuario",ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("agency-transition-progress-deleted");return Results.Ok(new{ok=true});}).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
-app.MapDelete("/api/agency-transitions/{id:guid}/stages/{stageId:guid}",async(Guid id,Guid stageId,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{var scope=UserScope(context);var result=await db.DeleteAgencyTransitionStageContent(id,stageId,scope.UserId,scope.Role,context.User.FindFirstValue("display_name")??"Usuario",ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("agency-transition-stage-content-deleted");return Results.Ok(new{ok=true});}).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
-app.MapDelete("/api/agency-transitions/{id:guid}",async(Guid id,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{var scope=UserScope(context);var result=await db.DeleteAgencyTransition(id,scope.Role,ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("agency-transition-deleted");return Results.Ok(new{ok=true});}).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
-app.MapGet("/api/maintenance/movements",async(HttpContext context,Database db,CancellationToken ct)=>{var scope=UserScope(context);var supportTeam=context.User.FindFirstValue("support_team");var rows=await db.MaintenanceMovements(scope.UserId,scope.Role,supportTeam,ct);if(rows is null)return Results.Forbid();var products=await db.MaintenanceProducts(scope.Role,supportTeam,ct);return Results.Ok(new{movements=rows,products});}).RequireAuthorization("PortalUser");
-app.MapPost("/api/maintenance/movements",async(MaintenanceMovementCreate body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{var area=(body.OperationalArea??"").Trim().ToUpperInvariant();var movement=(body.MovementType??"").Trim().ToUpperInvariant();var invalidArea=area is not ("WORKSHOP" or "WAREHOUSE");var invalidMovement=movement is not ("ENTRY" or "EXIT" or "REQUEST" or "NEW_DELIVERY" or "DAMAGED_RETURN" or "TRANSFER_TO_WORKSHOP" or "REPLACEMENT" or "COMPONENT_REPLACEMENT" or "REPAIR" or "DISCHARGE");var invalidAreaMovement=(area=="WAREHOUSE"&&movement is not ("ENTRY" or "EXIT" or "REQUEST" or "NEW_DELIVERY" or "DAMAGED_RETURN" or "TRANSFER_TO_WORKSHOP" or "DISCHARGE"))||(area=="WORKSHOP"&&movement is not ("ENTRY" or "EXIT" or "REPAIR" or "REPLACEMENT" or "COMPONENT_REPLACEMENT"));var missingCustody=movement!="REQUEST"&&(string.IsNullOrWhiteSpace(body.DeliveredByName)||string.IsNullOrWhiteSpace(body.ReceivedByName));var missingRecipient=(movement is "REQUEST" or "NEW_DELIVERY" or "EXIT")&&body.TechnicianUserId is null;var missingRequestRoute=movement=="REQUEST"&&body.AgencyId is null;if(invalidArea||invalidMovement||invalidAreaMovement||missingCustody||missingRecipient||missingRequestRoute||string.IsNullOrWhiteSpace(body.DocumentNumber)||string.IsNullOrWhiteSpace(body.EquipmentType)||string.IsNullOrWhiteSpace(body.FailureCause)||(movement!="REQUEST"&&string.IsNullOrWhiteSpace(body.SerialNumber))||(body.EquipmentType?.Length??0)>100||(body.ComponentType?.Length??0)>100||body.Quantity is <1 or >1000||(body.Notes?.Length??0)>2000||(body.SerialNumber?.Length??0)>120||(body.SignatureData?.Length??0)>500000||(body.DeliveredByName?.Length??0)>160||(body.ReceivedByName?.Length??0)>160||(body.DestinationName?.Length??0)>200)return Results.UnprocessableEntity(new{error="Completa los datos obligatorios. Las solicitudes requieren agencia, equipo y técnico instalador; los demás movimientos también requieren serial y cadena de custodia."});if(body.SignatureData is not null&&!body.SignatureData.StartsWith("data:image/png;base64,",StringComparison.Ordinal))return Results.UnprocessableEntity(new{error="La firma digital no tiene un formato válido."});var scope=UserScope(context);var actor=WorkshopActor.From(context);var result=await db.CreateMaintenanceMovement(body,scope.UserId,scope.Role,context.User.FindFirstValue("support_team"),actor.Name,ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("maintenance-movement-created");if(body.TechnicianUserId is not null&&movement!="REQUEST"&&await db.NotifyMaintenanceReceiptCreated(body.DocumentNumber!,actor,ct)){broker.Publish("chat-message");broker.Publish("institutional-document-created");}return Results.Ok(new{ok=true,documentNumber=body.DocumentNumber,qrToken=body.QrToken});}).RequireAuthorization("PortalUser");
-app.MapGet("/api/maintenance/procurement",async(HttpContext context,Database db,CancellationToken ct)=>{var scope=UserScope(context);var snapshot=await db.MaintenanceProcurement(scope.Role,context.User.FindFirstValue("support_team"),ct);return snapshot is null?Results.Forbid():Results.Ok(snapshot);}).RequireAuthorization("PortalUser");
-app.MapPost("/api/maintenance/suppliers",async(MaintenanceSupplierCreate body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{if(string.IsNullOrWhiteSpace(body.Name)||(body.Name?.Length??0)>160||(body.TaxId?.Length??0)>40||(body.ContactName?.Length??0)>120||(body.Phone?.Length??0)>50||(body.Email?.Length??0)>160)return Results.UnprocessableEntity(new{error="Completa un proveedor válido."});var scope=UserScope(context);var result=await db.CreateMaintenanceSupplier(body,scope.Role,context.User.FindFirstValue("support_team"),context.User.FindFirstValue("display_name")??"Usuario",ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("maintenance-supplier-created");return Results.Ok(new{ok=true});}).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
-app.MapPost("/api/maintenance/requisitions",async(MaintenanceRequisitionCreate body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{if(string.IsNullOrWhiteSpace(body.Department)||string.IsNullOrWhiteSpace(body.ProductName)||body.ProductName.Length>160||body.Quantity is <1 or >100000||body.Priority is not ("LOW" or "MEDIUM" or "HIGH" or "CRITICAL")||(body.Notes?.Length??0)>2000)return Results.UnprocessableEntity(new{error="Completa departamento, artículo, cantidad y prioridad de la requisición."});var scope=UserScope(context);var result=await db.CreateMaintenanceRequisition(body,scope.UserId,scope.Role,context.User.FindFirstValue("support_team"),context.User.FindFirstValue("display_name")??"Usuario",ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("maintenance-requisition-created");return Results.Ok(new{ok=true});}).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
-app.MapPost("/api/maintenance/purchase-orders",async(MaintenancePurchaseOrderCreate body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{if(body.SupplierId==Guid.Empty||string.IsNullOrWhiteSpace(body.Department)||string.IsNullOrWhiteSpace(body.ProductName)||body.Quantity is <1 or >100000||body.UnitCost<0||(body.Notes?.Length??0)>2000)return Results.UnprocessableEntity(new{error="Completa proveedor, departamento, artículo, cantidad y costo de la orden."});var scope=UserScope(context);var result=await db.CreateMaintenancePurchaseOrder(body,scope.Role,context.User.FindFirstValue("support_team"),context.User.FindFirstValue("display_name")??"Usuario",ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("maintenance-purchase-order-created");return Results.Ok(new{ok=true});}).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
-app.MapPost("/api/maintenance/purchase-orders/{id:guid}/receive",async(Guid id,MaintenancePurchaseOrderReceive body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{if(body.Quantity is <1 or >100000||string.IsNullOrWhiteSpace(body.SerialNumber)||(body.SerialNumber?.Length??0)>120||(body.ReceivedByName?.Length??0)>160||(body.Notes?.Length??0)>2000)return Results.UnprocessableEntity(new{error="Indica cantidad recibida, serial/lote y responsable de recepción."});var scope=UserScope(context);var result=await db.ReceiveMaintenancePurchaseOrder(id,body,scope.UserId,scope.Role,context.User.FindFirstValue("support_team"),context.User.FindFirstValue("display_name")??"Usuario",ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("maintenance-purchase-order-received");return Results.Ok(new{ok=true});}).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
-app.MapPost("/api/maintenance/returns",async(MaintenanceReturnCreate body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{if(string.IsNullOrWhiteSpace(body.Department)||string.IsNullOrWhiteSpace(body.ProductName)||string.IsNullOrWhiteSpace(body.SerialNumber)||string.IsNullOrWhiteSpace(body.Reason)||body.Quantity is <1 or >100000||(body.Notes?.Length??0)>2000)return Results.UnprocessableEntity(new{error="Completa artículo, serial/lote, cantidad y motivo de devolución."});var scope=UserScope(context);var result=await db.CreateMaintenanceReturn(body,scope.UserId,scope.Role,context.User.FindFirstValue("support_team"),context.User.FindFirstValue("display_name")??"Usuario",ct);if(!result.Ok)return TicketActionResponse(result);broker.Publish("maintenance-return-created");return Results.Ok(new{ok=true});}).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
-app.MapDelete("/api/tickets/{id:guid}", async (Guid id,Database db,LiveNotificationBroker broker,CancellationToken ct) => {if(!await db.DeleteTicket(id,ct))return Results.NotFound(new{error="Ticket no encontrado."});broker.Publish("ticket-deleted");return Results.Ok(new{ok=true});}).RequireAuthorization("TicketDeletion");
-app.MapGet("/api/support/chat/conversations",async(HttpContext context,Database db,CancellationToken ct)=>{var scope=UserScope(context);return Results.Ok(new{conversations=await db.SupportConversations(scope.UserId,scope.Role,ct)});}).RequireAuthorization("SupportChat");
-app.MapGet("/api/support/chat/contacts",async(HttpContext context,Database db,CancellationToken ct)=>{var scope=UserScope(context);return Results.Ok(new{contacts=await db.SupportContacts(scope.UserId,ct)});}).RequireAuthorization("SupportChat");
-app.MapPost("/api/support/chat/direct",async(SupportDirectConversationCreate body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{if(string.IsNullOrWhiteSpace(body.TargetUserId))return Results.UnprocessableEntity(new{error="Selecciona un contacto."});var scope=UserScope(context);var created=await db.CreateDirectSupportConversation(body.TargetUserId,scope.UserId,scope.Role,context.User.FindFirstValue("display_name")??"Usuario",context.User.Identity?.Name??"",ct);if(created is null)return Results.NotFound(new{error="El contacto ya no está disponible."});broker.Publish("chat-direct-created");return Results.Ok(created);}).RequireAuthorization("SupportChat");
-app.MapGet("/api/support/chat/conversations/{id:guid}/messages",async(Guid id,HttpContext context,Database db,CancellationToken ct)=>{var scope=UserScope(context);return Results.Ok(new{messages=await db.SupportMessages(id,scope.UserId,scope.Role,ct)});}).RequireAuthorization("SupportChat");
-app.MapGet("/api/support/chat/notifications",async(HttpContext context,Database db,CancellationToken ct)=>{var scope=UserScope(context);return Results.Ok(new{notifications=await db.SupportChatNotifications(scope.UserId,scope.Role,ct)});}).RequireAuthorization("SupportChat");
-app.MapPost("/api/notifications/state",async(NotificationStateInput body,HttpContext context,Database db,CancellationToken ct)=>{if(body.Keys is null||body.Keys.Count==0||body.Keys.Count>200||body.Action is not ("READ" or "DISMISS"))return Results.UnprocessableEntity(new{error="Selecciona notificaciones y una acción válida."});var scope=UserScope(context);await db.SetNotificationState(scope.UserId,body.Keys,body.Action=="DISMISS",ct);return Results.Ok(new{ok=true});}).RequireAuthorization("TicketNotifications").RequireRateLimiting("sensitive-write");
-app.MapPost("/api/support/chat/conversations",async(SupportConversationCreate body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{if(string.IsNullOrWhiteSpace(body.Department)||body.Department.Length>40||(body.Category?.Length??0)>60)return Results.UnprocessableEntity(new{error="Selecciona un departamento y un tipo de ayuda válidos."});var scope=UserScope(context);var created=await db.CreateSupportConversation(body,scope.UserId,scope.Role,context.User.FindFirstValue("display_name")??"Supervisor",context.User.Identity?.Name??"",ct);if(created is null)return Results.Forbid();broker.Publish("chat-created");return Results.Json(created,statusCode:201);}).RequireAuthorization("SupportChat");
-app.MapPost("/api/support/chat/conversations/{id:guid}/messages",async(Guid id,SupportMessageCreate body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{if(string.IsNullOrWhiteSpace(body.Message)||body.Message.Trim().Length>2000)return Results.UnprocessableEntity(new{error="Escribe un mensaje de hasta 2,000 caracteres."});var scope=UserScope(context);if(!await db.AddSupportMessage(id,body.Message.Trim(),scope.UserId,scope.Role,context.User.FindFirstValue("display_name")??"Usuario",ct))return Results.NotFound(new{error="Conversación no encontrada."});broker.Publish("chat-message");return Results.Ok(new{ok=true});}).RequireAuthorization("SupportChat");
-app.MapDelete("/api/support/chat/messages/{id:guid}",async(Guid id,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{var scope=UserScope(context);if(!await db.DeleteSupportMessage(id,scope.UserId,scope.Role,context.User.FindFirstValue("display_name")??"Usuario",ct))return Results.NotFound(new{error="El mensaje no existe o no tienes permiso para eliminarlo."});broker.Publish("chat-message-deleted");return Results.Ok(new{ok=true});}).RequireAuthorization("SupportChat").RequireRateLimiting("sensitive-write");
-app.MapPost("/api/support/chat/conversations/{id:guid}/voice",async(Guid id,HttpRequest request,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{if(!request.HasFormContentType)return Results.BadRequest(new{error="Adjunta una nota de voz valida."});var form=await request.ReadFormAsync(ct);var voice=form.Files.GetFile("voice");if(voice is null||voice.Length==0||voice.Length>10*1024*1024)return Results.UnprocessableEntity(new{error="La nota de voz debe pesar hasta 10 MB."});var allowed=new[]{"audio/webm","audio/ogg","audio/mp4","audio/mpeg","audio/wav","audio/x-wav"};var contentType=(voice.ContentType??"").Split(';')[0].ToLowerInvariant();if(!allowed.Contains(contentType))return Results.UnprocessableEntity(new{error="Formato de audio no compatible."});await using var stream=new MemoryStream();await voice.CopyToAsync(stream,ct);var audioData=stream.ToArray();if(!ValidAudio(audioData,contentType))return Results.UnprocessableEntity(new{error="El archivo no contiene una nota de voz válida."});var duration=int.TryParse(form["durationSeconds"],out var seconds)?Math.Clamp(seconds,0,600):(int?)null;var scope=UserScope(context);if(!await db.AddSupportVoiceNote(id,audioData,contentType,Path.GetFileName(voice.FileName),duration,scope.UserId,scope.Role,context.User.FindFirstValue("display_name")??"Usuario",ct))return Results.NotFound();broker.Publish("chat-message");return Results.Ok(new{ok=true});}).RequireAuthorization("SupportChat").DisableAntiforgery().RequireRateLimiting("sensitive-write");
-app.MapGet("/api/support/chat/voice/{messageId:guid}",async(Guid messageId,HttpContext context,Database db,CancellationToken ct)=>{var scope=UserScope(context);var voice=await db.SupportVoiceNote(messageId,scope.UserId,scope.Role,ct);return voice is null?Results.NotFound():Results.File(voice.Value.Audio,voice.Value.ContentType,voice.Value.FileName,enableRangeProcessing:true);}).RequireAuthorization("SupportChat");
-app.MapPut("/api/support/chat/conversations/{id:guid}/status",async(Guid id,SupportConversationStatus body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{string[] statuses=["WAITING_SUPPORT","IN_PROGRESS","RESOLVED","CLOSED"];if(!statuses.Contains(body.Status))return Results.UnprocessableEntity(new{error="Estado de conversación no válido."});var scope=UserScope(context);if(!await db.UpdateSupportConversationStatus(id,body.Status!,scope.UserId,scope.Role,ct))return Results.NotFound(new{error="Conversación no encontrada."});broker.Publish("chat-status");return Results.Ok(new{ok=true});}).RequireAuthorization("SupportChatManage");
-app.MapPost("/api/support/chat/conversations/{id:guid}/control",async(Guid id,SupportConversationControl body,HttpContext context,Database db,LiveNotificationBroker broker,CancellationToken ct)=>{var action=(body.Action??"").Trim().ToUpperInvariant();string[] actions=["MUTE","UNMUTE","RESTRICT","UNRESTRICT","BLOCK","UNBLOCK","DELETE"];if(!actions.Contains(action))return Results.UnprocessableEntity(new{error="Control de conversación no válido."});if((action is "RESTRICT" or "UNRESTRICT" or "BLOCK" or "UNBLOCK")&&!HasPermission(context.User,"canModerateSupportChat"))return Results.Forbid();var scope=UserScope(context);if(action=="DELETE"&&!HasPermission(context.User,"canDeleteSupportConversations")&&!await db.CanDeleteDirectConversation(id,scope.UserId,scope.Role,ct))return Results.Forbid();if(!await db.UpdateSupportConversationControl(id,action,scope.UserId,scope.Role,ct))return Results.NotFound(new{error="Conversación no encontrada."});broker.Publish("chat-control");return Results.Ok(new{ok=true,action});}).RequireAuthorization("SupportChat");
-app.MapPost("/api/support/chat/presence",async(SupportPresenceInput body,HttpContext context,Database db,SupportPresenceTracker tracker,LiveNotificationBroker broker,CancellationToken ct)=>{var scope=UserScope(context);string department="";if(body.ConversationId is Guid conversationId){var access=await db.SupportPresenceContext(conversationId,scope.UserId,scope.Role,ct);if(access is null)return Results.NotFound(new{error="Conversación no encontrada."});department=access;}else department=scope.Role switch{"Technology"=>"TECHNOLOGY","GeneralServices"=>"GENERAL_SERVICES","HumanResources"=>"HUMAN_RESOURCES",_=>""};tracker.Touch(scope.UserId,context.User.FindFirstValue("display_name")??"Usuario",scope.Role,department,body.ConversationId,body.IsTyping);broker.Publish("chat-presence");return Results.Ok(tracker.Snapshot(department,body.ConversationId,scope.UserId));}).RequireAuthorization("SupportChat");
-app.MapGet("/api/support/chat/presence/{conversationId:guid}",async(Guid conversationId,HttpContext context,Database db,SupportPresenceTracker tracker,CancellationToken ct)=>{var scope=UserScope(context);var department=await db.SupportPresenceContext(conversationId,scope.UserId,scope.Role,ct);return department is null?Results.NotFound():Results.Ok(tracker.Snapshot(department,conversationId,scope.UserId));}).RequireAuthorization("SupportChat");
-app.MapGet("/api/account/contact-profile",async(HttpContext context,Database db,CancellationToken ct)=>{var scope=UserScope(context);if(Guid.TryParse(scope.UserId,out var id))return Results.Ok(await db.ContactProfile(id,ct));return Results.Ok(new{id=scope.UserId,email=context.User.Identity?.Name??"",displayName=context.User.FindFirstValue("display_name")??"Administrador principal",role=scope.Role,contact=(string?)null,avatarUrl=(string?)null,groups=Array.Empty<string>()});}).RequireAuthorization("PortalUser");
-app.MapPut("/api/account/contact-profile",async(AccountContactUpdate body,HttpContext context,Database db,CancellationToken ct)=>{var scope=UserScope(context);if(!Guid.TryParse(scope.UserId,out var id))return Results.Conflict(new{error="La cuenta de recuperación no guarda un perfil. Crea un usuario administrador permanente."});if((body.Contact?.Length??0)>80)return Results.UnprocessableEntity(new{error="La información de contacto supera 80 caracteres."});await db.UpdateOwnContact(id,body.Contact,ct);return Results.Ok(new{ok=true});}).RequireAuthorization("PortalUser");
-app.MapPut("/api/admin/audits/{profileId:guid}", async (Guid profileId, AuditUpdate body, HttpContext context, Database db, CancellationToken ct) => {var validation=ValidateAuditUpdate(body);if(validation is not null)return Results.UnprocessableEntity(new{error=validation});var updated=await db.UpdateAudit(profileId,body,context.User.Identity?.Name??"admin",ct);return updated is null?Results.NotFound(new{error="No encontramos esta auditoría."}):Results.Ok(updated);}).RequireAuthorization("AuditManagement");
-app.MapDelete("/api/admin/audits/{profileId:guid}", async (Guid profileId,HttpContext context,Database db,CancellationToken ct) => await db.DeleteAudit(profileId,context.User.Identity?.Name??"admin",ct)?Results.Ok(new{ok=true}):Results.NotFound(new{error="No encontramos esta auditoría."})).RequireAuthorization("AuditManagement");
-app.MapGet("/api/admin/users", async (Database db,CancellationToken ct) => Results.Ok(new{users=await db.AdminUsers(ct)})).RequireAuthorization("UserAdministration");
-app.MapGet("/api/admin/groups-catalog", async (Database db,CancellationToken ct) => Results.Ok(new{groups=await db.AllGroupNames(ct)})).RequireAuthorization("UserAdministration");
-app.MapPost("/api/admin/users", async (AdminUserCreate body,Database db,CancellationToken ct) => {var validation=ValidateUserWithTeam(body.Email,body.DisplayName,body.Role,body.Password,true,body.SupportTeam);if(validation is not null)return Results.UnprocessableEntity(new{error=validation});try{return Results.Json(await db.CreateAdminUser(body,ct),statusCode:201);}catch(AdminUserConflictException){return Results.Conflict(new{error="Ya existe una cuenta activa con ese usuario. Usa otro nombre de usuario."});}catch(SqlException error) when(error.Number is 2601 or 2627){return Results.Conflict(new{error="Ya existe una cuenta con ese usuario."});}}).RequireAuthorization("UserAdministration");
-app.MapPut("/api/admin/users/{id:guid}", async (Guid id,AdminUserUpdate body,HttpContext context,Database db,CancellationToken ct) => {var validation=ValidateUserWithTeam(body.Email,body.DisplayName,body.Role,body.Password,false,body.SupportTeam);if(validation is not null)return Results.UnprocessableEntity(new{error=validation});if(context.User.FindFirstValue(ClaimTypes.NameIdentifier)==id.ToString()&&(!body.IsActive||body.Role!="ADMINISTRATOR"))return Results.Conflict(new{error="No puedes quitarte tu propio acceso de administrador."});try{var user=await db.UpdateAdminUser(id,body,ct);return user is null?Results.NotFound(new{error="Usuario no encontrado."}):Results.Ok(user);}catch(SqlException error) when(error.Number is 2601 or 2627){return Results.Conflict(new{error="Ya existe una cuenta con ese usuario."});}}).RequireAuthorization("UserAdministration");
-app.MapDelete("/api/admin/users/{id:guid}", async (Guid id,HttpContext context,Database db,CancellationToken ct) => {
-    if (context.User.FindFirstValue(ClaimTypes.NameIdentifier)==id.ToString())
-        return Results.Conflict(new { error="No puedes eliminar la cuenta con la que estás conectado." });
-    var deleted=await db.DeleteAdminUser(id,context.User.Identity?.Name??"",ct);
-    return deleted?Results.Ok(new { ok=true }):Results.NotFound(new { error="Usuario no encontrado o ya fue eliminado." });
-}).RequireAuthorization("UserAdministration");
-app.MapPut("/api/account/password", async (PasswordChange body,HttpContext context,Database db,CancellationToken ct) => {if(string.IsNullOrEmpty(body.CurrentPassword)||string.IsNullOrEmpty(body.NewPassword))return Results.UnprocessableEntity(new{error="Completa la contraseña actual y la nueva."});if(body.NewPassword.Length<8||body.NewPassword.Length>128||body.NewPassword=="123456")return Results.UnprocessableEntity(new{error="La nueva contraseña debe tener entre 8 y 128 caracteres y no puede ser la clave temporal."});var scope=UserScope(context);if(!Guid.TryParse(scope.UserId,out var id))return Results.Conflict(new{error="La cuenta de recuperación debe crear primero su usuario permanente desde el panel."});var account=await db.ChangeOwnPassword(id,body.CurrentPassword,body.NewPassword,ct);if(account is null)return Results.Json(new{error="La contraseña actual no es correcta."},statusCode:401);await SignInAccount(context,account);return Results.Ok(SessionPayload(account));}).RequireAuthorization("PortalUser").RequireRateLimiting("login");
-app.MapPost("/api/account/avatar", async (HttpRequest request,HttpContext context,Database db,CancellationToken ct) => {var scope=UserScope(context);if(!Guid.TryParse(scope.UserId,out var id))return Results.Conflict(new{error="La cuenta de recuperación no admite fotografía."});if(!request.HasFormContentType)return Results.UnprocessableEntity(new{error="Selecciona una fotografía."});var form=await request.ReadFormAsync(ct);var file=form.Files.GetFile("avatar");if(file is null||file.Length==0)return Results.UnprocessableEntity(new{error="Selecciona una fotografía."});if(file.Length>5*1024*1024)return Results.UnprocessableEntity(new{error="La foto de perfil supera 5 MB."});var allowed=new HashSet<string>(StringComparer.OrdinalIgnoreCase){"image/jpeg","image/jpg","image/png","image/webp"};if(!allowed.Contains(file.ContentType))return Results.UnprocessableEntity(new{error="La foto debe ser JPG, PNG o WebP."});await using var input=file.OpenReadStream();using var buffer=new MemoryStream();await input.CopyToAsync(buffer,ct);var avatarData=buffer.ToArray();if(!ValidEvidenceImage(avatarData,file.ContentType))return Results.UnprocessableEntity(new{error="El archivo no contiene una fotografía válida."});await db.AttachAvatar(id,avatarData,file.ContentType,ct);return Results.Ok(new{avatarUrl=$"/api/account/avatar/{id}?v={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}"});}).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
-app.MapGet("/api/account/avatar/{userId:guid}", async (Guid userId,Database db,CancellationToken ct) => {var avatar=await db.Avatar(userId,ct);return avatar is null?Results.NotFound():Results.File(avatar.Value.Data,avatar.Value.Mime,enableRangeProcessing:true);}).RequireAuthorization("PortalUser");
-app.MapPost("/api/submit", async (Submit body, HttpContext http, Database db, Tokens tokens, CancellationToken ct) => {
-    if (!string.IsNullOrEmpty(body.Website)) return Results.BadRequest(new { error = "Solicitud rechazada." });
-    if (!Guid.TryParse(body.AgencyId, out var agencyId)) return Results.UnprocessableEntity(new { error = "La agencia no es válida." });
-    var validation = Validate(body); if (validation is not null) return Results.UnprocessableEntity(new { error = validation });
-    var allowedDamageTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
-        "WIRING", "SCREENS", "CONNECTIVITY", "FURNITURE",
-        "GENERAL_PAINTING", "GENERAL_INVERTER", "GENERAL_BATTERIES", "GENERAL_RESTRUCTURING",
-        "GENERAL_LIGHTING", "GENERAL_METALWORK", "GENERAL_GENERATOR_REQUEST", "GENERAL_ELECTRICAL",
-        "GENERAL_SHUTTER", "GENERAL_OTHER"
-    };
-    if (body.Answers?.DamageFound == "yes" && (body.Answers.DamageTypes is null || body.Answers.DamageTypes.Count == 0)) return Results.UnprocessableEntity(new { error = "Indica al menos un tipo de avería." });
-    if (body.Answers?.DamageTypes?.Any(value => !allowedDamageTypes.Contains(value)) == true) return Results.UnprocessableEntity(new { error = "La clasificación de la avería no es válida." });
-    var scope=UserScope(http);if(!await db.CanAccessAgency(agencyId,scope.UserId,scope.Role,ct))return Results.Forbid();
-    var profileId = await db.Submit(agencyId, body, scope.UserId, http.User.Identity?.Name, http.User.FindFirstValue("display_name"), http.Connection.RemoteIpAddress?.ToString(), http.Request.Headers.UserAgent.ToString(), ct);
-    return Results.Json(new { ok = true, profileId, uploadToken = tokens.Create(profileId.ToString()) }, statusCode: 201);
-}).RequireAuthorization("FieldAudit").RequireRateLimiting("sensitive-write");
-app.MapPost("/api/image", async (HttpRequest request, Database db, Tokens tokens, CancellationToken ct) => {
-    if (!request.HasFormContentType) return Results.UnprocessableEntity(new { error = "Selecciona una imagen válida." });
-    var form = await request.ReadFormAsync(ct); var idText = form["profileId"].ToString(); var photoType = form["photoType"].ToString();
-    double photoLat=0,photoLng=0,photoAccuracy=0;DateTimeOffset photoCaptured=default;
-    var validGeo=double.TryParse(form["photoLatitude"],System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out photoLat)&&double.TryParse(form["photoLongitude"],System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out photoLng)&&double.TryParse(form["photoAccuracy"],System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out photoAccuracy)&&DateTimeOffset.TryParse(form["photoCapturedAt"],out photoCaptured);
-    if (!Guid.TryParse(idText, out var id)) return Results.Json(new { error = "No se pudo identificar la auditoría de esta fotografía." }, statusCode: 403);
-    var photoScope=UserScope(request.HttpContext);
-    if (!tokens.Verify(form["token"].ToString(), idText) && !await db.CanAccessProfile(id,photoScope.UserId,photoScope.Role,ct)) return Results.Json(new { error = "Tu usuario no tiene acceso a esta auditoría." }, statusCode: 403);
-    var file = form.Files.GetFile("image"); if (file is null || file.Length == 0) return Results.UnprocessableEntity(new { error = "Selecciona una imagen válida." });
-    if (file.Length > 20 * 1024 * 1024) return Results.UnprocessableEntity(new { error = "La imagen supera el máximo de 20 MB." });
-    var types = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase) { ["image/jpeg"]="jpg",["image/jpg"]="jpg",["image/png"]="png",["image/webp"]="webp",["image/heic"]="heic",["image/heif"]="heif",["image/heic-sequence"]="heic",["image/heif-sequence"]="heif" };
-    if (!types.TryGetValue(file.ContentType, out var extension)) return Results.UnprocessableEntity(new { error = "La cámara envió un formato no reconocido. Se aceptan JPG, PNG, WebP, HEIC y HEIF." });
-    if (!new[] { "frontal", "operativa", "entorno", "inversor", "bateria" }.Contains(photoType)) return Results.UnprocessableEntity(new { error = "El tipo de fotografía no es válido." });
-    var photoAgeSeconds=(DateTimeOffset.UtcNow-photoCaptured).TotalSeconds;
-    if(!validGeo||photoLat is < -90 or > 90||photoLng is < -180 or > 180||(photoLat==0&&photoLng==0)||photoAccuracy<=0||photoAccuracy>100||photoAgeSeconds< -120)return Results.UnprocessableEntity(new{error="La fotografía no contiene una ubicación GPS válida."});
-    if(!await db.PhotoMatchesProfile(id,photoLat,photoLng,75,ct))return Results.UnprocessableEntity(new{error="La ubicación de esta fotografía no coincide con el punto verificado de la banca."});
-    await using var input = file.OpenReadStream(); using var buffer = new MemoryStream(); await input.CopyToAsync(buffer, ct);var imageData=buffer.ToArray();
-    if(!ValidEvidenceImage(imageData,file.ContentType))return Results.UnprocessableEntity(new{error="El archivo enviado no contiene una imagen válida."});
-    await db.AttachPhoto(id, photoType, imageData, file.ContentType, photoLat, photoLng, photoAccuracy, photoCaptured.UtcDateTime, ct);
-    return Results.Ok(new { ok = true });
-}).RequireAuthorization("FieldAudit").RequireRateLimiting("sensitive-write");
-app.MapGet("/api/images/{profileId:guid}", async (Guid profileId,HttpContext context,Database db,CancellationToken ct) => {var scope=UserScope(context);if(!await db.CanAccessProfile(profileId,scope.UserId,scope.Role,ct))return Results.Forbid();var photo=await db.Photo(profileId,ct);context.Response.Headers.CacheControl="no-store";return photo is null?Results.NotFound():Results.File(photo.Value.Data,photo.Value.Mime,enableRangeProcessing:false);}).RequireAuthorization("PanelView");
-app.MapGet("/api/images/{profileId:guid}/{photoType}", async (Guid profileId,string photoType,HttpContext context,Database db,CancellationToken ct) => {if(!new[]{"frontal","operativa","entorno","inversor","bateria"}.Contains(photoType))return Results.NotFound();var scope=UserScope(context);if(!await db.CanAccessProfile(profileId,scope.UserId,scope.Role,ct))return Results.Forbid();var photo=await db.Photo(profileId,photoType,ct);context.Response.Headers.CacheControl="no-store";return photo is null?Results.NotFound():Results.File(photo.Value.Data,photo.Value.Mime,enableRangeProcessing:false);}).RequireAuthorization("PanelView");
-// Keep unknown API routes as JSON 404 responses instead of returning the SPA HTML.
-app.Map("/api/{**path}", () => Results.NotFound(new { error = "La ruta solicitada no existe." }));
-app.MapFallbackToFile("index.html");
-app.Run();
-
-static string ClientKey(HttpContext context)=>context.Connection.RemoteIpAddress?.ToString()??"unknown";
-static bool IsTransientSqlFailure(SqlException error)=>error.Number is -2 or 0 or 40 or 53 or 64 or 233 or 258 or 10053 or 10054 or 10060 or 11001 or 1205 or 40197 or 40501 or 40613 or 49918 or 49919 or 49920;
-static async Task<T> RetryDatabaseAsync<T>(Func<Task<T>> action,CancellationToken ct,string operation){SqlException? last=null;for(var attempt=0;attempt<3;attempt++){try{return await action();}catch(SqlException error) when(!ct.IsCancellationRequested&&IsTransientSqlFailure(error)){last=error;Console.Error.WriteLine($"SQL {operation} (reintento {attempt+1}/3): {error.Message}");if(attempt<2)await Task.Delay(400*(attempt+1),ct);}}if(last is not null)throw last;throw new InvalidOperationException("MSSQL_RETRY:No fue posible completar la operación de base de datos.");}
-static bool IsUnsafeMethod(string method)=>method is "POST" or "PUT" or "PATCH" or "DELETE";
-static bool IsCrossSiteRequest(HttpRequest request){var fetchSite=request.Headers["Sec-Fetch-Site"].ToString();if(string.Equals(fetchSite,"cross-site",StringComparison.OrdinalIgnoreCase))return true;if(!string.IsNullOrWhiteSpace(fetchSite))return false;var origin=request.Headers.Origin.ToString();if(string.IsNullOrWhiteSpace(origin)||!Uri.TryCreate(origin,UriKind.Absolute,out var uri))return false;return !string.Equals(uri.Host,request.Host.Host,StringComparison.OrdinalIgnoreCase);}
-static string Pick(System.Text.Json.JsonElement element,params string[] keys){foreach(var key in keys)if(element.ValueKind==System.Text.Json.JsonValueKind.Object&&element.TryGetProperty(key,out var value)&&value.ValueKind==System.Text.Json.JsonValueKind.String&&!string.IsNullOrWhiteSpace(value.GetString()))return value.GetString()!;return"";}
-static string First(string current,string fallback)=>string.IsNullOrWhiteSpace(current)?fallback:current;
-static async Task SignInAccount(HttpContext context,AdminIdentity account){var permissions=AccountPermissions(account);var identity=new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier,account.Id),new Claim(ClaimTypes.Name,account.Email),new Claim("display_name",account.DisplayName),new Claim(ClaimTypes.Role,account.Role),new Claim("must_change_password",account.MustChangePassword?"true":"false"),new Claim("avatar_url",account.AvatarUrl??""),new Claim("support_team",account.SupportTeam??""),new Claim("permissions_json",System.Text.Json.JsonSerializer.Serialize(permissions))],CookieAuthenticationDefaults.AuthenticationScheme);var principal=new ClaimsPrincipal(identity);context.User=principal;await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,principal,new AuthenticationProperties{IsPersistent=true,AllowRefresh=true,ExpiresUtc=DateTimeOffset.UtcNow.AddYears(10)});}
-static (string UserId,string Role) UserScope(HttpContext context)=>(context.User.FindFirstValue(ClaimTypes.NameIdentifier)??"",context.User.FindFirstValue(ClaimTypes.Role)??"Viewer");
-static object SessionPayload(AdminIdentity account,string? persistentSessionToken=null){var canExportAudits=account.Role is "Administrator" or "Fiscalizador";var canManage=account.Role=="Administrator";return new{authenticated=true,id=account.Id,email=account.Email,displayName=account.DisplayName,role=account.Role,mustChangePassword=account.MustChangePassword,avatarUrl=account.AvatarUrl,supportTeam=account.SupportTeam,scope=account.Role=="GroupAdministrator"?"assigned-groups":account.Role is "Technology" or "GeneralServices" or "HumanResources"?"support-department":"all",supportDepartment=account.Role=="Technology"?"TECHNOLOGY":account.Role=="GeneralServices"?"GENERAL_SERVICES":account.Role=="HumanResources"?"HUMAN_RESOURCES":null,permissions=AccountPermissions(account),persistentSessionToken};}
-static object SessionPayloadFromContext(HttpContext context){var role=context.User.FindFirstValue(ClaimTypes.Role)??"Viewer";return new{authenticated=true,id=context.User.FindFirstValue(ClaimTypes.NameIdentifier)??"",email=context.User.Identity?.Name??"",displayName=context.User.FindFirstValue("display_name")??"Usuario",role,mustChangePassword=context.User.FindFirstValue("must_change_password")=="true",avatarUrl=string.IsNullOrWhiteSpace(context.User.FindFirstValue("avatar_url"))?null:context.User.FindFirstValue("avatar_url"),supportTeam=string.IsNullOrWhiteSpace(context.User.FindFirstValue("support_team"))?null:context.User.FindFirstValue("support_team"),scope=role=="GroupAdministrator"?"assigned-groups":role is "Technology" or "GeneralServices" or "HumanResources"?"support-department":"all",supportDepartment=role=="Technology"?"TECHNOLOGY":role=="GeneralServices"?"GENERAL_SERVICES":role=="HumanResources"?"HUMAN_RESOURCES":null,permissions=PermissionClaim(context.User)};}
-static Dictionary<string,bool> Permissions(string role,bool? exportPermission=null,bool? managePermission=null,Dictionary<string,bool>? custom=null){var support=role is "Administrator" or "Technology" or "GeneralServices" or "HumanResources";var values=new Dictionary<string,bool>{{"canView",true},{"canManage",managePermission??role=="Administrator"},{"canManageUsers",role=="Administrator"},{"canManageAudits",role=="Administrator"},{"canManageAgencies",role=="Administrator"},{"canViewDashboard",role is "Administrator" or "Viewer" or "GroupAdministrator" or "Fiscalizador"},{"canAudit",role is "Administrator" or "GroupAdministrator"},{"canCreateTickets",role is "Administrator" or "GroupAdministrator" or "Technology" or "GeneralServices" or "HumanResources"},{"canResolveTickets",support},{"canAssignTickets",support},{"canConfigureProfile",true},{"canExportAudits",exportPermission??role is "Administrator" or "Fiscalizador"},{"canViewSupportDashboard",support},{"canViewAllSupportDepartments",role=="Administrator"},{"canConfigureSupport",role=="Administrator"},{"canViewSupportFindings",support},{"canUseSupportChat",role is "Administrator" or "GroupAdministrator" or "Technology" or "GeneralServices" or "HumanResources"},{"canManageSupportChat",support},{"canModerateSupportChat",support},{"canDeleteSupportConversations",role=="Administrator"},{"canShareSupportConversations",role is "Administrator" or "GroupAdministrator" or "Technology" or "GeneralServices" or "HumanResources"},{"canDeleteSupportTickets",role=="Administrator"},{"canViewTicketNotifications",true}};if(custom is not null)foreach(var item in custom)if(values.ContainsKey(item.Key))values[item.Key]=item.Value;values["canManage"]=values["canManageUsers"];values["canViewTicketNotifications"]=true;return values;}
-static bool IsFranklinAgencyAdministrator(string? email)=>string.Equals(NormalizeLogin(email),"franklin.calderon@grupotejeda.local",StringComparison.OrdinalIgnoreCase);
-static bool IsTechnologySupportTeam(string? supportTeam)=>supportTeam is "CALL_CENTER" or "TECHNICAL_FAILURE" or "TECHNICIANS";
-static Dictionary<string,bool> AccountPermissions(AdminIdentity account){var values=Permissions(account.Role,account.Role is "Administrator" or "Fiscalizador",account.Role=="Administrator",account.Permissions);var maintenanceOperator=account.SupportTeam is "WAREHOUSE" or "WORKSHOP";if(maintenanceOperator)foreach(var key in new[]{"canViewDashboard","canAudit","canExportAudits","canManageUsers","canManageAudits","canManageAgencies","canCreateTickets","canAssignTickets","canResolveTickets","canViewAllSupportDepartments","canConfigureSupport","canViewSupportFindings","canManageSupportChat","canModerateSupportChat","canDeleteSupportTickets","canDeleteSupportConversations","canShareSupportConversations"})values[key]=false;if(account.Role=="Administrator")values["canManageUsers"]=true;if(account.Role=="Technology"&&IsTechnologySupportTeam(account.SupportTeam)){values["canResolveTickets"]=true;values["canViewTicketNotifications"]=true;}if(account.Role=="Technology"&&(account.SupportTeam is "CALL_CENTER" or "TECHNICAL_FAILURE")){values["canCreateTickets"]=true;values["canAssignTickets"]=true;}if(account.Role=="Technology"&&account.SupportTeam=="TECHNICIANS"){values["canUseSupportChat"]=true;values["canShareSupportConversations"]=true;values["canViewTicketNotifications"]=true;}values["canManageAgencies"]=!maintenanceOperator&&(account.Role=="Administrator"||account.Role=="Technology"&&IsFranklinAgencyAdministrator(account.Email));values["canManage"]=values["canManageUsers"];return values;}
-static Dictionary<string,bool> PermissionClaim(ClaimsPrincipal user){var role=user.FindFirstValue(ClaimTypes.Role)??"Viewer";var supportTeam=user.FindFirstValue("support_team");var values=Permissions(role);try{var custom=System.Text.Json.JsonSerializer.Deserialize<Dictionary<string,bool>>(user.FindFirstValue("permissions_json")??"");if(custom is not null)foreach(var item in custom)if(values.ContainsKey(item.Key))values[item.Key]=item.Value;}catch{}if(role=="Administrator")values["canManageUsers"]=true;if(role=="Technology"&&IsTechnologySupportTeam(supportTeam)){values["canResolveTickets"]=true;values["canViewTicketNotifications"]=true;}if(role=="Technology"&&(supportTeam is "CALL_CENTER" or "TECHNICAL_FAILURE")){values["canCreateTickets"]=true;values["canAssignTickets"]=true;}if(role=="Technology"&&supportTeam=="TECHNICIANS"){values["canUseSupportChat"]=true;values["canShareSupportConversations"]=true;}if(role=="Technology"&&IsFranklinAgencyAdministrator(user.Identity?.Name))values["canManageAgencies"]=true;values["canManage"]=values["canManageUsers"];return values;}
-static bool HasPermission(ClaimsPrincipal user,string key)=>PermissionClaim(user).GetValueOrDefault(key);
-static string? ValidateUserWithTeam(string? email,string? displayName,string? role,string? password,bool passwordRequired,string? supportTeam){if(!string.IsNullOrWhiteSpace(supportTeam)){var valid=role=="TECHNOLOGY"&&supportTeam is "CALL_CENTER" or "TECHNICAL_FAILURE" or "TECHNICIANS" or "WAREHOUSE" or "WORKSHOP"||role=="GENERAL_SERVICES"&&supportTeam=="WORKSHOP";if(!valid)return"El área asignada no corresponde con el departamento del usuario.";}return ValidateUser(email,displayName,role,password,passwordRequired);}
-static string NormalizeLogin(string? value){var login=(value??"").Trim().ToLowerInvariant();return string.IsNullOrWhiteSpace(login)||login.Contains('@')?login:$"{login}@grupotejeda.local";}
-static string? ValidateUser(string? email,string? displayName,string? role,string? password,bool passwordRequired){var username=(email??"").Trim().ToLowerInvariant().Replace("@grupotejeda.local","");if(!System.Text.RegularExpressions.Regex.IsMatch(username,"^[a-z0-9]+\\.[a-z0-9]+$"))return"El usuario debe usar el formato nombre.apellido.";if(string.IsNullOrWhiteSpace(displayName)||displayName.Length>160)return"Escribe el nombre del usuario.";if(role!="ADMINISTRATOR"&&role!="VIEWER"&&role!="GROUP_ADMIN"&&role!="FISCALIZADOR"&&role!="TECHNOLOGY"&&role!="GENERAL_SERVICES"&&role!="HUMAN_RESOURCES")return"Selecciona un rol válido.";if(passwordRequired&&string.IsNullOrWhiteSpace(password))return"La contraseña es obligatoria.";if(!string.IsNullOrEmpty(password)&&password!="123456"&&password.Length<8)return"La nueva contraseña debe tener al menos 8 caracteres.";if((password?.Length??0)>128)return"La contraseña es demasiado larga.";return null;}
-static string? ValidateTicket(TicketCreate body){string[] priorities=["LOW","MEDIUM","HIGH","CRITICAL"];if(body.AgencyId is null)return"Selecciona una agencia.";if(body.TicketType is not (null or "SUPPORT" or "INTERNAL"))return"Selecciona un tipo de ticket válido.";if(string.IsNullOrWhiteSpace(body.Category)||body.Category.Length>60)return"Selecciona una categoría válida.";if(string.IsNullOrWhiteSpace(body.AssignedDepartment)||body.AssignedDepartment.Length>40)return"Selecciona un departamento válido.";if(!priorities.Contains(body.Priority))return"Selecciona una prioridad válida.";if(string.IsNullOrWhiteSpace(body.Subject)||body.Subject.Trim().Length>180)return"Escribe un asunto de hasta 180 caracteres.";if(string.IsNullOrWhiteSpace(body.Description)||body.Description.Trim().Length>2000)return"Describe la incidencia en un máximo de 2,000 caracteres.";return null;}
-static string? ValidateTicketUpdate(TicketUpdate body){string[] statuses=["OPEN","IN_PROGRESS","PENDING","RESOLVED","CLOSED","CANCELLED"];string[] priorities=["LOW","MEDIUM","HIGH","CRITICAL"];if(!statuses.Contains(body.Status))return"Selecciona un estado válido.";if(!priorities.Contains(body.Priority))return"Selecciona una prioridad válida.";if((body.Resolution?.Length??0)>2000)return"La solución o motivo supera 2,000 caracteres.";if(body.Status is "PENDING" or "RESOLVED" or "CLOSED" or "CANCELLED"&&string.IsNullOrWhiteSpace(body.Resolution))return body.Status=="PENDING"?"Escribe el motivo por el que el ticket quedará pendiente.":body.Status=="CANCELLED"?"Escribe el motivo de la anulación.":"Escribe la solución antes de resolver o cerrar el ticket.";if(body.Status is "PENDING" or "CANCELLED"&&body.Resolution!.Trim().Length<5)return"El motivo debe tener al menos 5 caracteres.";return null;}
-static string? ValidateAuditUpdate(AuditUpdate b){static bool Bad(string? value,int max)=>string.IsNullOrWhiteSpace(value)||value.Trim().Length>max;if(Bad(b.Codigo,100)||Bad(b.Terminal,300)||Bad(b.Grupo,150))return"Completa el código, terminal y grupo.";if(Bad(b.EmployeeName,160)||Bad(b.Direccion,300)||Bad(b.Sector,120)||Bad(b.Municipio,120)||Bad(b.Provincia,120))return"Completa los datos del empleado y la dirección.";if(b.Latitude is < -90 or > 90||b.Longitude is < -180 or > 180||(b.Latitude==0&&b.Longitude==0)||b.Accuracy<=0||b.Accuracy>1000)return"Las coordenadas o la precisión no son válidas.";if((b.Observations?.Length??0)>1000)return"La observación supera 1,000 caracteres.";var a=b.Answers;string[] binary=["yes","no"];string[] optional=["yes","no","not_applicable"];if(a is null||!binary.Contains(a.Painted)||!binary.Contains(a.RazaSticker)||!binary.Contains(a.RealSticker)||!binary.Contains(a.LotekaRemoved)||!binary.Contains(a.DamageFound)||!optional.Contains(a.PrinterMaintained)||!optional.Contains(a.InverterPresent)||!optional.Contains(a.BatteryPresent))return"Completa las ocho respuestas.";return null;}
-static string? Validate(Submit b) { static bool Bad(string? x,int n)=>string.IsNullOrWhiteSpace(x)||x.Trim().Length>n;if(Bad(b.EmployeeName,160))return"El nombre del empleado es obligatorio.";if(Bad(b.Direccion,300))return"La dirección es obligatoria.";if(Bad(b.Sector,120))return"El sector es obligatorio.";if(Bad(b.Municipio,120))return"El municipio es obligatorio.";if(Bad(b.Provincia,120))return"La provincia es obligatoria.";if(b.TipoEstablecimiento!="Banca de lotería")return"El establecimiento debe registrarse como banca de lotería.";if((b.Observations?.Length??0)>1000)return"La observación supera el máximo de 1,000 caracteres.";var answers=b.Answers;string[] binary=["yes","no"];string[] optional=["yes","no","not_applicable"];if(answers is null||!binary.Contains(answers.Painted)||!binary.Contains(answers.RazaSticker)||!binary.Contains(answers.RealSticker)||!binary.Contains(answers.LotekaRemoved)||!binary.Contains(answers.DamageFound)||!optional.Contains(answers.PrinterMaintained)||!optional.Contains(answers.InverterPresent)||!optional.Contains(answers.BatteryPresent))return"Completa las ocho verificaciones del formulario.";var g=b.Geolocation;if(g is null||g.Latitude is < -90 or > 90||g.Longitude is < -180 or > 180||(g.Latitude==0&&g.Longitude==0))return"La ubicación no es válida.";var max=PositiveEnvironmentNumber("MAX_GPS_ACCURACY_METERS",100);if(g.AccuracyMeters<=0||g.AccuracyMeters>max)return"La ubicación no tiene suficiente precisión.";if(g.Source!="browser_geolocation")return"La ubicación debe capturarse desde el dispositivo.";if(g.CapturedAt is null)return"La evidencia de ubicación no tiene una fecha válida.";var ageSeconds=(DateTimeOffset.UtcNow-g.CapturedAt.Value).TotalSeconds;if(ageSeconds< -120)return"La fecha de la ubicación está en el futuro. Vuelve a capturarla.";return null; }
-static void LoadEnv(string path) { if(!File.Exists(path))return;foreach(var raw in File.ReadLines(path)){var line=raw.Trim();if(line.Length==0||line.StartsWith('#'))continue;var i=line.IndexOf('=');if(i<1)continue;var key=line[..i].Trim();var value=line[(i+1)..].Trim().Trim('"','\'');if(string.IsNullOrEmpty(Environment.GetEnvironmentVariable(key)))Environment.SetEnvironmentVariable(key,value);} }
-static bool Fixed(string? value,string expected){var a=Encoding.UTF8.GetBytes(value??"");var b=Encoding.UTF8.GetBytes(expected);return a.Length==b.Length&&CryptographicOperations.FixedTimeEquals(a,b);}
-static double PositiveEnvironmentNumber(string name,double fallback)=>double.TryParse(Environment.GetEnvironmentVariable(name),System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out var value)&&value>0?value:fallback;
-static bool ValidEvidenceImage(byte[] data,string contentType)=>contentType.ToLowerInvariant() switch{"image/jpeg" or "image/jpg"=>data.Length>3&&data[0]==0xFF&&data[1]==0xD8&&data[2]==0xFF,"image/png"=>data.Length>8&&data[0]==0x89&&data[1]==0x50&&data[2]==0x4E&&data[3]==0x47,"image/webp"=>data.Length>12&&Encoding.ASCII.GetString(data,0,4)=="RIFF"&&Encoding.ASCII.GetString(data,8,4)=="WEBP","image/heic" or "image/heif" or "image/heic-sequence" or "image/heif-sequence"=>data.Length>12&&Encoding.ASCII.GetString(data,4,4)=="ftyp"&&new[]{"heic","heix","hevc","hevx","heim","heis","mif1","msf1"}.Contains(Encoding.ASCII.GetString(data,8,4)),_=>false};
-static bool ValidAudio(byte[] data,string contentType)=>contentType switch{"audio/webm"=>data.Length>4&&data[0]==0x1A&&data[1]==0x45&&data[2]==0xDF&&data[3]==0xA3,"audio/ogg"=>data.Length>4&&Encoding.ASCII.GetString(data,0,4)=="OggS","audio/mp4"=>data.Length>12&&Encoding.ASCII.GetString(data,4,4)=="ftyp","audio/mpeg"=>data.Length>3&&(Encoding.ASCII.GetString(data,0,3)=="ID3"||(data[0]==0xFF&&(data[1]&0xE0)==0xE0)),"audio/wav" or "audio/x-wav"=>data.Length>12&&Encoding.ASCII.GetString(data,0,4)=="RIFF"&&Encoding.ASCII.GetString(data,8,4)=="WAVE",_=>false};
-static string? ValidateTicketRoute(TicketRoute body){if(string.IsNullOrWhiteSpace(body.AssignedDepartment)||body.AssignedDepartment.Length>40)return"Selecciona un departamento válido.";if(body.AssignedTeam is not (null or "CALL_CENTER" or "TECHNICAL_FAILURE" or "TECHNICIANS"))return"Selecciona un equipo de Tecnología válido.";if(body.AssignedDepartment!="TECHNOLOGY"&&body.AssignedTeam is not null)return"Los equipos Call Center, Avería Técnica y Técnicos solo pertenecen a Tecnología.";if((body.Comment?.Length??0)>1000)return"El comentario supera 1,000 caracteres.";return null;}
-static string? ValidateAgencyDirectoryUpdate(AgencyDirectoryUpdate body){static bool Bad(string? value,int max)=>string.IsNullOrWhiteSpace(value)||value.Trim().Length>max;if(Bad(body.Codigo,100)||Bad(body.Terminal,300)||Bad(body.Grupo,150))return"Completa el código, la terminal y el grupo de la agencia.";if((body.Direccion?.Length??0)>300||(body.Sector?.Length??0)>120||(body.Municipio?.Length??0)>120||(body.Provincia?.Length??0)>120)return"La dirección de la agencia supera el tamaño permitido.";if(body.Latitude.HasValue!=body.Longitude.HasValue)return"Completa juntas la latitud y la longitud.";if(body.Latitude is < -90 or > 90||body.Longitude is < -180 or > 180||(body.Latitude==0&&body.Longitude==0))return"Las coordenadas de la agencia no son válidas.";return null;}
-static string? ValidateAgencyDirectoryImport(AgencyDirectoryImport body){if(body.Agencies is null||body.Agencies.Count==0)return"El archivo no contiene agencias para importar.";if(body.Agencies.Count>1000)return"El archivo supera el límite de 1,000 agencias por importación.";if((body.FileName?.Length??0)>200)return"El nombre del archivo es demasiado largo.";for(var index=0;index<body.Agencies.Count;index++){var row=body.Agencies[index];var rowNumber=row.RowNumber>1?row.RowNumber:index+2;static bool Bad(string? value,int max)=>string.IsNullOrWhiteSpace(value)||value.Trim().Length>max;if(Bad(row.Codigo,100)||Bad(row.Terminal,300)||Bad(row.Grupo,150))return$"Fila {rowNumber}: completa Código, Terminal y Grupo.";if((row.Region?.Length??0)>120||(row.Direccion?.Length??0)>300||(row.Sector?.Length??0)>120||(row.Municipio?.Length??0)>120||(row.Provincia?.Length??0)>120)return$"Fila {rowNumber}: uno de los campos opcionales supera el tamaño permitido.";if(row.Latitude.HasValue!=row.Longitude.HasValue)return$"Fila {rowNumber}: completa juntas la latitud y la longitud.";if(row.Latitude is < -90 or > 90||row.Longitude is < -180 or > 180||(row.Latitude==0&&row.Longitude==0))return$"Fila {rowNumber}: las coordenadas no son válidas.";}return null;}
-static IResult TicketActionResponse(TicketActionResult result)=>result.Code switch{"FORBIDDEN"=>Results.Json(new{error=result.Error},statusCode:403),"NOT_FOUND"=>Results.NotFound(new{error=result.Error}),"CONFLICT"=>Results.Conflict(new{error=result.Error}),_=>Results.UnprocessableEntity(new{error=result.Error})};
-
-record AdminLogin(string? Email,string? Password);
-record PersistentSessionInput(string? Token);
-record AdminIdentity(string Id,string Email,string DisplayName,string Role,bool MustChangePassword,string? AvatarUrl,Dictionary<string,bool> Permissions,string? SupportTeam);
-record AdminUserRow(Guid Id,string Email,string DisplayName,string Role,bool IsActive,DateTime? LastLoginAt,DateTime CreatedAt,string? Region,string? Contact,string? AvatarUrl,bool MustChangePassword,List<string> Groups,int AgencyCount,Dictionary<string,bool> Permissions,string? SupportTeam);
-record AdminUserCreate(string? Email,string? DisplayName,string? Role,string? Password,string? Region,string? Contact,List<string>? Groups,Dictionary<string,bool>? Permissions,string? SupportTeam);
-record AdminUserUpdate(string? Email,string? DisplayName,string? Role,bool IsActive,string? Password,string? Region,string? Contact,List<string>? Groups,Dictionary<string,bool>? Permissions,string? SupportTeam);
-record PasswordChange(string? CurrentPassword,string? NewPassword);
-record TicketCreate(Guid? AgencyId,string? Category,string? AssignedDepartment,string? Priority,string? Subject,string? Description,string? TicketType,string? AssignedTechnicianId,string? AssignedTeam,bool? AllowDuplicate);
-record TicketUpdate(string? Status,string? Priority,string? Resolution,string? AssignedTechnicianId,string? AssignedTeam=null);
-record TicketRoute(string? AssignedDepartment,string? AssignedTeam,string? AssignedTechnicianId,string? Comment);
-record TicketShare(List<string>? Departments,string? Comment);
-record TicketActionResult(bool Ok,string Code,string? Error);
-sealed class AdminUserConflictException(Guid id) : Exception($"Cuenta activa duplicada: {id}");
-sealed class TicketDuplicateException : Exception
-{
-    public Guid TicketId { get; }
-    public long TicketNumber { get; }
-    public string Status { get; }
-    public string Subject { get; }
-    public TicketDuplicateException(Guid ticketId,long ticketNumber,string status,string subject) : base($"Ticket duplicado #{ticketNumber}")
-    { TicketId=ticketId;TicketNumber=ticketNumber;Status=status;Subject=subject; }
+	private static void Main(string[] args)
+	{
+		LoadEnv(Path.Combine(Directory.GetCurrentDirectory(), ".env.local"));
+		if (File.Exists(Path.Combine(Directory.GetCurrentDirectory(), "RegistroAgencias.Api.csproj")))
+		{
+			LoadEnv(Path.Combine(Directory.GetCurrentDirectory(), "..", ".env.local"));
+		}
+		WebApplicationBuilder webApplicationBuilder = WebApplication.CreateBuilder(args);
+		StorageServerConfiguration.RestoreAndPersist(webApplicationBuilder.Configuration, webApplicationBuilder.Environment.ContentRootPath, webApplicationBuilder.Environment.WebRootPath);
+		StorageFiles.Configure(webApplicationBuilder.Configuration);
+		string fullPath = Path.GetFullPath(webApplicationBuilder.Configuration["STORAGE_QUEUE_PATH"] ?? Path.Combine(webApplicationBuilder.Environment.ContentRootPath, "App_Data", "StorageQueue"));
+		string fullPath2 = Path.GetFullPath(webApplicationBuilder.Environment.WebRootPath ?? Path.Combine(webApplicationBuilder.Environment.ContentRootPath, "wwwroot"));
+		if (fullPath.Equals(fullPath2, StringComparison.OrdinalIgnoreCase) || fullPath.StartsWith(fullPath2 + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+		{
+			throw new InvalidOperationException("STORAGE_QUEUE_PATH debe estar fuera de wwwroot.");
+		}
+		ServiceCollectionServiceExtensions.AddSingleton(implementationInstance: (StorageUploadQueue)(StorageFiles.Queue = new StorageUploadQueue(fullPath, webApplicationBuilder.Configuration)), services: webApplicationBuilder.Services);
+		webApplicationBuilder.Services.AddSingleton<StorageUsageMonitor>();
+		webApplicationBuilder.Services.AddSingleton<StorageDocumentUsage>();
+		webApplicationBuilder.Services.AddHostedService<StorageUploadWorker>();
+		string text = Environment.GetEnvironmentVariable("DATA_PROTECTION_KEYS_PATH");
+		if (string.IsNullOrWhiteSpace(text))
+		{
+			text = Path.Combine(webApplicationBuilder.Environment.ContentRootPath, "App_Data", "DataProtection-Keys");
+		}
+		Directory.CreateDirectory(text);
+		webApplicationBuilder.Services.AddDataProtection().SetApplicationName("GrupoTejeda.OficinaVirtual").PersistKeysToFileSystem(new DirectoryInfo(text));
+		webApplicationBuilder.WebHost.ConfigureKestrel((KestrelServerOptions options) =>
+		{
+			options.AddServerHeader = false;
+			options.Limits.MaxRequestBodySize = 52428800L;
+		});
+		webApplicationBuilder.Services.Configure((FormOptions x) =>
+		{
+			x.MultipartBodyLengthLimit = 52428800L;
+		});
+		webApplicationBuilder.Services.AddResponseCompression((ResponseCompressionOptions options) =>
+		{
+			options.EnableForHttps = true;
+			options.Providers.Add<BrotliCompressionProvider>();
+			options.Providers.Add<GzipCompressionProvider>();
+			options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(new string[2] { "application/json", "image/svg+xml" });
+		});
+		webApplicationBuilder.Services.Configure((BrotliCompressionProviderOptions options) =>
+		{
+			options.Level = CompressionLevel.Fastest;
+		});
+		webApplicationBuilder.Services.Configure((GzipCompressionProviderOptions options) =>
+		{
+			options.Level = CompressionLevel.Fastest;
+		});
+		webApplicationBuilder.Services.AddSingleton<Database>();
+		webApplicationBuilder.Services.AddSingleton<StorageMigrationJob>();
+		webApplicationBuilder.Services.AddHostedService((IServiceProvider provider) => provider.GetRequiredService<StorageMigrationJob>());
+		webApplicationBuilder.Services.AddSingleton<StorageVerificationJob>();
+		webApplicationBuilder.Services.AddHostedService((IServiceProvider provider) => provider.GetRequiredService<StorageVerificationJob>());
+		webApplicationBuilder.Services.AddSingleton<Tokens>();
+		webApplicationBuilder.Services.AddSingleton<LiveNotificationBroker>();
+		webApplicationBuilder.Services.AddSingleton<PwaPushService>();
+		webApplicationBuilder.Services.AddHostedService((IServiceProvider provider) => provider.GetRequiredService<PwaPushService>());
+		webApplicationBuilder.Services.AddSingleton<SupportPresenceTracker>();
+		webApplicationBuilder.Services.AddSingleton<LicenseGuard>();
+		webApplicationBuilder.Services.AddHttpClient("license-server", (HttpClient client) =>
+		{
+			client.Timeout = TimeSpan.FromSeconds(10.0);
+			client.DefaultRequestHeaders.UserAgent.ParseAdd("RegistroAgencias-LicenseClient/1.0");
+		});
+		webApplicationBuilder.Services.AddHttpClient("geocoder", (HttpClient client) =>
+		{
+			client.Timeout = TimeSpan.FromSeconds(12.0);
+			client.DefaultRequestHeaders.UserAgent.ParseAdd(Environment.GetEnvironmentVariable("GEOCODER_USER_AGENT") ?? "GrupoTejedaAuditorias/2026");
+			client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("es-DO,es;q=0.9");
+		});
+		webApplicationBuilder.Services.AddRateLimiter((RateLimiterOptions options) =>
+		{
+			options.RejectionStatusCode = 429;
+			options.OnRejected = async (OnRejectedContext context, CancellationToken ct) =>
+			{
+				context.HttpContext.Response.Headers.RetryAfter = "60";
+				await context.HttpContext.Response.WriteAsJsonAsync(new
+				{
+					error = "Demasiadas solicitudes. Espera un minuto y vuelve a intentarlo.",
+					code = "RATE_LIMITED"
+				}, ct);
+			};
+			options.AddPolicy("login", (HttpContext context) => RateLimitPartition.GetFixedWindowLimiter(ClientKey(context), (string _) => new FixedWindowRateLimiterOptions
+			{
+				PermitLimit = 8,
+				Window = TimeSpan.FromMinutes(1.0),
+				QueueLimit = 0,
+				AutoReplenishment = true
+			}));
+			options.AddPolicy("sensitive-write", (HttpContext context) => RateLimitPartition.GetFixedWindowLimiter(ClientKey(context), (string _) => new FixedWindowRateLimiterOptions
+			{
+				PermitLimit = 60,
+				Window = TimeSpan.FromMinutes(1.0),
+				QueueLimit = 0,
+				AutoReplenishment = true
+			}));
+		});
+		webApplicationBuilder.Services.AddAuthentication("Cookies").AddCookie((CookieAuthenticationOptions options) =>
+		{
+			options.Cookie.Name = "oficina_admin";
+			options.Cookie.HttpOnly = true;
+			options.Cookie.SameSite = SameSiteMode.Strict;
+			options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+			options.Cookie.MaxAge = TimeSpan.FromDays(3650.0);
+			options.ExpireTimeSpan = TimeSpan.FromDays(3650.0);
+			options.SlidingExpiration = true;
+			options.Events.OnRedirectToAccessDenied = ApiCookieEvents.AccessDenied;
+			options.Events.OnRedirectToLogin = (RedirectContext<CookieAuthenticationOptions> c) =>
+			{
+				c.Response.StatusCode = 401;
+				c.Response.Headers.CacheControl = "no-store";
+				return c.Response.WriteAsJsonAsync(new
+				{
+					error = "Tu sesión no está activa. Inicia sesión nuevamente.",
+					code = "SESSION_REQUIRED"
+				});
+			};
+		});
+		webApplicationBuilder.Services.AddAuthorization((AuthorizationOptions options) =>
+		{
+			options.AddPolicy("PortalUser", (AuthorizationPolicyBuilder policy) =>
+			{
+				policy.RequireRole("Administrator", "Administrative", "Viewer", "GroupAdministrator", "Fiscalizador", "Technology", "GeneralServices", "HumanResources", "Warehouse", "Department");
+			});
+			options.AddPolicy("PanelView", (AuthorizationPolicyBuilder policy) =>
+			{
+				policy.RequireAssertion((AuthorizationHandlerContext context) =>
+				{
+					IIdentity? identity = context.User.Identity;
+					return identity != null && identity.IsAuthenticated && (context.User.IsInRole("Administrator") || context.User.IsInRole("Viewer") || context.User.IsInRole("GroupAdministrator") || context.User.IsInRole("Fiscalizador") || HasPermission(context.User, "canViewDashboard") || HasPermission(context.User, "canViewFieldAudits"));
+				});
+			});
+			options.AddPolicy("PanelManage", (AuthorizationPolicyBuilder policy) =>
+			{
+				policy.RequireRole("Administrator");
+			});
+			options.AddPolicy("FieldAudit", (AuthorizationPolicyBuilder policy) =>
+			{
+				policy.RequireRole("Administrator", "GroupAdministrator");
+			});
+			options.AddPolicy("TicketCreate", (AuthorizationPolicyBuilder policy) =>
+			{
+				policy.RequireAssertion((AuthorizationHandlerContext context) => HasPermission(context.User, "canCreateTickets"));
+			});
+			options.AddPolicy("TicketResolve", (AuthorizationPolicyBuilder policy) =>
+			{
+				policy.RequireAssertion((AuthorizationHandlerContext context) => HasPermission(context.User, "canResolveTickets"));
+			});
+			options.AddPolicy("TicketRouting", (AuthorizationPolicyBuilder policy) =>
+			{
+				policy.RequireAssertion((AuthorizationHandlerContext context) => HasPermission(context.User, "canAssignTickets"));
+			});
+			options.AddPolicy("SupportTechnician", (AuthorizationPolicyBuilder policy) =>
+			{
+				policy.RequireAssertion((AuthorizationHandlerContext context) => HasPermission(context.User, "canViewSupportFindings"));
+			});
+			options.AddPolicy("SupportDashboard", (AuthorizationPolicyBuilder policy) =>
+			{
+				policy.RequireRole("Administrator", "Technology", "GeneralServices", "HumanResources");
+			});
+			options.AddPolicy("SupportConfiguration", (AuthorizationPolicyBuilder policy) =>
+			{
+				policy.RequireAssertion((AuthorizationHandlerContext context) => HasPermission(context.User, "canConfigureSupport"));
+			});
+			options.AddPolicy("SupportChat", (AuthorizationPolicyBuilder policy) =>
+			{
+				policy.RequireAssertion((AuthorizationHandlerContext context) => HasPermission(context.User, "canUseSupportChat"));
+			});
+			options.AddPolicy("SupportChatManage", (AuthorizationPolicyBuilder policy) =>
+			{
+				policy.RequireAssertion((AuthorizationHandlerContext context) => HasPermission(context.User, "canManageSupportChat"));
+			});
+			options.AddPolicy("SupportChatModerate", (AuthorizationPolicyBuilder policy) =>
+			{
+				policy.RequireAssertion((AuthorizationHandlerContext context) => HasPermission(context.User, "canModerateSupportChat"));
+			});
+			options.AddPolicy("SupportChatDelete", (AuthorizationPolicyBuilder policy) =>
+			{
+				policy.RequireAssertion((AuthorizationHandlerContext context) => HasPermission(context.User, "canDeleteSupportConversations"));
+			});
+			options.AddPolicy("TicketNotifications", (AuthorizationPolicyBuilder policy) =>
+			{
+				policy.RequireAssertion((AuthorizationHandlerContext context) => HasPermission(context.User, "canViewTicketNotifications"));
+			});
+			options.AddPolicy("UserAdministration", (AuthorizationPolicyBuilder policy) =>
+			{
+				policy.RequireAssertion((AuthorizationHandlerContext context) => HasPermission(context.User, "canManageUsers"));
+			});
+			options.AddPolicy("AuditManagement", (AuthorizationPolicyBuilder policy) =>
+			{
+				policy.RequireAssertion((AuthorizationHandlerContext context) => HasPermission(context.User, "canManageAudits"));
+			});
+			options.AddPolicy("TicketDeletion", (AuthorizationPolicyBuilder policy) =>
+			{
+				policy.RequireAssertion((AuthorizationHandlerContext context) => HasPermission(context.User, "canDeleteSupportTickets"));
+			});
+			options.AddPolicy("AgencyDirectoryManage", (AuthorizationPolicyBuilder policy) =>
+			{
+				policy.RequireAssertion((AuthorizationHandlerContext context) => HasPermission(context.User, "canManageAgencies"));
+			});
+		});
+		WebApplication webApplication = webApplicationBuilder.Build();
+		webApplication.MapGet("/api/admin/storage/status", (Func<StorageMigrationJob, IResult>)((StorageMigrationJob job) => Results.Ok(job.Status()))).RequireAuthorization("PanelManage");
+		webApplication.MapGet("/api/admin/storage/analytics", (Func<StorageUploadQueue, IResult>)((StorageUploadQueue queue) => Results.Ok(queue.Analytics()))).RequireAuthorization("PanelManage");
+		webApplication.MapGet("/api/admin/storage/documents", (Func<StorageDocumentUsage, CancellationToken, Task<IResult>>)(async (StorageDocumentUsage usage, CancellationToken ct) => Results.Ok(await usage.Read(ct)))).RequireAuthorization("PanelManage");
+		webApplication.MapGet("/api/admin/storage/usage", (Func<StorageUsageMonitor, HttpContext, CancellationToken, Task<IResult>>)(async (StorageUsageMonitor usage, HttpContext context, CancellationToken ct) =>
+		{
+			context.Response.Headers.CacheControl = "no-store";
+			return Results.Ok(await usage.Read(ct));
+		})).RequireAuthorization("PanelManage");
+		webApplication.MapGet("/api/admin/storage/queue", (Func<StorageUploadQueue, IResult>)((StorageUploadQueue queue) => Results.Ok(queue.Status()))).RequireAuthorization("PanelManage");
+		webApplication.MapPost("/api/admin/storage/queue/resume", (Func<StorageUploadQueue, IResult>)((StorageUploadQueue queue) => (!queue.Resume()) ? Results.Conflict(new
+		{
+			error = "Hay una transferencia en curso. Espera a que termine."
+		}) : Results.Ok(queue.Status()))).RequireAuthorization("PanelManage").RequireRateLimiting("sensitive-write");
+		webApplication.MapGet("/api/admin/storage/verification", (Func<StorageVerificationJob, IResult>)((StorageVerificationJob job) => Results.Ok(job.Status()))).RequireAuthorization("PanelManage");
+		webApplication.MapPost("/api/admin/storage/verify", (Func<StorageVerificationJob, StorageUploadQueue, IResult>)((StorageVerificationJob job, StorageUploadQueue queue) =>
+		{
+			DateTime? verificationBlockedUntil = queue.Status().VerificationBlockedUntil;
+			if (verificationBlockedUntil.HasValue)
+			{
+				DateTime valueOrDefault = verificationBlockedUntil.GetValueOrDefault();
+				if (valueOrDefault > DateTime.UtcNow)
+				{
+					return Results.Conflict(new
+					{
+						error = "Espera requerida para respetar los límites de subida.",
+						retryAt = valueOrDefault
+					});
+				}
+			}
+			return (!job.Start()) ? Results.Conflict(new
+			{
+				error = "Ya hay una prueba en curso."
+			}) : Results.Accepted("/api/admin/storage/verification", job.Status());
+		})).RequireAuthorization("PanelManage").RequireRateLimiting("sensitive-write");
+		webApplication.MapPost("/api/admin/storage/migrate", (Func<StorageMigrationJob, IResult>)((StorageMigrationJob job) => (!job.Start()) ? Results.Conflict(new
+		{
+			error = "Ya hay una copia en curso."
+		}) : Results.Accepted("/api/admin/storage/status", job.Status()))).RequireAuthorization("PanelManage").RequireRateLimiting("sensitive-write");
+		webApplication.MapMaintenanceDocumentEndpoints();
+		webApplication.MapWorkshopEndpoints();
+		webApplication.MapWorkshopStockExitEndpoints();
+		webApplication.MapMaintenanceTemplateEndpoints();
+		webApplication.MapInstitutionalDocumentEndpoints();
+		webApplication.MapAdministrativeFileEndpoints();
+		webApplication.MapAdministrativeAssetEndpoints();
+		webApplication.MapWarehouseFulfillmentEndpoints();
+		webApplication.Use(async (HttpContext context, Func<Task> next) =>
+		{
+			context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+			context.Response.Headers["X-Frame-Options"] = "DENY";
+			context.Response.Headers["Referrer-Policy"] = "no-referrer";
+			context.Response.Headers["Permissions-Policy"] = "camera=(self), microphone=(self), geolocation=(self), payment=(), usb=(), serial=()";
+			context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; frame-src 'self' blob: https://www.openstreetmap.org; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https://nominatim.openstreetmap.org; worker-src 'self' blob:";
+			context.Response.Headers["Cross-Origin-Opener-Policy"] = "same-origin";
+			context.Response.Headers["X-Permitted-Cross-Domain-Policies"] = "none";
+			context.Response.Headers["X-Application-Release"] = "V536-WEB-20261116-2120";
+			if (context.Request.IsHttps)
+			{
+				context.Response.Headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
+			}
+			context.Response.OnStarting(() =>
+			{
+				string text2 = context.Request.Path.Value ?? "";
+				string? contentType = context.Response.ContentType;
+				if ((contentType != null && contentType.Contains("text/html", StringComparison.OrdinalIgnoreCase)) || text2.Equals("/release-guard.js", StringComparison.OrdinalIgnoreCase) || text2.Equals("/version-web.json", StringComparison.OrdinalIgnoreCase))
+				{
+					context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
+					context.Response.Headers.Pragma = "no-cache";
+					context.Response.Headers.Expires = "0";
+				}
+				return Task.CompletedTask;
+			});
+			await next();
+		});
+		webApplication.UseResponseCompression();
+		webApplication.Use((HttpContext context, Func<Task> next) =>
+		{
+			context.Response.Headers["X-Application-Release"] = "V536-WEB-20261116-2120";
+			return next();
+		});
+		webApplication.UseDefaultFiles();
+		FileExtensionContentTypeProvider publicContentTypes = new FileExtensionContentTypeProvider();
+		publicContentTypes.Mappings[".reg"] = "application/octet-stream";
+		webApplication.UseStaticFiles(new StaticFileOptions
+		{
+			ContentTypeProvider = publicContentTypes,
+			OnPrepareResponse = (StaticFileResponseContext context) =>
+			{
+				string text2 = context.Context.Request.Path.Value ?? "";
+				if (text2.StartsWith("/assets/", StringComparison.OrdinalIgnoreCase))
+				{
+					context.Context.Response.Headers.CacheControl = "public,max-age=31536000,immutable";
+				}
+			}
+		});
+		webApplication.Use(async (HttpContext context, Func<Task> next) =>
+		{
+			try
+			{
+				await next();
+			}
+			catch (AgencyConflict)
+			{
+				context.Response.StatusCode = 409;
+				await context.Response.WriteAsJsonAsync(new
+				{
+					error = "Esta agencia ya fue registrada por otra persona."
+				});
+			}
+			catch (StorageServiceException ex)
+			{
+				context.Response.StatusCode = ex.Status;
+				await context.Response.WriteAsJsonAsync(new
+				{
+					error = ex.Message,
+					code = ex.Code
+				});
+			}
+			catch (SqlException ex2)
+			{
+				Console.Error.WriteLine(ex2);
+				DatabaseDiagnostic databaseDiagnostic = Database.DescribeConnectionError(ex2);
+				context.Response.StatusCode = 503;
+				await context.Response.WriteAsJsonAsync(new
+				{
+					error = databaseDiagnostic.Message,
+					code = databaseDiagnostic.Code
+				});
+			}
+			catch (InvalidOperationException ex3) when (ex3.Message.StartsWith("MSSQL_CONFIG:", StringComparison.Ordinal))
+			{
+				Console.Error.WriteLine(ex3);
+				context.Response.StatusCode = 503;
+				await context.Response.WriteAsJsonAsync(new
+				{
+					error = ex3.Message.Substring("MSSQL_CONFIG:".Length),
+					code = "MSSQL_CONFIG"
+				});
+			}
+			catch (Exception value)
+			{
+				Console.Error.WriteLine(value);
+				context.Response.StatusCode = 500;
+				await context.Response.WriteAsJsonAsync(new
+				{
+					error = "Ocurrió un error inesperado."
+				});
+			}
+		});
+		webApplication.Use(async (HttpContext context, Func<Task> next) =>
+		{
+			if (!IsUnsafeMethod(context.Request.Method) || !IsCrossSiteRequest(context.Request))
+			{
+				await next();
+			}
+			else
+			{
+				context.Response.StatusCode = 403;
+				await context.Response.WriteAsJsonAsync(new
+				{
+					error = "Solicitud de otro sitio bloqueada.",
+					code = "CROSS_SITE_REQUEST_BLOCKED"
+				});
+			}
+		});
+		webApplication.UseRateLimiter();
+		webApplication.Use(async (HttpContext context, Func<Task> next) =>
+		{
+			string text2 = context.Request.Path.Value ?? "";
+			bool flag = !text2.StartsWith("/api/", StringComparison.OrdinalIgnoreCase);
+			bool flag2 = flag;
+			if (!flag2)
+			{
+				bool flag3;
+				switch (text2)
+				{
+				case "/api/health":
+				case "/api/version":
+				case "/api/license/status":
+					flag3 = true;
+					break;
+				default:
+					flag3 = false;
+					break;
+				}
+				flag2 = flag3;
+			}
+			if (flag2)
+			{
+				await next();
+			}
+			else
+			{
+				LicenseDecision licenseDecision = await context.RequestServices.GetRequiredService<LicenseGuard>().Check(context.RequestAborted);
+				if (licenseDecision.AllowsUse)
+				{
+					await next();
+				}
+				else
+				{
+					context.Response.StatusCode = 423;
+					await context.Response.WriteAsJsonAsync(new
+					{
+						error = licenseDecision.Message,
+						code = licenseDecision.Code,
+						status = licenseDecision.Status,
+						expiresAt = licenseDecision.ExpiresAt,
+						checkedAt = licenseDecision.CheckedAt
+					});
+				}
+			}
+		});
+		webApplication.UseAuthentication();
+		webApplication.Use(async (HttpContext context, Func<Task> next) =>
+		{
+			string text2 = context.Request.Path.Value ?? "";
+			int num;
+			if ((context.User.Identity?.IsAuthenticated ?? false) && text2.StartsWith("/api/", StringComparison.OrdinalIgnoreCase))
+			{
+				switch (text2)
+				{
+				default:
+					num = ((!(text2 == "/api/account/password/recover")) ? 1 : 0);
+					break;
+				case "/api/health":
+				case "/api/version":
+				case "/api/license/status":
+				case "/api/admin/login":
+					num = 0;
+					break;
+				}
+			}
+			else
+			{
+				num = 0;
+			}
+			bool refreshSession = (byte)num != 0;
+			bool flag = refreshSession && context.User.FindFirstValue("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier") == "legacy-admin";
+			bool flag2 = flag;
+			if (flag2)
+			{
+				flag2 = !(await context.RequestServices.GetRequiredService<Database>().LegacyPasswordAccessEnabled(context.RequestAborted));
+			}
+			if (flag2)
+			{
+				context.Response.StatusCode = 401;
+				await context.Response.WriteAsJsonAsync(new
+				{
+					error = "La contraseña cambió. Inicia sesión nuevamente.",
+					code = "SESSION_REVOKED"
+				});
+			}
+			else
+			{
+				if (refreshSession && Guid.TryParse(context.User.FindFirstValue("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"), out var userId))
+				{
+					Database database = context.RequestServices.GetRequiredService<Database>();
+					try
+					{
+						await database.EnsureUnifiedSupportProfile(WithEffectivePermissions, context.RequestAborted);
+					}
+					catch (Exception exception)
+					{
+						context.RequestServices.GetRequiredService<ILogger<Program>>().LogError(exception, "No se pudo unificar el perfil Soporte; la solicitud continuará con los permisos actuales.");
+					}
+					AdminIdentity adminIdentity = await database.Account(userId, context.RequestAborted);
+					if ((object)adminIdentity == null)
+					{
+						await context.SignOutAsync();
+						context.Response.StatusCode = 401;
+						await context.Response.WriteAsJsonAsync(new
+						{
+							error = "La cuenta fue desactivada o ya no existe."
+						});
+						return;
+					}
+					if ((context.User.FindFirstValue("recovery_version") ?? "") != adminIdentity.RecoveryVersion)
+					{
+						context.Response.StatusCode = 401;
+						await context.Response.WriteAsJsonAsync(new
+						{
+							error = "La contraseña cambió. Inicia sesión nuevamente.",
+							code = "SESSION_REVOKED"
+						});
+						return;
+					}
+					adminIdentity = EmmaAdministrativeAccess.Scope(adminIdentity);
+					string text3 = JsonSerializer.Serialize(AccountPermissions(adminIdentity));
+					if (context.User.FindFirstValue("http://schemas.microsoft.com/ws/2008/06/identity/claims/role") != adminIdentity.Role || context.User.FindFirstValue("must_change_password") != (adminIdentity.MustChangePassword ? "true" : "false") || context.User.FindFirstValue("avatar_url") != (adminIdentity.AvatarUrl ?? "") || context.User.FindFirstValue("display_name") != adminIdentity.DisplayName || context.User.Identity?.Name != adminIdentity.Email || context.User.FindFirstValue("support_team") != (adminIdentity.SupportTeam ?? "") || context.User.FindFirstValue("permissions_json") != text3 || string.IsNullOrWhiteSpace(context.User.FindFirstValue("operational_session_id")))
+					{
+						await SignInAccount(context, adminIdentity);
+					}
+					string sessionTrace = context.User.FindFirstValue("operational_session_id") ?? "";
+					if (OperationalActivityThrottle.ShouldWrite(sessionTrace))
+					{
+						try
+						{
+							await database.TouchOperationalSession(sessionTrace, text2, context.RequestAborted);
+						}
+						catch (Exception exception) when (!context.RequestAborted.IsCancellationRequested)
+						{
+							context.RequestServices.GetRequiredService<ILogger<Program>>().LogWarning(exception, "No se pudo actualizar la actividad de la sesión.");
+						}
+					}
+				}
+				await next();
+			}
+		});
+		webApplication.UseAuthorization();
+		webApplication.Use(async (HttpContext context, Func<Task> next) =>
+		{
+			string text2 = context.User.FindFirstValue("http://schemas.microsoft.com/ws/2008/06/identity/claims/role");
+			string text3 = context.User.FindFirstValue("support_team");
+			string text4;
+			if (text2 == "Administrator")
+			{
+				text4 = "administration";
+			}
+			else
+			{
+				string text5;
+				if (text2 == "GroupAdministrator")
+				{
+					text5 = "supervisors";
+				}
+				else
+				{
+					string text7;
+					bool flag;
+					string text6;
+					switch (text3)
+					{
+					case "TECHNICIANS":
+						text7 = "technicians";
+						break;
+					case "CALL_CENTER":
+					case "TECHNICAL_FAILURE":
+						flag = true;
+						goto IL_00a3;
+					default:
+						{
+							flag = false;
+							goto IL_00a3;
+						}
+						IL_00a3:
+						if (flag)
+						{
+							text6 = "support";
+						}
+						else
+						{
+							bool flag2 = ((text2 == "Technology" || text2 == "GeneralServices") ? true : false);
+							text6 = (flag2 ? "technicians" : "other");
+						}
+						text7 = text6;
+						break;
+					}
+					text5 = text7;
+				}
+				text4 = text5;
+			}
+			string text8 = text4;
+			using (StorageOrigin.Scope("new", text8))
+			{
+				await next();
+			}
+		});
+		webApplication.Use(async (HttpContext context, Func<Task> next) =>
+		{
+			if (WarehouseRequesterProfile.IsRequester(context.User) && !WarehouseRequesterProfile.ApiAllowed(context.Request.Path.Value ?? "", context.Request.Method))
+			{
+				context.Response.StatusCode = 403;
+				await context.Response.WriteAsJsonAsync(new
+				{
+					error = "Este perfil solo permite enviar y consultar solicitudes propias a Almacén."
+				});
+			}
+			else
+			{
+				string text2 = OperationalPermissions.Required(context.Request.Path.Value ?? "", context.Request.Method);
+				if (!(context.User.Identity?.IsAuthenticated ?? false) || text2 == null || OperationalPermissions.Allowed(context.User, text2))
+				{
+					await next();
+				}
+				else
+				{
+					context.Response.StatusCode = 403;
+					await context.Response.WriteAsJsonAsync(new
+					{
+						error = "Tu cuenta no tiene permiso para esta operación.",
+						permission = text2
+					});
+				}
+			}
+		});
+		webApplication.Use(async (HttpContext context, Func<Task> next) =>
+		{
+			if (!context.User.IsInRole("Department") || DepartmentAccounts.ApiAllowed(context.Request.Path.Value ?? "", context.Request.Method))
+			{
+				await next();
+			}
+			else
+			{
+				context.Response.StatusCode = 403;
+				await context.Response.WriteAsJsonAsync(new
+				{
+					error = "Este recurso no pertenece al departamento asignado."
+				});
+			}
+		});
+		webApplication.MapGet("/api/department-support", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			string scope = AreaManagerAccess.Scope(context.User);
+			if (scope == null || scope == "ALL")
+			{
+				return Results.Forbid();
+			}
+			string tickets = await db.DepartmentSupport(scope, ct);
+			string text2 = await db.DepartmentSupportMembers(scope, ct);
+			return Results.Content("{\"tickets\":" + tickets + ",\"members\":" + text2 + "}", "application/json");
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/manager-team-members", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			string text2 = AreaManagerAccess.RequestedScope(context.User, context.Request.Query["scope"].FirstOrDefault());
+			return (text2 == null) ? Results.Forbid() : Results.Content("{\"members\":" + await db.DepartmentSupportMembers(text2, ct) + "}", "application/json");
+		})).RequireAuthorization("PortalUser");
+		webApplication.Use(async (HttpContext context, Func<Task> next) =>
+		{
+			bool flag = context.User.IsInRole("Administrative") && !AdministrativeProfiles.ApiAllowed(context.Request.Path.Value ?? "") && !EmmaAdministrativeAccess.ApiAllowed(context.User, context.Request.Path.Value ?? "", context.Request.Method) && !AdministrativeTicketAccess.ApiAllowed(context.Request.Path.Value ?? "", context.Request.Method, AreaManagerAccess.Allowed(context.User));
+			bool flag2 = flag;
+			if (flag2)
+			{
+				bool flag3 = AreaManagerAccess.Allowed(context.User) && context.Request.Method == "GET";
+				bool flag4 = flag3;
+				if (flag4)
+				{
+					string value = context.Request.Path.Value;
+					bool flag5 = ((value == "/api/department-support" || value == "/api/department-audit" || value == "/api/manager-team-members") ? true : false);
+					flag4 = flag5;
+				}
+				flag2 = !flag4;
+			}
+			if (flag2)
+			{
+				context.Response.StatusCode = 403;
+				await context.Response.WriteAsJsonAsync(new
+				{
+					error = "Este recurso no pertenece al perfil administrativo."
+				});
+			}
+			else
+			{
+				await next();
+			}
+		});
+		webApplication.Use(TemporaryPasswordGate.Invoke);
+		webApplication.MapGet("/api/health", (Func<Database, CancellationToken, Task<IResult>>)(async (Database db, CancellationToken ct) =>
+		{
+			DatabaseHealth databaseHealth = await db.Health(ct);
+			return databaseHealth.Ok ? Results.Ok(new
+			{
+				ok = true,
+				service = "registro-agencias-dotnet",
+				database = "sql-server-2025",
+				connectionMode = databaseHealth.Mode
+			}) : Results.Json(new
+			{
+				ok = false,
+				error = databaseHealth.Message,
+				code = databaseHealth.Code
+			}, (JsonSerializerOptions?)null, (string?)null, (int?)503);
+		}));
+		webApplication.MapGet("/api/version", (Func<IResult>)(() => Results.Ok(new
+		{
+			version = "2026.11.02.499",
+			storage = "warehouse-forms-profile-v5-20261024",
+			fieldIncidentReport = "three-department-create-ticket-v1",
+			warehouseSubmissionFix = "all-operational-requesters-and-confirmation-20261010",
+			administrativeProfiles = "six-scoped-accounts-20261002",
+			administrativeForms = "excel-bulk-import-edit-revision-audit-v454",
+			fuelForms = "gasoline-registration-gas-approval-date-filters-v455",
+			warehouseEditing = "diorly-ana-direct-button-search-inventory-v459",
+			weekendLoans = "vittini-usage-confirmed-returns-v455",
+			ticketModems = "admin-and-technical-failure-internal-ticket-agency-linked-v456",
+			supervisorWaskar = "active-group-audit-evidence-normal-login-verified-v456",
+			modemForm = "self-contained-layout-code-linked-agency-v457",
+			auditPhotoGps = "best-valid-reading-real-accuracy-all-supervisors-v481",
+			executiveReports = "administrator-department-separated-with-workshop-v484",
+			warehouseWeekendTheme = "institutional-dark-white-text-v459",
+			vittiniWarehouseVisibility = "active-technical-failure-team-requests-v460",
+			supervisorWarehouseDestinations = "agency-or-multiple-agencies-only-v461",
+			warehouseProfessionalWorkspace = "sidebar-daily-control-sticky-status-dark-editor-v462",
+			administrativeFileExplorer = "tree-only-folders-file-type-icons-v463",
+			administrativeFileActions = "context-menu-native-office-open-with-v490",
+			voiceOperations = "multi-item-same-warehouse-request-natural-additions-v499",
+			administrativeNavigation = "shared-administration-sections-all-departments-v480",
+			departmentalAdministrativeProfile = "single-profile-exact-administration-permissions-all-departments-v480",
+			warehouseDestinations = "group-agency-own-administration-own-only-supervisors-scoped",
+			release = "V536-WEB-20261116-2120",
+			managerTicketControl = "department-card-collapsible-users-directory-v495",
+			callCenterTransfers = "supervisors-and-technical-failure-shared-resolution",
+			queryRecovery = "independent-cache-bounded-transient-read-retry",
+			storageConfiguration = "private-durable-server-backup",
+			warehouseInventory = "2026-10-27-inventario-corregido-134",
+			warehouseEntryQuantityLimit = 10000,
+			design = "modern-live-queue-controls-V307",
+			dataMode = "mssql-direct-assignment-with-group-scope",
+			databaseConnection = "sql-server-2025-monster-internal-public-fallback",
+			assembly = Assembly.GetExecutingAssembly().GetName().Name,
+			supportTickets = "personal-technician-assigned-resolved-only-v404",
+			maintenance = "catalog-department-constraint-recovery-v418-20260930",
+			workshopTracking = "workshop-daily-movements-selectable-calendar-branded-pdf-v484",
+			workshopDailyReports = "three-range-reports-and-area-totals-v485",
+			agencyTransitions = "department-only-visible-completed-evidence-v304",
+			supportNotifications = "finding-author-name-login-v362",
+			findingAreaFilters = "selected-department-tickets-and-findings-v400",
+			supportChat = "device-local-time-and-role-safe-mobile-chat-push-v321",
+			supportReports = "real-audit-total-v362",
+			reportDateRange = "independent-from-to-calendars-including-call-center-v489",
+			callCenterAgentReport = "two-independent-from-to-calendars-v489",
+			selectedFolderTheme = "dark-tree-selection-no-global-white-v491",
+			cacheGuard = "synchronized-html-script-header-release-v500",
+			supportCatalog = "technology-cpu-failure-V300",
+			permissions = "technician-resolution-all-profiles-v438-20261017",
+			liveUpdates = "selected-department-tickets-and-findings-v400",
+			loginStability = "server-side-transient-db-retry-and-persistent-cookie-fallback-v328",
+			userAdministrationStability = "inactive-account-reactivation-and-double-submit-guard-v329",
+			deployment = "monster-double-route-v500",
+			performance = "mobile-on-demand-voice-directory-hidden-tab-polling-v500",
+			portal = "files-communications-four-card-home-v401",
+			dashboard = "department-filtered-findings-v400",
+			ticketData = "agency-directory-5000-chunked-import-v395",
+			responsiblePicker = "field-technicians-restored-for-support-team-assignment-v310",
+			userAdministration = "single-administrative-profile-all-departments-v480",
+			fieldAuditPhotos = "authenticated-profile-access-token-recovery-v323"
+		})));
+		webApplication.MapGet("/api/license/status", (Func<LicenseGuard, CancellationToken, Task<IResult>>)(async (LicenseGuard guard, CancellationToken ct) =>
+		{
+			LicenseDecision licenseDecision = await guard.Check(ct);
+			return Results.Ok(new
+			{
+				enabled = guard.Enabled,
+				allowed = licenseDecision.AllowsUse,
+				status = licenseDecision.Status,
+				code = licenseDecision.Code,
+				message = licenseDecision.Message,
+				expiresAt = licenseDecision.ExpiresAt,
+				checkedAt = licenseDecision.CheckedAt,
+				usingGracePeriod = licenseDecision.UsingGracePeriod,
+				signatureVerified = licenseDecision.SignatureVerified
+			});
+		}));
+		webApplication.MapGet("/api/geocode/reverse", (Func<double?, double?, IHttpClientFactory, CancellationToken, Task<IResult>>)(async (double? lat, double? lng, IHttpClientFactory clients, CancellationToken ct) =>
+		{
+			bool flag;
+			if (lat.HasValue)
+			{
+				double valueOrDefault = lat.GetValueOrDefault();
+				if (!(valueOrDefault < -90.0) && !(valueOrDefault > 90.0))
+				{
+					flag = false;
+					goto IL_0068;
+				}
+			}
+			flag = true;
+			goto IL_0068;
+			IL_0068:
+			bool flag2 = flag;
+			bool flag3 = flag2;
+			bool flag4;
+			if (!flag3)
+			{
+				if (lng.HasValue)
+				{
+					double valueOrDefault2 = lng.GetValueOrDefault();
+					if (!(valueOrDefault2 < -180.0) && !(valueOrDefault2 > 180.0))
+					{
+						flag4 = false;
+						goto IL_00af;
+					}
+				}
+				flag4 = true;
+				goto IL_00af;
+			}
+			goto IL_00b3;
+			IL_00af:
+			flag3 = flag4;
+			goto IL_00b3;
+			IL_00b3:
+			if (flag3)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Las coordenadas no son válidas."
+				});
+			}
+			string latitude = lat.Value.ToString("0.########", CultureInfo.InvariantCulture);
+			string longitude = lng.Value.ToString("0.########", CultureInfo.InvariantCulture);
+			HttpClient client = clients.CreateClient("geocoder");
+			string direccion = "";
+			string sector = "";
+			string municipio = "";
+			string provincia = "";
+			string displayName = "";
+			List<string> sources = new List<string>();
+			try
+			{
+				string requestUri = $"https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?location={longitude}%2C{latitude}&f=json&langCode=es&featureTypes=PointAddress%2CStreetAddress%2CStreetName";
+				using HttpResponseMessage response = await client.GetAsync(requestUri, ct);
+				if (response.IsSuccessStatusCode)
+				{
+					using JsonDocument jsonDocument = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+					if (jsonDocument.RootElement.TryGetProperty("address", out var value))
+					{
+						direccion = Pick(value, new string[3] { "Address", "ShortLabel", "Match_addr" });
+						sector = Pick(value, new string[3] { "Sector", "Neighborhood", "District" });
+						municipio = Pick(value, new string[2] { "City", "Subregion" });
+						provincia = Pick(value, new string[1] { "Region" });
+						displayName = Pick(value, new string[2] { "LongLabel", "Match_addr" });
+						sources.Add("ArcGIS");
+					}
+				}
+			}
+			catch (Exception ex) when (!ct.IsCancellationRequested)
+			{
+				Console.Error.WriteLine("ArcGIS reverse geocode: " + ex.Message);
+			}
+			if (string.IsNullOrWhiteSpace(direccion) || string.IsNullOrWhiteSpace(sector) || string.IsNullOrWhiteSpace(municipio) || string.IsNullOrWhiteSpace(provincia))
+			{
+				try
+				{
+					string requestUri2 = $"https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat={latitude}&lon={longitude}&zoom=18&addressdetails=1&layer=address&accept-language=es";
+					using HttpResponseMessage response = await client.GetAsync(requestUri2, ct);
+					if (response.IsSuccessStatusCode)
+					{
+						using JsonDocument jsonDocument2 = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+						JsonElement rootElement = jsonDocument2.RootElement;
+						if (rootElement.TryGetProperty("address", out var value2))
+						{
+							string text2 = Pick(value2, new string[4] { "road", "pedestrian", "residential", "footway" });
+							string text3 = Pick(value2, new string[1] { "house_number" });
+							string text4 = string.Join(" ", new string[2] { text2, text3 }.Where((string x) => !string.IsNullOrWhiteSpace(x))).Trim();
+							if (string.IsNullOrWhiteSpace(text4))
+							{
+								text4 = Pick(rootElement, new string[2] { "name", "display_name" }).Split(',')[0].Trim();
+							}
+							direccion = First(direccion, text4);
+							sector = First(sector, Pick(value2, new string[6] { "suburb", "neighbourhood", "quarter", "residential", "hamlet", "village" }));
+							municipio = First(municipio, Pick(value2, new string[5] { "city", "town", "municipality", "city_district", "county" }));
+							provincia = First(provincia, Pick(value2, new string[3] { "state", "region", "state_district" }));
+							displayName = First(displayName, Pick(rootElement, new string[1] { "display_name" }));
+							sources.Add("OpenStreetMap");
+						}
+					}
+				}
+				catch (Exception ex2) when (!ct.IsCancellationRequested)
+				{
+					Console.Error.WriteLine("OpenStreetMap reverse geocode: " + ex2.Message);
+				}
+			}
+			if (string.IsNullOrWhiteSpace(sector))
+			{
+				try
+				{
+					if (sources.Contains("OpenStreetMap"))
+					{
+						await Task.Delay(1100, ct);
+					}
+					string requestUri3 = $"https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat={latitude}&lon={longitude}&zoom=15&addressdetails=1&accept-language=es";
+					using HttpResponseMessage response = await client.GetAsync(requestUri3, ct);
+					if (response.IsSuccessStatusCode)
+					{
+						using JsonDocument jsonDocument3 = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+						JsonElement rootElement2 = jsonDocument3.RootElement;
+						if (rootElement2.TryGetProperty("address", out var value3))
+						{
+							sector = First(sector, Pick(value3, new string[8] { "suburb", "neighbourhood", "quarter", "city_district", "village", "hamlet", "town", "municipality" }));
+							municipio = First(municipio, Pick(value3, new string[4] { "city", "town", "municipality", "county" }));
+							provincia = First(provincia, Pick(value3, new string[3] { "state", "region", "state_district" }));
+							displayName = First(displayName, Pick(rootElement2, new string[1] { "display_name" }));
+							if (!sources.Contains("OpenStreetMap"))
+							{
+								sources.Add("OpenStreetMap");
+							}
+						}
+					}
+				}
+				catch (Exception ex3) when (!ct.IsCancellationRequested)
+				{
+					Console.Error.WriteLine("OpenStreetMap area reverse geocode: " + ex3.Message);
+				}
+			}
+			if (string.IsNullOrWhiteSpace(municipio) || string.IsNullOrWhiteSpace(provincia))
+			{
+				try
+				{
+					string requestUri4 = $"https://api.bigdatacloud.net/data/reverse-geocode-client?latitude={latitude}&longitude={longitude}&localityLanguage=es";
+					using HttpResponseMessage response = await client.GetAsync(requestUri4, ct);
+					if (response.IsSuccessStatusCode)
+					{
+						using JsonDocument jsonDocument4 = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+						JsonElement rootElement3 = jsonDocument4.RootElement;
+						municipio = First(municipio, Pick(rootElement3, new string[2] { "city", "locality" }));
+						provincia = First(provincia, Pick(rootElement3, new string[1] { "principalSubdivision" }));
+						displayName = First(displayName, string.Join(", ", new string[3]
+						{
+							Pick(rootElement3, new string[1] { "locality" }),
+							Pick(rootElement3, new string[1] { "principalSubdivision" }),
+							Pick(rootElement3, new string[1] { "countryName" })
+						}.Where((string x) => !string.IsNullOrWhiteSpace(x))));
+						sources.Add("BigDataCloud");
+					}
+				}
+				catch (Exception ex4) when (!ct.IsCancellationRequested)
+				{
+					Console.Error.WriteLine("BigDataCloud reverse geocode: " + ex4.Message);
+				}
+			}
+			if (string.IsNullOrWhiteSpace(direccion) && string.IsNullOrWhiteSpace(sector) && string.IsNullOrWhiteSpace(municipio) && string.IsNullOrWhiteSpace(provincia))
+			{
+				return Results.Json(new
+				{
+					error = "Los servicios de dirección no respondieron para esta coordenada. Vuelve a intentarlo."
+				}, (JsonSerializerOptions?)null, (string?)null, (int?)502);
+			}
+			return Results.Ok(new
+			{
+				direccion = direccion,
+				sector = sector,
+				municipio = municipio,
+				provincia = provincia,
+				displayName = displayName,
+				complete = (!string.IsNullOrWhiteSpace(direccion) && !string.IsNullOrWhiteSpace(sector) && !string.IsNullOrWhiteSpace(municipio) && !string.IsNullOrWhiteSpace(provincia)),
+				source = string.Join(" + ", sources)
+			});
+		})).RequireAuthorization("FieldAudit");
+		webApplication.MapPost("/api/operational-errors", (Func<OperationalErrorReport, HttpContext, Database, CancellationToken, Task<IResult>>)(async (OperationalErrorReport body, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			await db.RecordOperationalError(body, context.User, ct);
+			return Results.Accepted();
+		})).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
+		webApplication.MapGet("/api/department-audit", (Func<string, DateTime?, DateTime?, int?, HttpContext, Database, CancellationToken, Task<IResult>>)(async (string? area, DateTime? from, DateTime? to, int? offset, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			string text2;
+			bool flag3;
+			if (EmmaAdministrativeAccess.Allowed(context.User))
+			{
+				bool flag = string.IsNullOrWhiteSpace(area);
+				bool flag2 = flag;
+				if (!flag2)
+				{
+					flag3 = ((area == "ADMINISTRATIVE" || area == "ALL") ? true : false);
+					flag2 = flag3;
+				}
+				text2 = (flag2 ? "ADMINISTRATIVE" : null);
+			}
+			else
+			{
+				text2 = AreaManagerAccess.RequestedScope(context.User, area);
+			}
+			string text3 = text2;
+			if (text3 == null)
+			{
+				return Results.Forbid();
+			}
+			DateTime date = (from ?? DateTime.UtcNow.AddDays(-30.0)).Date;
+			DateTime dateTime = (to ?? DateTime.UtcNow).Date.AddDays(1.0);
+			bool flag4 = dateTime <= date || dateTime - date > TimeSpan.FromDays(367.0);
+			bool flag5 = flag4;
+			if (!flag5)
+			{
+				if (offset.HasValue)
+				{
+					int valueOrDefault = offset.GetValueOrDefault();
+					if (valueOrDefault < 0 || valueOrDefault > 1000000)
+					{
+						flag3 = true;
+						goto IL_0178;
+					}
+				}
+				flag3 = false;
+				goto IL_0178;
+			}
+			goto IL_017c;
+			IL_0178:
+			flag5 = flag3;
+			goto IL_017c;
+			IL_017c:
+			if (flag5)
+			{
+				return Results.BadRequest(new
+				{
+					error = "Selecciona un período de hasta un año."
+				});
+			}
+			return Results.Content(await db.DepartmentOperationalAudit(text3, date.AddHours(4.0), dateTime.AddHours(4.0), offset.GetValueOrDefault(), ct), "application/json");
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/groups", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			return Results.Ok(new
+			{
+				groups = await db.RecurringAuditGroups(tuple.Item1, tuple.Item2, ct)
+			});
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/group", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			return Results.Ok(new
+			{
+				groups = await db.RecurringAuditGroups(tuple.Item1, tuple.Item2, ct)
+			});
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/panel/groups", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			return Results.Ok(new
+			{
+				groups = await db.RecurringAuditGroups(tuple.Item1, tuple.Item2, ct)
+			});
+		})).RequireAuthorization("PanelView");
+		webApplication.MapGet("/api/panel/catalog", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			return Results.Ok(new
+			{
+				agencies = await db.RecurringPanelAgencies(null, tuple.Item1, tuple.Item2, ct)
+			});
+		})).RequireAuthorization("PanelView");
+		webApplication.MapGet("/api/agencies", (Func<string, HttpContext, Database, CancellationToken, Task<IResult>>)(async (string? grupo, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			if (string.IsNullOrWhiteSpace(grupo))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Debes indicar un grupo."
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			return Results.Ok(new
+			{
+				agencies = await db.RecurringAuditAgencies(grupo.Trim(), tuple.Item1, tuple.Item2, ct)
+			});
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/panel/agencies", (Func<string, HttpContext, Database, CancellationToken, Task<IResult>>)(async (string? grupo, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			if (string.IsNullOrWhiteSpace(grupo))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Debes indicar un grupo."
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			return Results.Ok(new
+			{
+				agencies = await db.RecurringPanelAgencies(grupo.Trim(), tuple.Item1, tuple.Item2, ct)
+			});
+		})).RequireAuthorization("PanelView");
+		webApplication.MapPost("/api/admin/login", (Func<AdminLogin, HttpContext, Database, CancellationToken, Task<IResult>>)(async (AdminLogin login, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			string email = NormalizeLogin(login.Email);
+			string password = login.Password ?? "";
+			if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+			{
+				return Results.Json(new
+				{
+					error = "Escribe el usuario y la contraseña."
+				}, (JsonSerializerOptions?)null, (string?)null, (int?)401);
+			}
+			AdminIdentity account = null;
+			try
+			{
+				account = await RetryDatabaseAsync<AdminIdentity>(() => db.AuthenticateUser(email, password, ct), ct, "login");
+			}
+			catch (SqlException ex) when ((uint)(ex.Number - 207) <= 1u)
+			{
+				Console.Error.WriteLine("Se usará el acceso principal configurado porque no está instalada la gestión avanzada de usuarios: " + ex.Message);
+			}
+			if ((object)account == null)
+			{
+				string legacyEmail = Environment.GetEnvironmentVariable("ADMIN_EMAIL")?.Trim().ToLowerInvariant();
+				string environmentVariable = Environment.GetEnvironmentVariable("ADMIN_PASSWORD");
+				bool flag = !string.IsNullOrWhiteSpace(legacyEmail) && !string.IsNullOrWhiteSpace(environmentVariable) && Fixed(email, legacyEmail) && Fixed(password, environmentVariable);
+				bool flag2 = flag;
+				if (flag2)
+				{
+					flag2 = await db.LegacyPasswordAccessEnabled(ct);
+				}
+				if (flag2)
+				{
+					account = new AdminIdentity("legacy-admin", legacyEmail, "Administrador principal", "Administrator", MustChangePassword: false, null, new Dictionary<string, bool>(), null);
+				}
+			}
+			if ((object)account == null)
+			{
+				return Results.Json(new
+				{
+					error = "Credenciales incorrectas o usuario desactivado."
+				}, (JsonSerializerOptions?)null, (string?)null, (int?)401);
+			}
+			if (EnedraineCallCenterProfile.IsTarget(account.Email))
+			{
+				try
+				{
+					await db.EnsureUnifiedSupportProfile(WithEffectivePermissions, ct);
+					account = (await db.Account(Guid.Parse(account.Id), ct)) ?? account;
+				}
+				catch (Exception exception) when (!ct.IsCancellationRequested)
+				{
+					context.RequestServices.GetRequiredService<ILogger<Program>>().LogError(exception, "No se pudo actualizar el perfil de Call Center; se conserva el acceso actual.");
+				}
+			}
+			await SignInAccount(context, account);
+			string persistentSessionToken = null;
+			try
+			{
+				persistentSessionToken = await RetryDatabaseAsync<string>(() => db.CreatePersistentLoginToken(account.Id, ct, account.RecoveryVersion), ct, "token persistente");
+			}
+			catch (SqlException ex2) when (!ct.IsCancellationRequested)
+			{
+				Console.Error.WriteLine("No se pudo guardar el token persistente; se conserva la cookie de sesión: " + ex2.Message);
+			}
+			catch (InvalidOperationException ex3) when (!ct.IsCancellationRequested && ex3.Message.StartsWith("MSSQL_CONFIG:", StringComparison.Ordinal))
+			{
+				Console.Error.WriteLine("No se pudo guardar el token persistente; se conserva la cookie de sesión: " + ex3.Message);
+			}
+			return Results.Ok(SessionPayload(account, persistentSessionToken));
+		})).RequireRateLimiting("login");
+		webApplication.MapPost("/api/admin/session/restore", (Func<PersistentSessionInput, HttpContext, Database, CancellationToken, Task<IResult>>)(async (PersistentSessionInput body, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			AdminIdentity account = await db.RestorePersistentLogin(body.Token, ct);
+			if ((object)account == null)
+			{
+				return Results.Json(new
+				{
+					error = "La sesión guardada ya no es válida."
+				}, (JsonSerializerOptions?)null, (string?)null, (int?)401);
+			}
+			await SignInAccount(context, account);
+			return Results.Ok(SessionPayload(account));
+		})).RequireRateLimiting("login");
+		webApplication.MapPost("/api/account/recovery-code", (Func<RecoveryCodeRequest, HttpContext, Database, CancellationToken, Task<IResult>>)(async (RecoveryCodeRequest body, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			context.Response.Headers.CacheControl = "no-store";
+			string text2 = context.User.FindFirstValue("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier") ?? "";
+			if (!Guid.TryParse(text2, out var _))
+			{
+				return Results.Conflict(new
+				{
+					error = "Esta cuenta necesita un usuario permanente para habilitar la recuperación."
+				});
+			}
+			string text3 = await db.GenerateRecoveryCode(text2, body.CurrentPassword ?? "", ct);
+			return (text3 == null) ? Results.Json(new
+			{
+				error = "Confirma tu contraseña actual. Si tu contraseña es temporal, cámbiala primero."
+			}, (JsonSerializerOptions?)null, (string?)null, (int?)400) : Results.Ok(new
+			{
+				code = text3
+			});
+		})).RequireAuthorization("PortalUser").RequireRateLimiting("login");
+		webApplication.MapPost("/api/account/recovery-code/generate", (Func<RecoveryCodeLoginRequest, HttpContext, Database, CancellationToken, Task<IResult>>)(async (RecoveryCodeLoginRequest body, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			context.Response.Headers.CacheControl = "no-store";
+			string text2 = await db.GenerateRecoveryCodeFromLogin(NormalizeLogin(body.UserName), body.CurrentPassword ?? "", ct);
+			return (text2 == null) ? Results.Json(new
+			{
+				error = "No fue posible generar el código. Revisa tu usuario y contraseña actual. Si tu contraseña es temporal, inicia sesión y cámbiala primero."
+			}, (JsonSerializerOptions?)null, (string?)null, (int?)400) : Results.Ok(new
+			{
+				code = text2
+			});
+		})).AllowAnonymous().RequireRateLimiting("login");
+		webApplication.MapPost("/api/account/password/recover", (Func<PasswordRecoveryRequest, HttpContext, Database, CancellationToken, Task<IResult>>)(async (PasswordRecoveryRequest body, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			context.Response.Headers.CacheControl = "no-store";
+			if (body.NewPassword == null || body.NewPassword.Length < 8 || body.NewPassword.Length > 128)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "La nueva contraseña debe tener entre 8 y 128 caracteres."
+				});
+			}
+			if (!(await db.RecoverPassword(NormalizeLogin(body.UserName), body.Code ?? "", body.NewPassword, ct)))
+			{
+				return Results.Json(new
+				{
+					error = "No fue posible recuperar la cuenta con esos datos. Revisa el usuario y el código. Si no tienes un código válido, contacta al administrador."
+				}, (JsonSerializerOptions?)null, (string?)null, (int?)400);
+			}
+			await context.SignOutAsync();
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).AllowAnonymous().RequireRateLimiting("login");
+		webApplication.MapPost("/api/admin/presence", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			bool active = bool.TryParse(context.Request.Query["active"], out bool value) && value;
+			await db.PulseOperationalSession(context.User.FindFirstValue("operational_session_id"), active, ct);
+			return Results.Ok(new { ok = true, active });
+		}));
+		webApplication.MapPost("/api/admin/logout", (Func<PersistentSessionInput, HttpContext, Database, CancellationToken, Task<IResult>>)(async (PersistentSessionInput? body, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			await db.RevokePersistentLogin(body?.Token, ct);
+			await db.EndOperationalSession(context.User.FindFirstValue("operational_session_id"), ct);
+			await context.SignOutAsync();
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		}));
+		webApplication.MapGet("/api/admin/session", (Func<HttpContext, IResult>)((HttpContext context) =>
+		{
+			IIdentity? identity = context.User.Identity;
+			return (identity == null || !identity.IsAuthenticated) ? Results.Ok(new
+			{
+				authenticated = false
+			}) : Results.Ok(SessionPayloadFromContext(context));
+		}));
+		webApplication.MapGet("/api/dashboard", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			return Results.Ok(await db.RecurringAuditDashboard(tuple.Item1, tuple.Item2, ct));
+		})).RequireAuthorization("PanelView");
+		webApplication.MapGet("/api/executive-report", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			if (!context.User.IsInRole("Administrator")) return Results.Forbid();
+			DateTime? from = DateTime.TryParseExact(context.Request.Query["from"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out DateTime parsedFrom) ? parsedFrom : null;
+			DateTime? to = DateTime.TryParseExact(context.Request.Query["to"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out DateTime parsedTo) ? parsedTo : null;
+			if (from.HasValue && to.HasValue && from.Value.Date > to.Value.Date) return Results.BadRequest(new { error = "La fecha Desde no puede ser posterior a la fecha Hasta." });
+			return Results.Ok(await db.ExecutiveReport(from, to, ct));
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/incident-ticket-report", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			string login = AdministrativeProfiles.Login(context.User.Identity?.Name ?? "");
+			if (!context.User.IsInRole("Administrator") && login is not ("yessica.mercedes" or "yesica.mercedes")) return Results.Forbid();
+			DateTime? from = DateTime.TryParseExact(context.Request.Query["from"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out DateTime parsedFrom) ? parsedFrom : null;
+			DateTime? to = DateTime.TryParseExact(context.Request.Query["to"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out DateTime parsedTo) ? parsedTo : null;
+			if (from.HasValue && to.HasValue && from.Value.Date > to.Value.Date) return Results.BadRequest(new { error = "La fecha Desde no puede ser posterior a la fecha Hasta." });
+			return Results.Ok(new { tickets = await db.IncidentTicketReport(from, to, ct) });
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/admin/audits/{profileId:guid}", (Func<Guid, HttpContext, Database, CancellationToken, Task<IResult>>)(async (Guid profileId, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			AuditDetailRow auditDetailRow = await db.AuditDetail(profileId, tuple.Item1, tuple.Item2, ct);
+			return ((object)auditDetailRow == null) ? Results.NotFound(new
+			{
+				error = "No encontramos esta auditoría o no pertenece a tus grupos."
+			}) : Results.Ok(auditDetailRow);
+		})).RequireAuthorization("PanelView");
+		webApplication.MapGet("/api/tickets/agencies", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string UserId, string Role) scope = UserScope(context);
+			List<TicketAgencyRow> agencies = await db.TicketAgencies(scope.UserId, scope.Role, ct);
+			TicketAgencyCatalogStats ticketAgencyCatalogStats = await db.TicketAgencyCatalogStats(scope.UserId, scope.Role, ct);
+			return Results.Ok(new
+			{
+				agencies = agencies,
+				totalActive = ticketAgencyCatalogStats.TotalActive,
+				invalidIds = ticketAgencyCatalogStats.InvalidIds,
+				catalogComplete = (ticketAgencyCatalogStats.InvalidIds == 0L && agencies.Count == ticketAgencyCatalogStats.TotalActive)
+			});
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/agency-locations", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			context.Response.Headers.CacheControl = "no-store";
+			(string, string) tuple = UserScope(context);
+			return Results.Ok(new
+			{
+				agencies = await db.AgencyLocations(tuple.Item1, tuple.Item2, ct)
+			});
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapPut("/api/technology/agencies/{id:guid}", (Func<Guid, AgencyDirectoryUpdate, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, AgencyDirectoryUpdate body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			string text2 = ValidateAgencyDirectoryUpdate(body);
+			if (text2 != null)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = text2
+				});
+			}
+			if (!(await db.UpdateAgencyDirectory(id, body, context.User.Identity?.Name ?? "Usuario", ct)))
+			{
+				return Results.NotFound(new
+				{
+					error = "Agencia no encontrada."
+				});
+			}
+			broker.Publish("agency-directory-updated");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("AgencyDirectoryManage").RequireRateLimiting("sensitive-write");
+		webApplication.MapPost("/api/technology/agencies/import", (Func<AgencyDirectoryImport, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (AgencyDirectoryImport body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			string text2 = ValidateAgencyDirectoryImport(body);
+			if (text2 != null)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = text2
+				});
+			}
+			AgencyDirectoryImportResult agencyDirectoryImportResult = await db.ImportAgencyDirectory(body.Agencies, body.FileName, context.User.Identity?.Name ?? "Usuario", ct);
+			if (agencyDirectoryImportResult.Created > 0 || agencyDirectoryImportResult.Updated > 0)
+			{
+				broker.Publish("agency-directory-updated");
+			}
+			return Results.Ok(agencyDirectoryImportResult);
+		})).RequireAuthorization("AgencyDirectoryManage").RequireRateLimiting("sensitive-write");
+		webApplication.MapGet("/api/support/catalog", (Func<Database, CancellationToken, Task<IResult>>)(async (Database db, CancellationToken ct) => Results.Ok(new
+		{
+			departments = await db.SupportCatalog(ct)
+		}))).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/support/directory", (Func<Database, CancellationToken, Task<IResult>>)(async (Database db, CancellationToken ct) => Results.Ok(new
+		{
+			departments = await db.SupportCatalogReadOnly(ct)
+		}))).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/support/metrics", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string UserId, string Role) scope = UserScope(context);
+			List<SupportDepartmentMetricRow> metrics = scope.Role == "Administrator"
+				? await db.GlobalSupportDepartmentMetrics(ct)
+				: await db.SupportDepartmentMetrics(scope.UserId, scope.Role, HasPermission(context.User, "canAssignTickets") || AreaManagerAccess.Scope(context.User) != null, HasPermission(context.User, "canViewSupportFindings"), context.User.FindFirstValue("support_team"), context.User.Identity?.Name, ct, AreaManagerAccess.Scope(context.User) != null);
+			return Results.Ok(new { metrics });
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/support/overview", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string UserId, string Role) scope = UserScope(context);
+			Task<List<SupportDepartmentRow>> departments = db.SupportCatalogReadOnly(ct);
+			Task<List<SupportDepartmentMetricRow>> metrics = scope.Role == "Administrator"
+				? db.GlobalSupportDepartmentMetrics(ct)
+				: db.SupportDepartmentMetrics(scope.UserId, scope.Role, HasPermission(context.User, "canAssignTickets") || AreaManagerAccess.Scope(context.User) != null, HasPermission(context.User, "canViewSupportFindings"), context.User.FindFirstValue("support_team"), context.User.Identity?.Name, ct, AreaManagerAccess.Scope(context.User) != null);
+			await Task.WhenAll(departments, metrics);
+			return Results.Ok(new
+			{
+				departments = await departments,
+				metrics = await metrics
+			});
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapPut("/api/admin/support/departments/{code}", (Func<string, SupportDepartmentInput, Database, CancellationToken, Task<IResult>>)(async (string code, SupportDepartmentInput body, Database db, CancellationToken ct) =>
+		{
+			body = body with
+			{
+				Code = code.ToUpperInvariant()
+			};
+			await db.UpsertSupportDepartment(body, ct);
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("SupportConfiguration");
+		webApplication.MapPost("/api/admin/support/categories", (Func<SupportCategoryInput, Database, CancellationToken, Task<IResult>>)(async (SupportCategoryInput body, Database db, CancellationToken ct) =>
+		{
+			await db.UpsertSupportCategory(null, body, ct);
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("SupportConfiguration");
+		webApplication.MapPut("/api/admin/support/categories/{id:guid}", (Func<Guid, SupportCategoryInput, Database, CancellationToken, Task<IResult>>)(async (Guid id, SupportCategoryInput body, Database db, CancellationToken ct) =>
+		{
+			await db.UpsertSupportCategory(id, body, ct);
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("SupportConfiguration");
+		webApplication.MapDelete("/api/admin/support/categories/{id:guid}", (Func<Guid, Database, CancellationToken, Task<IResult>>)(async (Guid id, Database db, CancellationToken ct) => (await db.DeleteSupportCategory(id, ct)) ? Results.Ok(new
+		{
+			ok = true
+		}) : Results.NotFound())).RequireAuthorization("SupportConfiguration");
+		webApplication.MapGet("/api/tickets", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			return Results.Ok(new
+			{
+				tickets = await db.Tickets(tuple.Item1, tuple.Item2, HasPermission(context.User, "canAssignTickets") || AreaManagerAccess.Scope(context.User) != null, context.User.FindFirstValue("support_team"), context.User.Identity?.Name, ct, AreaManagerAccess.Scope(context.User) != null)
+			});
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/tickets/technicians", (Func<Database, CancellationToken, Task<IResult>>)(async (Database db, CancellationToken ct) => Results.Ok(new
+		{
+			technicians = await db.SupportTechnicians(ct)
+		}))).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/tickets/alerts", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			return Results.Ok(new
+			{
+				count = await db.TicketAlerts(tuple.Item1, tuple.Item2, HasPermission(context.User, "canAssignTickets"), context.User.FindFirstValue("support_team"), context.User.Identity?.Name, ct)
+			});
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/tickets/notifications", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string UserId, string Role) scope = UserScope(context);
+			List<TicketNotificationRow> notifications=[];
+			try { notifications.AddRange(await db.ResolvedTicketNotifications(scope.UserId, scope.Role, HasPermission(context.User, "canAssignTickets"), context.User.FindFirstValue("support_team"), ct)); }
+			catch(Exception exception) when(exception is not OperationCanceledException) { Console.Error.WriteLine($"Notificaciones de tickets omitidas: {exception.Message}"); }
+			try { notifications.AddRange(await db.AutomaticFindingNotifications(scope.UserId, scope.Role, ct)); }
+			catch(Exception exception) when(exception is not OperationCanceledException) { Console.Error.WriteLine($"Notificaciones de hallazgos omitidas: {exception.Message}"); }
+			return Results.Ok(new
+			{
+				notifications = notifications.OrderByDescending((TicketNotificationRow item) => item.UpdatedAt).Take(100)
+			});
+		})).RequireAuthorization("TicketNotifications");
+		webApplication.MapGet("/api/push/public-key", (Func<PwaPushService, IResult>)((PwaPushService push) => Results.Ok(new
+		{
+			publicKey = push.PublicKey,
+			keySource = (push.UsesPersistedFallbackKeys ? "APP_DATA" : "MONSTER_ENVIRONMENT")
+		}))).RequireAuthorization("PortalUser");
+		webApplication.MapPost("/api/push/subscriptions", (Func<PushSubscriptionInput, HttpContext, Database, CancellationToken, Task<IResult>>)(async (PushSubscriptionInput body, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			string text2 = body.Endpoint?.Trim();
+			string text3 = body.Keys?.P256dh?.Trim();
+			string text4 = body.Keys?.Auth?.Trim();
+			if (string.IsNullOrWhiteSpace(text2) || text2.Length > 2048 || string.IsNullOrWhiteSpace(text3) || string.IsNullOrWhiteSpace(text4) || text3.Length > 512 || text4.Length > 512)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "La suscripción push no es válida."
+				});
+			}
+			await db.SavePushSubscription(UserScope(context).UserId, text2, text3, text4, ct);
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapMethods("/api/push/test", new string[2] { "GET", "POST" }, (Func<HttpContext, PwaPushService, CancellationToken, Task<IResult>>)(async (HttpContext context, PwaPushService push, CancellationToken ct) =>
+		{
+			PushTestResult pushTestResult = await push.SendTest(UserScope(context).UserId, ct);
+			if (pushTestResult.Sent > 0)
+			{
+				return Results.Ok(new
+				{
+					ok = true,
+					sent = pushTestResult.Sent,
+					registered = pushTestResult.Registered
+				});
+			}
+			return (pushTestResult.Registered == 0) ? Results.Conflict(new
+			{
+				error = "Este dispositivo todavía no está suscrito. Pulsa Activar notificaciones e inténtalo nuevamente.",
+				code = "PUSH_SUBSCRIPTION_REQUIRED"
+			}) : Results.Json(new
+			{
+				error = (pushTestResult.Error ?? "El proveedor no confirmó la notificación."),
+				code = "PUSH_DELIVERY_FAILED",
+				registered = pushTestResult.Registered
+			}, (JsonSerializerOptions?)null, (string?)null, (int?)502);
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/tickets/statistics", (Func<DateTime?, DateTime?, HttpContext, Database, CancellationToken, Task<IResult>>)(async (DateTime? from, DateTime? to, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			return Results.Ok(await db.TicketStatistics(tuple.Item1, tuple.Item2, HasPermission(context.User, "canAssignTickets"), context.User.FindFirstValue("support_team"), from, to, ct));
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/dashboard/home-summary", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string userId, string role) = UserScope(context);
+			return Results.Ok(await db.HomeSummary(userId, role, HasPermission(context.User, "canAssignTickets"), context.User.FindFirstValue("support_team"), ct));
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/live/stream", (Func<HttpContext, LiveNotificationBroker, CancellationToken, Task>)(async (HttpContext context, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			context.Response.Headers.CacheControl = "no-cache, no-transform";
+			context.Response.Headers.Connection = "keep-alive";
+			context.Response.Headers["X-Accel-Buffering"] = "no";
+			context.Response.ContentType = "text/event-stream";
+			LiveSubscription subscription = broker.Subscribe();
+			try
+			{
+				await context.Response.WriteAsync("retry: 10000\n: connected\n\n", ct);
+				await context.Response.Body.FlushAsync(ct);
+				Task<bool> pendingRead = subscription.Reader.WaitToReadAsync(ct).AsTask();
+				while (!ct.IsCancellationRequested)
+				{
+					Task task = Task.Delay(TimeSpan.FromSeconds(15.0), ct);
+					if (await Task.WhenAny(pendingRead, task) != pendingRead)
+					{
+						await context.Response.WriteAsync($": heartbeat {DateTimeOffset.UtcNow.ToUnixTimeSeconds()}\n\n", ct);
+					}
+					else
+					{
+						if (!(await pendingRead))
+						{
+							break;
+						}
+						string item;
+						while (subscription.Reader.TryRead(out item))
+						{
+							await context.Response.WriteAsync("event: refresh\ndata: " + item + "\n\n", ct);
+						}
+						pendingRead = subscription.Reader.WaitToReadAsync(ct).AsTask();
+					}
+					await context.Response.Body.FlushAsync(ct);
+				}
+			}
+			catch (OperationCanceledException) when (ct.IsCancellationRequested)
+			{
+			}
+			catch (IOException)
+			{
+			}
+			catch (ObjectDisposedException)
+			{
+			}
+			finally
+			{
+				broker.Unsubscribe(subscription.Id);
+			}
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/tickets/findings", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			return Results.Ok(new
+			{
+				findings = await db.AutomaticFindings(tuple.Item1, tuple.Item2, context.User.FindFirstValue("support_team"), HasPermission(context.User, "canAssignTickets"), ct)
+			});
+		})).RequireAuthorization("SupportTechnician");
+		webApplication.MapPut("/api/tickets/findings/{id:guid}/assign", (Func<Guid, FindingAssignment, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, FindingAssignment body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			if (!HasPermission(context.User, "canAssignTickets"))
+			{
+				return Results.Forbid();
+			}
+			if (!(await db.AssignAutomaticFinding(id, body.AssignedTechnicianId, tuple.Item1, tuple.Item2, canAssignTickets: true, context.User.FindFirstValue("display_name") ?? "Soporte", ct)))
+			{
+				return Results.NotFound(new
+				{
+					error = "Hallazgo no encontrado, finalizado, fuera de tu departamento o responsable no válido."
+				});
+			}
+			broker.Publish("finding-assigned");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("SupportTechnician");
+		webApplication.MapPut("/api/tickets/findings/{id:guid}/resolve", (Func<Guid, HttpRequest, HttpContext, Database, CancellationToken, Task<IResult>>)(async (Guid id, HttpRequest request, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			if (!request.HasFormContentType)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Describe la solución y adjunta las fotografías de evidencia."
+				});
+			}
+			IFormCollection formCollection = await request.ReadFormAsync(ct);
+			string diagnosis = formCollection["diagnosis"].ToString().Trim();
+			string resolution = formCollection["resolution"].ToString().Trim();
+			string verification = formCollection["verification"].ToString().Trim();
+			string recommendations = formCollection["recommendations"].ToString().Trim();
+			if (diagnosis.Length > 2000)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "El diagnóstico supera 2,000 caracteres."
+				});
+			}
+			int length = resolution.Length;
+			if ((length < 10 || length > 3000) ? true : false)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Describe el trabajo y la solución aplicada (mínimo 10 caracteres)."
+				});
+			}
+			if (verification.Length > 2000)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "La verificación supera 2,000 caracteres."
+				});
+			}
+			if (recommendations.Length > 2000)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Las recomendaciones superan 2,000 caracteres."
+				});
+			}
+			length = formCollection.Files.Count;
+			if ((length < 1 || length > 6) ? true : false)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Adjunta entre 1 y 6 fotografías de evidencia."
+				});
+			}
+			double? latitude = (double.TryParse(formCollection["latitude"], NumberStyles.Float, CultureInfo.InvariantCulture, out var result) ? new double?(result) : ((double?)null));
+			double? longitude = (double.TryParse(formCollection["longitude"], NumberStyles.Float, CultureInfo.InvariantCulture, out var result2) ? new double?(result2) : ((double?)null));
+			double? accuracy = (double.TryParse(formCollection["accuracyMeters"], NumberStyles.Float, CultureInfo.InvariantCulture, out var result3) ? new double?(result3) : ((double?)null));
+			DateTime? locationCapturedAt = (DateTime.TryParse(formCollection["locationCapturedAt"], null, DateTimeStyles.RoundtripKind, out var result4) ? new DateTime?(result4) : ((DateTime?)null));
+			HashSet<string> allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "image/jpeg", "image/jpg", "image/png", "image/webp" };
+			List<FindingEvidenceUpload> evidence = new List<FindingEvidenceUpload>();
+			long totalBytes = 0L;
+			foreach (IFormFile file in formCollection.Files)
+			{
+				if (file.Length == 0L || file.Length > 8388608 || !allowed.Contains(file.ContentType))
+				{
+					return Results.UnprocessableEntity(new
+					{
+						error = "Cada evidencia debe ser JPG, PNG o WebP y pesar menos de 8 MB."
+					});
+				}
+				totalBytes += file.Length;
+				if (totalBytes > 41943040)
+				{
+					return Results.UnprocessableEntity(new
+					{
+						error = "Las evidencias superan el límite total de 40 MB."
+					});
+				}
+				await using (Stream input = file.OpenReadStream())
+				{
+					using MemoryStream buffer = new MemoryStream();
+					await input.CopyToAsync(buffer, ct);
+					byte[] data = buffer.ToArray();
+					if (!ValidEvidenceImage(data, file.ContentType))
+					{
+						return Results.UnprocessableEntity(new
+						{
+							error = "Una evidencia no contiene una imagen válida."
+						});
+					}
+					evidence.Add(new FindingEvidenceUpload(Path.GetFileName(file.FileName), file.ContentType, data, latitude, longitude, accuracy, locationCapturedAt));
+				}
+				IResult result5 = null;
+			}
+			(string, string) tuple = UserScope(context);
+			return (await db.ResolveAutomaticFinding(id, diagnosis, resolution, verification, recommendations, tuple.Item1, tuple.Item2, context.User.FindFirstValue("support_team"), HasPermission(context.User, "canAssignTickets"), context.User.FindFirstValue("display_name") ?? "Técnico", context.User.Identity?.Name ?? "", evidence, ct)) ? Results.Ok(new
+			{
+				ok = true,
+				evidence = evidence.Count
+			}) : Results.NotFound(new
+			{
+				error = "Hallazgo no encontrado, no asignado a tu usuario o fuera de tu departamento."
+			});
+		})).RequireAuthorization("SupportTechnician");
+		webApplication.MapPut("/api/tickets/findings/{id:guid}/cancel", (Func<Guid, HttpRequest, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, HttpRequest request, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			if (!request.HasFormContentType)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Describe por qué se anula el hallazgo y adjunta fotografías de evidencia."
+				});
+			}
+			IFormCollection formCollection = await request.ReadFormAsync(ct);
+			string reason = formCollection["reason"].ToString().Trim();
+			if (reason.Length > 0)
+			{
+				if (!HasPermission(context.User, "canCancelFindingWithReason"))
+				{
+					return Results.Forbid();
+				}
+				int length = reason.Length;
+				if ((length < 10 || length > 2000) ? true : false)
+				{
+					return Results.UnprocessableEntity(new
+					{
+						error = "El motivo de anulación debe tener entre 10 y 2,000 caracteres."
+					});
+				}
+			}
+			else if (!HasPermission(context.User, "canCancelFindingWithoutReason"))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Describe el motivo de la anulación."
+				});
+			}
+			IReadOnlyList<IFormFile> files = formCollection.Files.GetFiles("evidence");
+			if (files.Count > 6 || formCollection.Files.Count != files.Count)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Adjunta hasta 6 fotografías de evidencia."
+				});
+			}
+			if ((files.Count > 0 && !HasPermission(context.User, "canCancelFindingWithEvidence")) || (files.Count == 0 && !HasPermission(context.User, "canCancelFindingWithoutEvidence")))
+			{
+				return Results.Forbid();
+			}
+			HashSet<string> allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "image/jpeg", "image/jpg", "image/png", "image/webp" };
+			List<FindingEvidenceUpload> evidence = new List<FindingEvidenceUpload>();
+			long totalBytes = 0L;
+			foreach (IFormFile file in files)
+			{
+				if (file.Length == 0L || file.Length > 8388608 || !allowed.Contains(file.ContentType))
+				{
+					return Results.UnprocessableEntity(new
+					{
+						error = "Cada evidencia debe ser JPG, PNG o WebP y pesar menos de 8 MB."
+					});
+				}
+				totalBytes += file.Length;
+				if (totalBytes > 41943040)
+				{
+					return Results.UnprocessableEntity(new
+					{
+						error = "Las evidencias superan el límite total de 40 MB."
+					});
+				}
+				await using (Stream input = file.OpenReadStream())
+				{
+					using MemoryStream buffer = new MemoryStream();
+					await input.CopyToAsync(buffer, ct);
+					byte[] data = buffer.ToArray();
+					if (!ValidEvidenceImage(data, file.ContentType))
+					{
+						return Results.UnprocessableEntity(new
+						{
+							error = "Una evidencia no contiene una imagen válida."
+						});
+					}
+					evidence.Add(new FindingEvidenceUpload(Path.GetFileName(file.FileName), file.ContentType, data));
+				}
+				IResult result = null;
+			}
+			(string, string) tuple = UserScope(context);
+			TicketActionResult ticketActionResult = await db.CancelAutomaticFinding(id, reason, tuple.Item1, tuple.Item2, context.User.FindFirstValue("support_team"), HasPermission(context.User, "canAssignTickets"), context.User.FindFirstValue("display_name") ?? "Usuario", context.User.Identity?.Name ?? "", evidence, HasPermission(context.User, "canCancelFindingWithEvidence"), HasPermission(context.User, "canCancelFindingWithoutEvidence"), HasPermission(context.User, "canCancelFindingWithReason"), HasPermission(context.User, "canCancelFindingWithoutReason"), ct);
+			if (!ticketActionResult.Ok)
+			{
+				return (ticketActionResult.Code == "CONFLICT") ? Results.Conflict(new
+				{
+					error = ticketActionResult.Error
+				}) : Results.NotFound(new
+				{
+					error = ticketActionResult.Error
+				});
+			}
+			broker.Publish("finding-cancelled");
+			return Results.Ok(new
+			{
+				ok = true,
+				evidence = evidence.Count
+			});
+		})).RequireAuthorization("SupportTechnician");
+		webApplication.MapGet("/api/tickets/findings/evidence/{evidenceId:guid}", (Func<Guid, HttpContext, Database, CancellationToken, Task<IResult>>)(async (Guid evidenceId, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(byte[], string)? tuple = await db.FindingEvidencePhoto(evidenceId, UserScope(context).Role, ct);
+			return (!tuple.HasValue) ? Results.NotFound() : Results.File(tuple.Value.Item1, tuple.Value.Item2, null, enableRangeProcessing: true);
+		})).RequireAuthorization("SupportTechnician");
+		webApplication.MapPost("/api/tickets", (Func<HttpRequest, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (HttpRequest request, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			(string UserId, string Role) scope = UserScope(context);
+			List<TicketEvidenceUpload> evidence = new List<TicketEvidenceUpload>();
+			string supervisorEscalationReason = null;
+			IFormCollection form;
+			TicketCreate body;
+			if (request.HasFormContentType)
+			{
+				form = await request.ReadFormAsync(ct);
+				Guid? agencyId = (Guid.TryParse(Text("agencyId"), out var result) ? new Guid?(result) : ((Guid?)null));
+				bool? allowDuplicate = (bool.TryParse(Text("allowDuplicate"), out var result2) ? new bool?(result2) : ((bool?)null));
+				body = new TicketCreate(agencyId, Text("category"), Text("assignedDepartment"), Text("priority"), Text("subject"), Text("description"), Text("ticketType"), Text("assignedTechnicianId"), Text("assignedTeam"), allowDuplicate);
+				supervisorEscalationReason = Text("supervisorEscalationReason");
+				if (scope.Role == "GroupAdministrator")
+				{
+					bool flag = supervisorEscalationReason == null;
+					bool flag2 = flag;
+					int length;
+					if (!flag2)
+					{
+						length = supervisorEscalationReason.Length;
+						bool flag3 = ((length < 15 || length > 1000) ? true : false);
+						flag2 = flag3;
+					}
+					if (flag2)
+					{
+						return Results.UnprocessableEntity(new
+						{
+							error = "Explica qué revisaste y por qué el caso no puede resolverse en la agencia (mínimo 15 caracteres)."
+						});
+					}
+					IReadOnlyList<IFormFile> files = form.Files.GetFiles("evidence");
+					length = files.Count;
+					if ((length < 1 || length > 4) ? true : false)
+					{
+						return Results.UnprocessableEntity(new
+						{
+							error = "Adjunta entre 1 y 4 fotografías que demuestren por qué el caso debe escalarse."
+						});
+					}
+					HashSet<string> allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "image/jpeg", "image/jpg", "image/png", "image/webp" };
+					long totalBytes = 0L;
+					foreach (IFormFile file in files)
+					{
+						if (file.Length == 0L || file.Length > 8388608 || !allowed.Contains(file.ContentType))
+						{
+							return Results.UnprocessableEntity(new
+							{
+								error = "Cada evidencia debe ser JPG, PNG o WebP y pesar menos de 8 MB."
+							});
+						}
+						totalBytes += file.Length;
+						if (totalBytes > 25165824)
+						{
+							return Results.UnprocessableEntity(new
+							{
+								error = "Las evidencias superan el límite total de 24 MB."
+							});
+						}
+						await using (Stream input = file.OpenReadStream())
+						{
+							using MemoryStream buffer = new MemoryStream();
+							await input.CopyToAsync(buffer, ct);
+							byte[] data = buffer.ToArray();
+							if (!ValidEvidenceImage(data, file.ContentType))
+							{
+								return Results.UnprocessableEntity(new
+								{
+									error = "Una evidencia no contiene una imagen válida."
+								});
+							}
+							evidence.Add(new TicketEvidenceUpload(Path.GetFileName(file.FileName), file.ContentType, data));
+						}
+						IResult result3 = null;
+					}
+				}
+			}
+			else
+			{
+				if (scope.Role == "GroupAdministrator")
+				{
+					return Results.UnprocessableEntity(new
+					{
+						error = "Los supervisores deben justificar el escalamiento y adjuntar evidencia fotográfica."
+					});
+				}
+				try
+				{
+					body = await request.ReadFromJsonAsync<TicketCreate>(ct);
+				}
+				catch (JsonException)
+				{
+					return Results.BadRequest(new
+					{
+						error = "La información del ticket no tiene un formato válido."
+					});
+				}
+			}
+			if ((object)body == null)
+			{
+				return Results.BadRequest(new
+				{
+					error = "Completa la información del ticket."
+				});
+			}
+			bool hasValue = body.WorkshopStockId.HasValue;
+			bool flag4 = hasValue;
+			if (flag4)
+			{
+				bool flag5 = !WorkshopActor.From(context).CanOperate || body.WorkshopStockId == Guid.Empty || body.TicketType != "INTERNAL";
+				bool flag6 = flag5;
+				if (!flag6)
+				{
+					string assignedDepartment = body.AssignedDepartment;
+					bool flag3 = ((assignedDepartment == "TECHNOLOGY" || assignedDepartment == "GENERAL_SERVICES") ? true : false);
+					flag6 = !flag3;
+				}
+				flag4 = flag6;
+			}
+			if (flag4)
+			{
+				return Results.Forbid();
+			}
+			bool flag7 = scope.Role == "GroupAdministrator";
+			bool flag8 = flag7;
+			if (flag8)
+			{
+				bool flag3;
+				switch (body?.AssignedDepartment)
+				{
+				case "TECHNOLOGY":
+				case "GENERAL_SERVICES":
+				case "HUMAN_RESOURCES":
+					flag3 = true;
+					break;
+				default:
+					flag3 = false;
+					break;
+				}
+				flag8 = !flag3;
+			}
+			if (flag8)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Los supervisores solo pueden crear tickets para Tecnología, Servicios Generales y Recursos Humanos."
+				});
+			}
+			string text2 = ValidateTicket(body);
+			if (text2 != null)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = text2
+				});
+			}
+			try
+			{
+				SupportTicketRow supportTicketRow = await db.CreateTicket(body, scope.UserId, scope.Role, context.User.FindFirstValue("display_name") ?? "Usuario", context.User.Identity?.Name ?? "", context.User.FindFirstValue("support_team"), HasPermission(context.User, "canAssignTickets"), evidence, supervisorEscalationReason, ct, body.WorkshopStockId);
+				if ((object)supportTicketRow == null)
+				{
+					return Results.Forbid();
+				}
+				broker.Publish("ticket-created");
+				if (body.WorkshopStockId.HasValue)
+				{
+					broker.Publish("maintenance-workshop-updated");
+				}
+				return Results.Json(supportTicketRow, (JsonSerializerOptions?)null, (string?)null, (int?)201);
+			}
+			catch (TicketDuplicateException ex2)
+			{
+				return Results.Conflict(new
+				{
+					error = $"Ya existe el ticket #{ex2.TicketNumber} con esta avería para la agencia.",
+					code = "DUPLICATE_TICKET",
+					duplicateTicketId = ex2.TicketId,
+					duplicateTicketNumber = ex2.TicketNumber,
+					duplicateStatus = ex2.Status,
+					duplicateSubject = ex2.Subject
+				});
+			}
+			catch (SqlException ex3) when (body.WorkshopStockId.HasValue && ex3.Number == 50001)
+			{
+				return Results.Conflict(new
+				{
+					error = ex3.Message
+				});
+			}
+			string? Text(string key)
+			{
+				string text3 = form[key].ToString().Trim();
+				if (!string.IsNullOrWhiteSpace(text3))
+				{
+					return text3;
+				}
+				return null;
+			}
+		})).DisableAntiforgery().RequireAuthorization("TicketCreate");
+		webApplication.MapPut("/api/tickets/{id:guid}", (Func<Guid, TicketUpdate, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, TicketUpdate body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			string text2 = ValidateTicketUpdate(body);
+			if (text2 != null)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = text2
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			TicketActionResult ticketActionResult = await db.UpdateTicket(id, body, tuple.Item1, tuple.Item2, context.User.FindFirstValue("display_name") ?? "Usuario", context.User.FindFirstValue("support_team"), HasPermission(context.User, "canAssignTickets"), ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("ticket-updated");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapPut("/api/tickets/{id:guid}/route", (Func<Guid, TicketRoute, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, TicketRoute body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			string text2 = ValidateTicketRoute(body);
+			if (text2 != null)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = text2
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			TicketActionResult ticketActionResult = await db.RouteTicket(id, body, tuple.Item1, tuple.Item2, context.User.FindFirstValue("display_name") ?? "Usuario", context.User.FindFirstValue("support_team"), ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("ticket-routed");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("TicketRouting");
+		webApplication.MapPut("/api/tickets/{id:guid}/share", (Func<Guid, TicketShare, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, TicketShare body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			if (body.Departments == null || body.Departments.Count > 10 || (body.Comment?.Length ?? 0) > 1000)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Selecciona hasta 10 departamentos y agrega un comentario de hasta 1,000 caracteres."
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			TicketActionResult ticketActionResult = await db.ShareTicket(id, body, tuple.Item1, tuple.Item2, context.User.FindFirstValue("display_name") ?? "Usuario", context.User.FindFirstValue("support_team"), ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("ticket-shared");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("TicketRouting");
+		webApplication.MapPost("/api/tickets/{id:guid}/resolve", (Func<Guid, HttpRequest, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, HttpRequest request, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			if (!request.HasFormContentType)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Completa la solución y adjunta la evidencia."
+				});
+			}
+			IFormCollection form = await request.ReadFormAsync(ct);
+			string status = form["status"].ToString().Trim().ToUpperInvariant();
+			if (string.IsNullOrWhiteSpace(status))
+			{
+				status = "RESOLVED";
+			}
+			string resolution = form["resolution"].ToString().Trim();
+			string text2 = status;
+			if ((!(text2 == "RESOLVED") && !(text2 == "CLOSED")) || 1 == 0)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "El estado final debe ser resuelto o cerrado."
+				});
+			}
+			int length = resolution.Length;
+			if ((length < 10 || length > 2000) ? true : false)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Describe la solución aplicada (entre 10 y 2,000 caracteres)."
+				});
+			}
+			length = form.Files.Count;
+			if ((length < 1 || length > 8) ? true : false)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Adjunta entre 1 y 8 fotografías de evidencia."
+				});
+			}
+			string replacementSerial = form["replacementSerial"].ToString().Trim();
+			string removedSerial = form["removedSerial"].ToString().Trim();
+			string text3 = await db.WorkshopTicketReplacementSerial(id, ct);
+			if (!string.IsNullOrWhiteSpace(text3))
+			{
+				replacementSerial = text3;
+			}
+			if (replacementSerial.Length > 120 || removedSerial.Length > 120)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Los seriales del equipo deben tener hasta 120 caracteres."
+				});
+			}
+			string text4 = (string.IsNullOrWhiteSpace(replacementSerial) ? "" : ("\n\nSerial del equipo reemplazado: " + replacementSerial)) + (string.IsNullOrWhiteSpace(removedSerial) ? "" : ("\nSerial del equipo retirado: " + removedSerial));
+			if (resolution.Length + text4.Length > 2000)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "La solución y los seriales juntos deben tener hasta 2,000 caracteres."
+				});
+			}
+			resolution += text4;
+			double? latitude = (double.TryParse(form["latitude"], NumberStyles.Float, CultureInfo.InvariantCulture, out var result) ? new double?(result) : ((double?)null));
+			double? longitude = (double.TryParse(form["longitude"], NumberStyles.Float, CultureInfo.InvariantCulture, out var result2) ? new double?(result2) : ((double?)null));
+			double? accuracy = (double.TryParse(form["accuracyMeters"], NumberStyles.Float, CultureInfo.InvariantCulture, out var result3) ? new double?(result3) : ((double?)null));
+			DateTime? locationCapturedAt = (DateTime.TryParse(form["locationCapturedAt"], null, DateTimeStyles.RoundtripKind, out var result4) ? new DateTime?(result4) : ((DateTime?)null));
+			HashSet<string> allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "image/jpeg", "image/jpg", "image/png", "image/webp" };
+			List<TicketEvidenceUpload> evidence = new List<TicketEvidenceUpload>();
+			long totalBytes = 0L;
+			foreach (IFormFile file in form.Files)
+			{
+				if (file.Length == 0L || file.Length > 8388608 || !allowed.Contains(file.ContentType))
+				{
+					return Results.UnprocessableEntity(new
+					{
+						error = "Cada evidencia debe ser JPG, PNG o WebP y pesar menos de 8 MB."
+					});
+				}
+				totalBytes += file.Length;
+				if (totalBytes > 67108864)
+				{
+					return Results.UnprocessableEntity(new
+					{
+						error = "Las evidencias superan el límite total de 64 MB."
+					});
+				}
+				await using (Stream input = file.OpenReadStream())
+				{
+					using MemoryStream buffer = new MemoryStream();
+					await input.CopyToAsync(buffer, ct);
+					byte[] data = buffer.ToArray();
+					if (!ValidEvidenceImage(data, file.ContentType))
+					{
+						return Results.UnprocessableEntity(new
+						{
+							error = "Una evidencia no contiene una imagen válida."
+						});
+					}
+					evidence.Add(new TicketEvidenceUpload(Path.GetFileName(file.FileName), file.ContentType, data));
+				}
+				IResult result5 = null;
+			}
+			evidence = evidence.Select((TicketEvidenceUpload item) => item with
+			{
+				Latitude = latitude,
+				Longitude = longitude,
+				AccuracyMeters = accuracy,
+				LocationCapturedAt = locationCapturedAt
+			}).ToList();
+			(string, string) tuple = UserScope(context);
+			TicketActionResult ticketActionResult = await db.ResolveTicket(id, status, resolution, evidence, tuple.Item1, tuple.Item2, context.User.FindFirstValue("display_name") ?? "Usuario", context.User.FindFirstValue("support_team"), HasPermission(context.User, "canAssignTickets"), HasPermission(context.User, "canResolveTickets"), ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("ticket-resolved");
+			return Results.Ok(new
+			{
+				ok = true,
+				evidence = evidence.Count
+			});
+		})).RequireAuthorization("PortalUser").DisableAntiforgery();
+		webApplication.MapGet("/api/tickets/evidence/{evidenceId:guid}", (Func<Guid, HttpContext, Database, CancellationToken, Task<IResult>>)(async (Guid evidenceId, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			(byte[], string, string)? tuple2 = await db.TicketEvidencePhoto(evidenceId, tuple.Item1, tuple.Item2, HasPermission(context.User, "canAssignTickets"), context.User.FindFirstValue("support_team"), ct);
+			return (!tuple2.HasValue) ? Results.NotFound() : Results.File(tuple2.Value.Item1, tuple2.Value.Item2, null, enableRangeProcessing: true);
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/agency-transitions", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			List<AgencyTransitionRow> list = await db.AgencyTransitions(UserScope(context).Role, ct);
+			return (list == null) ? Results.Forbid() : Results.Ok(new
+			{
+				projects = list
+			});
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapPost("/api/agency-transitions", (Func<AgencyTransitionCreate, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (AgencyTransitionCreate body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			bool flag = !body.AgencyId.HasValue;
+			bool flag2 = flag;
+			if (!flag2)
+			{
+				string projectType = body.ProjectType;
+				bool flag3 = ((projectType == "CONSTRUCTION" || projectType == "RESTRUCTURING") ? true : false);
+				flag2 = !flag3;
+			}
+			if (flag2 || (body.Notes?.Length ?? 0) > 2000)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Selecciona la agencia, el tipo de proceso y agrega notas de hasta 2,000 caracteres."
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			TicketActionResult ticketActionResult = await db.CreateAgencyTransition(body, tuple.Item1, tuple.Item2, context.User.FindFirstValue("display_name") ?? "Usuario", ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("agency-transition-created");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapPut("/api/agency-transitions/{id:guid}/stage", (Func<Guid, AgencyTransitionStageUpdate, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, AgencyTransitionStageUpdate body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			string status = body.Status;
+			bool flag = ((status == "IN_PROGRESS" || status == "COMPLETED") ? true : false);
+			if (!flag || (body.Notes?.Length ?? 0) > 2000)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Selecciona un estado válido y agrega notas de hasta 2,000 caracteres."
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			TicketActionResult ticketActionResult = await db.UpdateAgencyTransitionStage(id, body, tuple.Item1, tuple.Item2, context.User.FindFirstValue("display_name") ?? "Usuario", ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("agency-transition-updated");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapPut("/api/agency-transitions/{id:guid}/status", (Func<Guid, AgencyTransitionStatusUpdate, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, AgencyTransitionStatusUpdate body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			string status = body.Status;
+			bool flag = ((status == "ACTIVE" || status == "PENDING") ? true : false);
+			if (!flag || (body.Reason?.Length ?? 0) > 1000 || (body.Status == "PENDING" && (body.Reason?.Trim().Length ?? 0) < 5))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Para dejar el proceso pendiente, indica un motivo de al menos 5 caracteres."
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			TicketActionResult ticketActionResult = await db.UpdateAgencyTransitionStatus(id, body, tuple.Item1, tuple.Item2, context.User.FindFirstValue("display_name") ?? "Usuario", ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("agency-transition-status-updated");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
+		webApplication.MapPut("/api/agency-transitions/{id:guid}/stages/{stageId:guid}", (Func<Guid, Guid, AgencyTransitionStageEdit, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, Guid stageId, AgencyTransitionStageEdit body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			if ((body.Notes?.Length ?? 0) > 2000)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "La descripción admite hasta 2,000 caracteres."
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			TicketActionResult ticketActionResult = await db.EditAgencyTransitionStage(id, stageId, body, tuple.Item1, tuple.Item2, context.User.FindFirstValue("display_name") ?? "Usuario", ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("agency-transition-edited");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
+		webApplication.MapPut("/api/agency-transitions/{id:guid}/stages/{stageId:guid}/progress/{progressId:guid}/assignment", (Func<Guid, Guid, Guid, AgencyTransitionAssignmentUpdate, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, Guid stageId, Guid progressId, AgencyTransitionAssignmentUpdate body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			string assignmentType = body.AssignmentType;
+			bool flag = ((assignmentType == "TECHNICIAN" || assignmentType == "CONTRACTOR") ? true : false);
+			if (!flag || (body.ContractorName?.Length ?? 0) > 160)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Selecciona un técnico o escribe un contratista válido."
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			TicketActionResult ticketActionResult = await db.AssignAgencyTransitionProgress(id, stageId, progressId, body, tuple.Item1, tuple.Item2, context.User.FindFirstValue("display_name") ?? "Usuario", ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("agency-transition-record-assigned");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
+		webApplication.MapPost("/api/agency-transitions/{id:guid}/stages/{stageId:guid}/progress/{progressId:guid}/evidence", (Func<Guid, Guid, Guid, HttpRequest, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, Guid stageId, Guid progressId, HttpRequest request, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			if (!request.HasFormContentType)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Toma una fotografía con la cámara y el GPS activado."
+				});
+			}
+			IFormCollection formCollection = await request.ReadFormAsync(ct);
+			int count = formCollection.Files.Count;
+			if ((count < 1 || count > 4) ? true : false)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Adjunta entre 1 y 4 fotografías de evidencia."
+				});
+			}
+			double? latitude = (double.TryParse(formCollection["latitude"], NumberStyles.Float, CultureInfo.InvariantCulture, out var result) ? new double?(result) : ((double?)null));
+			double? longitude = (double.TryParse(formCollection["longitude"], NumberStyles.Float, CultureInfo.InvariantCulture, out var result2) ? new double?(result2) : ((double?)null));
+			double? accuracy = (double.TryParse(formCollection["accuracyMeters"], NumberStyles.Float, CultureInfo.InvariantCulture, out var result3) ? new double?(result3) : ((double?)null));
+			DateTime? locationCapturedAt = (DateTime.TryParse(formCollection["locationCapturedAt"], null, DateTimeStyles.RoundtripKind, out var result4) ? new DateTime?(result4) : ((DateTime?)null));
+			bool flag;
+			if (latitude.HasValue)
+			{
+				double valueOrDefault = latitude.GetValueOrDefault();
+				if (!(valueOrDefault < -90.0) && !(valueOrDefault > 90.0))
+				{
+					flag = false;
+					goto IL_020c;
+				}
+			}
+			flag = true;
+			goto IL_020c;
+			IL_02e9:
+			bool flag3;
+			bool flag2 = flag3;
+			goto IL_02ed;
+			IL_0258:
+			bool flag5;
+			bool flag4 = flag5 || (latitude == 0.0 && longitude == 0.0);
+			flag2 = flag4;
+			if (!flag2)
+			{
+				if (accuracy.HasValue)
+				{
+					double valueOrDefault2 = accuracy.GetValueOrDefault();
+					if (!(valueOrDefault2 <= 0.0))
+					{
+						flag3 = false;
+						goto IL_02e9;
+					}
+				}
+				flag3 = true;
+				goto IL_02e9;
+			}
+			goto IL_02ed;
+			IL_020c:
+			bool flag6 = flag;
+			flag5 = flag6;
+			if (!flag5)
+			{
+				if (longitude.HasValue)
+				{
+					double valueOrDefault2 = longitude.GetValueOrDefault();
+					if (!(valueOrDefault2 < -180.0) && !(valueOrDefault2 > 180.0))
+					{
+						flag3 = false;
+						goto IL_0254;
+					}
+				}
+				flag3 = true;
+				goto IL_0254;
+			}
+			goto IL_0258;
+			IL_0254:
+			flag5 = flag3;
+			goto IL_0258;
+			IL_02ed:
+			if (flag2 || !locationCapturedAt.HasValue)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "No se recibió una ubicación GPS válida. Activa la ubicación y toma la foto nuevamente."
+				});
+			}
+			if (locationCapturedAt.Value.ToUniversalTime() < DateTime.UtcNow.AddHours(-2.0) || locationCapturedAt.Value.ToUniversalTime() > DateTime.UtcNow.AddMinutes(10.0))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "La ubicación GPS no es reciente. Toma la fotografía nuevamente desde este formulario."
+				});
+			}
+			HashSet<string> allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "image/jpeg", "image/jpg", "image/png", "image/webp" };
+			List<AgencyTransitionEvidenceUpload> files = new List<AgencyTransitionEvidenceUpload>();
+			long totalBytes = 0L;
+			foreach (IFormFile file in formCollection.Files)
+			{
+				if (file.Length == 0L || file.Length > 8388608 || !allowed.Contains(file.ContentType))
+				{
+					return Results.UnprocessableEntity(new
+					{
+						error = "Cada evidencia debe ser JPG, PNG o WebP y pesar menos de 8 MB."
+					});
+				}
+				totalBytes += file.Length;
+				if (totalBytes > 33554432)
+				{
+					return Results.UnprocessableEntity(new
+					{
+						error = "Las evidencias superan el límite total de 32 MB."
+					});
+				}
+				await using (Stream input = file.OpenReadStream())
+				{
+					using MemoryStream buffer = new MemoryStream();
+					await input.CopyToAsync(buffer, ct);
+					byte[] data = buffer.ToArray();
+					if (!ValidEvidenceImage(data, file.ContentType))
+					{
+						return Results.UnprocessableEntity(new
+						{
+							error = "Una evidencia no contiene una imagen válida."
+						});
+					}
+					files.Add(new AgencyTransitionEvidenceUpload(Path.GetFileName(file.FileName), file.ContentType, data, latitude, longitude, accuracy, locationCapturedAt));
+				}
+				IResult result5 = null;
+			}
+			(string, string) tuple = UserScope(context);
+			TicketActionResult ticketActionResult = await db.AddAgencyTransitionEvidence(id, stageId, progressId, files, tuple.Item1, tuple.Item2, context.User.FindFirstValue("display_name") ?? "Usuario", ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("agency-transition-evidence-added");
+			return Results.Ok(new
+			{
+				ok = true,
+				evidence = files.Count,
+				gpsVerified = true,
+				latitude = latitude,
+				longitude = longitude,
+				accuracyMeters = accuracy
+			});
+		})).RequireAuthorization("PortalUser").DisableAntiforgery()
+			.RequireRateLimiting("sensitive-write");
+		webApplication.MapGet("/api/agency-transitions/evidence/{evidenceId:guid}", (Func<Guid, HttpContext, Database, CancellationToken, Task<IResult>>)(async (Guid evidenceId, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(byte[], string)? tuple = await db.AgencyTransitionEvidencePhoto(evidenceId, UserScope(context).Role, ct);
+			return (!tuple.HasValue) ? Results.NotFound() : Results.File(tuple.Value.Item1, tuple.Value.Item2, null, enableRangeProcessing: true);
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapDelete("/api/agency-transitions/{id:guid}/stages/{stageId:guid}/progress/{progressId:guid}/evidence/{evidenceId:guid}", (Func<Guid, Guid, Guid, Guid, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, Guid stageId, Guid progressId, Guid evidenceId, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			TicketActionResult ticketActionResult = await db.DeleteAgencyTransitionEvidence(id, stageId, progressId, evidenceId, UserScope(context).Role, ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("agency-transition-evidence-deleted");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
+		webApplication.MapPut("/api/agency-transitions/{id:guid}/stages/{stageId:guid}/progress/{progressId:guid}", (Func<Guid, Guid, Guid, AgencyTransitionProgressUpdate, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, Guid stageId, Guid progressId, AgencyTransitionProgressUpdate body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			bool flag = (body.Note?.Length ?? 0) > 2000;
+			bool flag2 = flag;
+			if (!flag2)
+			{
+				bool flag3;
+				switch (body.Status)
+				{
+				case null:
+				case "IN_PROGRESS":
+				case "COMPLETED":
+					flag3 = true;
+					break;
+				default:
+					flag3 = false;
+					break;
+				}
+				flag2 = !flag3;
+			}
+			if (flag2 || (string.IsNullOrWhiteSpace(body.Note) && body.Status == null))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Indica el texto actualizado o el estado del registro."
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			TicketActionResult ticketActionResult = await db.UpdateAgencyTransitionProgress(id, stageId, progressId, body, tuple.Item1, tuple.Item2, context.User.FindFirstValue("display_name") ?? "Usuario", ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("agency-transition-progress-updated");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
+		webApplication.MapDelete("/api/agency-transitions/{id:guid}/stages/{stageId:guid}/progress/{progressId:guid}", (Func<Guid, Guid, Guid, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, Guid stageId, Guid progressId, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			TicketActionResult ticketActionResult = await db.DeleteAgencyTransitionProgress(id, stageId, progressId, tuple.Item1, tuple.Item2, context.User.FindFirstValue("display_name") ?? "Usuario", ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("agency-transition-progress-deleted");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
+		webApplication.MapDelete("/api/agency-transitions/{id:guid}/stages/{stageId:guid}", (Func<Guid, Guid, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, Guid stageId, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			TicketActionResult ticketActionResult = await db.DeleteAgencyTransitionStageContent(id, stageId, tuple.Item1, tuple.Item2, context.User.FindFirstValue("display_name") ?? "Usuario", ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("agency-transition-stage-content-deleted");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
+		webApplication.MapDelete("/api/agency-transitions/{id:guid}", (Func<Guid, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			TicketActionResult ticketActionResult = await db.DeleteAgencyTransition(id, UserScope(context).Role, ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("agency-transition-deleted");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
+		webApplication.MapGet("/api/maintenance/movements", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string UserId, string Role) scope = UserScope(context);
+			string supportTeam = context.User.FindFirstValue("support_team");
+			List<MaintenanceMovementRow> rows = await db.MaintenanceMovements(scope.UserId, scope.Role, supportTeam, ct);
+			return (rows == null) ? Results.Forbid() : Results.Ok(new
+			{
+				movements = rows,
+				products = await db.MaintenanceProducts(scope.Role, supportTeam, ct),
+				pendingStock = await db.WarehousePendingStock(scope.Role, supportTeam, ct)
+			});
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapPost("/api/maintenance/movements", (Func<MaintenanceMovementCreate, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (MaintenanceMovementCreate body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			string text2 = (body.OperationalArea ?? "").Trim().ToUpperInvariant();
+			string movement = (body.MovementType ?? "").Trim().ToUpperInvariant();
+			bool flag = ((text2 == "WORKSHOP" || text2 == "WAREHOUSE") ? true : false);
+			bool flag2 = !flag;
+			switch (movement)
+			{
+			case "ENTRY":
+			case "EXIT":
+			case "REQUEST":
+			case "NEW_DELIVERY":
+			case "DAMAGED_RETURN":
+			case "TRANSFER_TO_WORKSHOP":
+			case "REPLACEMENT":
+			case "COMPONENT_REPLACEMENT":
+			case "REPAIR":
+			case "DISCHARGE":
+				flag = true;
+				break;
+			default:
+				flag = false;
+				break;
+			}
+			bool flag3 = !flag;
+			bool flag4 = text2 == "WAREHOUSE";
+			bool flag5 = flag4;
+			if (flag5)
+			{
+				switch (movement)
+				{
+				case "ENTRY":
+				case "EXIT":
+				case "REQUEST":
+				case "NEW_DELIVERY":
+				case "DAMAGED_RETURN":
+				case "TRANSFER_TO_WORKSHOP":
+				case "DISCHARGE":
+					flag = true;
+					break;
+				default:
+					flag = false;
+					break;
+				}
+				flag5 = !flag;
+			}
+			bool flag6 = flag5;
+			if (!flag6)
+			{
+				bool flag7 = text2 == "WORKSHOP";
+				bool flag8 = flag7;
+				if (flag8)
+				{
+					switch (movement)
+					{
+					case "ENTRY":
+					case "EXIT":
+					case "TRANSFER_TO_WORKSHOP":
+					case "REPAIR":
+					case "REPLACEMENT":
+					case "COMPONENT_REPLACEMENT":
+						flag = true;
+						break;
+					default:
+						flag = false;
+						break;
+					}
+					flag8 = !flag;
+				}
+				flag6 = flag8;
+			}
+			bool flag9 = flag6;
+			bool flag10 = (!(text2 == "WORKSHOP") || !(movement == "ENTRY")) && movement != "REQUEST" && (string.IsNullOrWhiteSpace(body.DeliveredByName) || string.IsNullOrWhiteSpace(body.ReceivedByName));
+			string text3 = movement;
+			flag = ((text3 == "NEW_DELIVERY" || text3 == "EXIT") ? true : false);
+			bool flag11 = flag && body.TechnicianUserId == null;
+			bool flag12 = movement == "REQUEST" && !body.AgencyId.HasValue;
+			bool flag13 = text2 == "WAREHOUSE";
+			bool flag14 = flag13;
+			if (flag14)
+			{
+				switch (movement)
+				{
+				case "ENTRY":
+				case "REQUEST":
+				case "TRANSFER_TO_WORKSHOP":
+					flag = true;
+					break;
+				default:
+					flag = false;
+					break;
+				}
+				flag14 = flag;
+			}
+			int num = (flag14 ? 10000 : 1000);
+			if (body.Quantity < 1 || body.Quantity > num)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Indica una cantidad entera entre 1 y " + ((num == 10000) ? "10,000" : "1,000") + " unidades."
+				});
+			}
+			if ((flag2 | flag3 | flag9 | flag10 | flag11 | flag12) || string.IsNullOrWhiteSpace(body.DocumentNumber) || string.IsNullOrWhiteSpace(body.EquipmentType) || string.IsNullOrWhiteSpace(body.FailureCause) || (movement != "REQUEST" && (!(text2 == "WAREHOUSE") || !(movement == "ENTRY")) && string.IsNullOrWhiteSpace(body.SerialNumber)) || (body.EquipmentType?.Length ?? 0) > 100 || (body.ComponentType?.Length ?? 0) > 100 || (body.Notes?.Length ?? 0) > 2000 || (body.SerialNumber?.Length ?? 0) > 120 || (body.SignatureData?.Length ?? 0) > 500000 || (body.DeliveredByName?.Length ?? 0) > 160 || (body.ReceivedByName?.Length ?? 0) > 160 || (body.DestinationName?.Length ?? 0) > 200)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Completa los datos obligatorios. Las entradas a Almacén permiten serial opcional. Las solicitudes requieren agencia y equipo; las salidas y entregas conservan sus requisitos de serial y custodia."
+				});
+			}
+			if (body.SignatureData != null && !body.SignatureData.StartsWith("data:image/png;base64,", StringComparison.Ordinal))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "La firma digital no tiene un formato válido."
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			WorkshopActor actor = WorkshopActor.From(context);
+			TicketActionResult ticketActionResult = await db.CreateMaintenanceMovement(body, tuple.Item1, tuple.Item2, context.User.FindFirstValue("support_team"), actor.Name, ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("maintenance-movement-created");
+			bool flag15 = body.TechnicianUserId != null && movement != "REQUEST";
+			bool flag16 = flag15;
+			if (flag16)
+			{
+				flag16 = await db.NotifyMaintenanceReceiptCreated(body.DocumentNumber, actor, ct);
+			}
+			if (flag16)
+			{
+				broker.Publish("chat-message");
+				broker.Publish("institutional-document-created");
+			}
+			return Results.Ok(new
+			{
+				ok = true,
+				documentNumber = body.DocumentNumber,
+				qrToken = body.QrToken
+			});
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapGet("/api/maintenance/procurement", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			MaintenanceProcurementSnapshot maintenanceProcurementSnapshot = await db.MaintenanceProcurement(UserScope(context).Role, context.User.FindFirstValue("support_team"), ct);
+			return ((object)maintenanceProcurementSnapshot == null) ? Results.Forbid() : Results.Ok(maintenanceProcurementSnapshot);
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapPost("/api/maintenance/suppliers", (Func<MaintenanceSupplierCreate, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (MaintenanceSupplierCreate body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			if (string.IsNullOrWhiteSpace(body.Name) || (body.Name?.Length ?? 0) > 160 || (body.TaxId?.Length ?? 0) > 40 || (body.ContactName?.Length ?? 0) > 120 || (body.Phone?.Length ?? 0) > 50 || (body.Email?.Length ?? 0) > 160)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Completa un proveedor válido."
+				});
+			}
+			TicketActionResult ticketActionResult = await db.CreateMaintenanceSupplier(body, UserScope(context).Role, context.User.FindFirstValue("support_team"), context.User.FindFirstValue("display_name") ?? "Usuario", ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("maintenance-supplier-created");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
+		webApplication.MapPost("/api/maintenance/requisitions", (Func<MaintenanceRequisitionCreate, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (MaintenanceRequisitionCreate body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			bool flag = string.IsNullOrWhiteSpace(body.Department) || string.IsNullOrWhiteSpace(body.ProductName) || body.ProductName.Length > 160;
+			bool flag2 = flag;
+			if (!flag2)
+			{
+				int quantity = body.Quantity;
+				bool flag3 = ((quantity < 1 || quantity > 100000) ? true : false);
+				flag2 = flag3;
+			}
+			bool flag4 = flag2;
+			if (!flag4)
+			{
+				bool flag3;
+				switch (body.Priority)
+				{
+				case "LOW":
+				case "MEDIUM":
+				case "HIGH":
+				case "CRITICAL":
+					flag3 = true;
+					break;
+				default:
+					flag3 = false;
+					break;
+				}
+				flag4 = !flag3;
+			}
+			if (flag4 || (body.Notes?.Length ?? 0) > 2000)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Completa departamento, artículo, cantidad y prioridad de la requisición."
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			TicketActionResult ticketActionResult = await db.CreateMaintenanceRequisition(body, tuple.Item1, tuple.Item2, context.User.FindFirstValue("support_team"), context.User.FindFirstValue("display_name") ?? "Usuario", ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("maintenance-requisition-created");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
+		webApplication.MapPost("/api/maintenance/purchase-orders", (Func<MaintenancePurchaseOrderCreate, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (MaintenancePurchaseOrderCreate body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			bool flag = body.SupplierId == Guid.Empty || string.IsNullOrWhiteSpace(body.Department) || string.IsNullOrWhiteSpace(body.ProductName);
+			bool flag2 = flag;
+			if (!flag2)
+			{
+				int quantity = body.Quantity;
+				bool flag3 = ((quantity < 1 || quantity > 100000) ? true : false);
+				flag2 = flag3;
+			}
+			if (flag2 || body.UnitCost < 0m || (body.Notes?.Length ?? 0) > 2000)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Completa proveedor, departamento, artículo, cantidad y costo de la orden."
+				});
+			}
+			TicketActionResult ticketActionResult = await db.CreateMaintenancePurchaseOrder(body, UserScope(context).Role, context.User.FindFirstValue("support_team"), context.User.FindFirstValue("display_name") ?? "Usuario", ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("maintenance-purchase-order-created");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
+		webApplication.MapPost("/api/maintenance/purchase-orders/{id:guid}/receive", (Func<Guid, MaintenancePurchaseOrderReceive, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, MaintenancePurchaseOrderReceive body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			int quantity = body.Quantity;
+			bool flag = ((quantity < 1 || quantity > 100000) ? true : false);
+			if (flag || string.IsNullOrWhiteSpace(body.SerialNumber) || (body.SerialNumber?.Length ?? 0) > 120 || (body.ReceivedByName?.Length ?? 0) > 160 || (body.Notes?.Length ?? 0) > 2000)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Indica cantidad recibida, serial/lote y responsable de recepción."
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			TicketActionResult ticketActionResult = await db.ReceiveMaintenancePurchaseOrder(id, body, tuple.Item1, tuple.Item2, context.User.FindFirstValue("support_team"), context.User.FindFirstValue("display_name") ?? "Usuario", ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("maintenance-purchase-order-received");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
+		webApplication.MapPost("/api/maintenance/returns", (Func<MaintenanceReturnCreate, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (MaintenanceReturnCreate body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			bool flag = string.IsNullOrWhiteSpace(body.Department) || string.IsNullOrWhiteSpace(body.ProductName) || string.IsNullOrWhiteSpace(body.SerialNumber) || string.IsNullOrWhiteSpace(body.Reason);
+			bool flag2 = flag;
+			if (!flag2)
+			{
+				int quantity = body.Quantity;
+				bool flag3 = ((quantity < 1 || quantity > 100000) ? true : false);
+				flag2 = flag3;
+			}
+			if (flag2 || (body.Notes?.Length ?? 0) > 2000)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Completa artículo, serial/lote, cantidad y motivo de devolución."
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			TicketActionResult ticketActionResult = await db.CreateMaintenanceReturn(body, tuple.Item1, tuple.Item2, context.User.FindFirstValue("support_team"), context.User.FindFirstValue("display_name") ?? "Usuario", ct);
+			if (!ticketActionResult.Ok)
+			{
+				return TicketActionResponse(ticketActionResult);
+			}
+			broker.Publish("maintenance-return-created");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
+		webApplication.MapDelete("/api/tickets/{id:guid}", (Func<Guid, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			if (!(await db.DeleteTicket(id, ct)))
+			{
+				return Results.NotFound(new
+				{
+					error = "Ticket no encontrado."
+				});
+			}
+			broker.Publish("ticket-deleted");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("TicketDeletion");
+		webApplication.MapGet("/api/support/chat/conversations", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			return Results.Ok(new
+			{
+				conversations = await db.SupportConversations(tuple.Item1, tuple.Item2, ct)
+			});
+		})).RequireAuthorization("SupportChat");
+		webApplication.MapGet("/api/support/chat/contacts", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) => Results.Ok(new
+		{
+			contacts = await db.SupportContacts(UserScope(context).UserId, ct)
+		}))).RequireAuthorization("SupportChat");
+		webApplication.MapPost("/api/support/chat/direct", (Func<SupportDirectConversationCreate, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (SupportDirectConversationCreate body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			if (string.IsNullOrWhiteSpace(body.TargetUserId))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Selecciona un contacto."
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			SupportConversationRow supportConversationRow = await db.CreateDirectSupportConversation(body.TargetUserId, tuple.Item1, tuple.Item2, context.User.FindFirstValue("display_name") ?? "Usuario", context.User.Identity?.Name ?? "", ct);
+			if ((object)supportConversationRow == null)
+			{
+				return Results.NotFound(new
+				{
+					error = "El contacto ya no está disponible."
+				});
+			}
+			broker.Publish("chat-direct-created");
+			return Results.Ok(supportConversationRow);
+		})).RequireAuthorization("SupportChat");
+		webApplication.MapGet("/api/support/chat/conversations/{id:guid}/messages", (Func<Guid, HttpContext, Database, CancellationToken, Task<IResult>>)(async (Guid id, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			return Results.Ok(new
+			{
+				messages = await db.SupportMessages(id, tuple.Item1, tuple.Item2, ct)
+			});
+		})).RequireAuthorization("SupportChat");
+		webApplication.MapGet("/api/support/chat/notifications", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			return Results.Ok(new
+			{
+				notifications = await db.SupportChatNotifications(tuple.Item1, tuple.Item2, ct)
+			});
+		})).RequireAuthorization("SupportChat");
+		webApplication.MapPost("/api/notifications/state", (Func<NotificationStateInput, HttpContext, Database, CancellationToken, Task<IResult>>)(async (NotificationStateInput body, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			bool flag = body.Keys == null || body.Keys.Count == 0 || body.Keys.Count > 200;
+			bool flag2 = flag;
+			if (!flag2)
+			{
+				string action = body.Action;
+				bool flag3 = ((action == "READ" || action == "DISMISS") ? true : false);
+				flag2 = !flag3;
+			}
+			if (flag2)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Selecciona notificaciones y una acción válida."
+				});
+			}
+			await db.SetNotificationState(UserScope(context).UserId, body.Keys, body.Action == "DISMISS", ct);
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("TicketNotifications").RequireRateLimiting("sensitive-write");
+		webApplication.MapPost("/api/support/chat/conversations", (Func<SupportConversationCreate, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (SupportConversationCreate body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			if (string.IsNullOrWhiteSpace(body.Department) || body.Department.Length > 40 || (body.Category?.Length ?? 0) > 60)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Selecciona un departamento y un tipo de ayuda válidos."
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			SupportConversationRow supportConversationRow = await db.CreateSupportConversation(body, tuple.Item1, tuple.Item2, context.User.FindFirstValue("display_name") ?? "Supervisor", context.User.Identity?.Name ?? "", ct);
+			if ((object)supportConversationRow == null)
+			{
+				return Results.Forbid();
+			}
+			broker.Publish("chat-created");
+			return Results.Json(supportConversationRow, (JsonSerializerOptions?)null, (string?)null, (int?)201);
+		})).RequireAuthorization("SupportChat");
+		webApplication.MapPost("/api/support/chat/conversations/{id:guid}/messages", (Func<Guid, SupportMessageCreate, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, SupportMessageCreate body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			if (string.IsNullOrWhiteSpace(body.Message) || body.Message.Trim().Length > 2000)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Escribe un mensaje de hasta 2,000 caracteres."
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			if (!(await db.AddSupportMessage(id, body.Message.Trim(), tuple.Item1, tuple.Item2, context.User.FindFirstValue("display_name") ?? "Usuario", ct)))
+			{
+				return Results.NotFound(new
+				{
+					error = "Conversación no encontrada."
+				});
+			}
+			broker.Publish("chat-message");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("SupportChat");
+		webApplication.MapDelete("/api/support/chat/messages/{id:guid}", (Func<Guid, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			if (!(await db.DeleteSupportMessage(id, tuple.Item1, tuple.Item2, context.User.FindFirstValue("display_name") ?? "Usuario", ct)))
+			{
+				return Results.NotFound(new
+				{
+					error = "El mensaje no existe o no tienes permiso para eliminarlo."
+				});
+			}
+			broker.Publish("chat-message-deleted");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("SupportChat").RequireRateLimiting("sensitive-write");
+		webApplication.MapPost("/api/support/chat/conversations/{id:guid}/voice", (Func<Guid, HttpRequest, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, HttpRequest request, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			if (!request.HasFormContentType)
+			{
+				return Results.BadRequest(new
+				{
+					error = "Adjunta una nota de voz valida."
+				});
+			}
+			IFormCollection form = await request.ReadFormAsync(ct);
+			IFormFile voice = form.Files.GetFile("voice");
+			if (voice == null || voice.Length == 0L || voice.Length > 10485760)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "La nota de voz debe pesar hasta 10 MB."
+				});
+			}
+			string[] source = new string[6] { "audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav", "audio/x-wav" };
+			string contentType = (voice.ContentType ?? "").Split(';')[0].ToLowerInvariant();
+			if (!Enumerable.Contains(source, contentType))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Formato de audio no compatible."
+				});
+			}
+			IResult result;
+			await using (MemoryStream stream = new MemoryStream())
+			{
+				await voice.CopyToAsync(stream, ct);
+				byte[] array = stream.ToArray();
+				if (!ValidAudio(array, contentType))
+				{
+					result = Results.UnprocessableEntity(new
+					{
+						error = "El archivo no contiene una nota de voz válida."
+					});
+				}
+				else
+				{
+					int? durationSeconds = (int.TryParse(form["durationSeconds"], out var result2) ? new int?(Math.Clamp(result2, 0, 600)) : ((int?)null));
+					(string, string) tuple = UserScope(context);
+					if (!(await db.AddSupportVoiceNote(id, array, contentType, Path.GetFileName(voice.FileName), durationSeconds, tuple.Item1, tuple.Item2, context.User.FindFirstValue("display_name") ?? "Usuario", ct)))
+					{
+						result = Results.NotFound();
+					}
+					else
+					{
+						broker.Publish("chat-message");
+						result = Results.Ok(new
+						{
+							ok = true
+						});
+					}
+				}
+			}
+			return result;
+		})).RequireAuthorization("SupportChat").DisableAntiforgery()
+			.RequireRateLimiting("sensitive-write");
+		webApplication.MapGet("/api/support/chat/voice/{messageId:guid}", (Func<Guid, HttpContext, Database, CancellationToken, Task<IResult>>)(async (Guid messageId, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			(byte[], string, string)? tuple2 = await db.SupportVoiceNote(messageId, tuple.Item1, tuple.Item2, ct);
+			return (!tuple2.HasValue) ? Results.NotFound() : Results.File(tuple2.Value.Item1, tuple2.Value.Item2, tuple2.Value.Item3, enableRangeProcessing: true);
+		})).RequireAuthorization("SupportChat");
+		webApplication.MapPut("/api/support/chat/conversations/{id:guid}/status", (Func<Guid, SupportConversationStatus, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, SupportConversationStatus body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			string[] source = new string[4] { "WAITING_SUPPORT", "IN_PROGRESS", "RESOLVED", "CLOSED" };
+			if (!Enumerable.Contains(source, body.Status))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Estado de conversación no válido."
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			if (!(await db.UpdateSupportConversationStatus(id, body.Status, tuple.Item1, tuple.Item2, ct)))
+			{
+				return Results.NotFound(new
+				{
+					error = "Conversación no encontrada."
+				});
+			}
+			broker.Publish("chat-status");
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("SupportChatManage");
+		webApplication.MapPost("/api/support/chat/conversations/{id:guid}/control", (Func<Guid, SupportConversationControl, HttpContext, Database, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (Guid id, SupportConversationControl body, HttpContext context, Database db, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			string action = (body.Action ?? "").Trim().ToUpperInvariant();
+			string[] source = new string[7] { "MUTE", "UNMUTE", "RESTRICT", "UNRESTRICT", "BLOCK", "UNBLOCK", "DELETE" };
+			if (!Enumerable.Contains(source, action))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Control de conversación no válido."
+				});
+			}
+			bool flag;
+			switch (action)
+			{
+			case "RESTRICT":
+			case "UNRESTRICT":
+			case "BLOCK":
+			case "UNBLOCK":
+				flag = true;
+				break;
+			default:
+				flag = false;
+				break;
+			}
+			if (flag && !HasPermission(context.User, "canModerateSupportChat"))
+			{
+				return Results.Forbid();
+			}
+			(string UserId, string Role) scope = UserScope(context);
+			bool flag2 = action == "DELETE" && !HasPermission(context.User, "canDeleteSupportConversations");
+			bool flag3 = flag2;
+			if (flag3)
+			{
+				flag3 = !(await db.CanDeleteDirectConversation(id, scope.UserId, scope.Role, ct));
+			}
+			if (flag3)
+			{
+				return Results.Forbid();
+			}
+			if (!(await db.UpdateSupportConversationControl(id, action, scope.UserId, scope.Role, ct)))
+			{
+				return Results.NotFound(new
+				{
+					error = "Conversación no encontrada."
+				});
+			}
+			broker.Publish("chat-control");
+			return Results.Ok(new
+			{
+				ok = true,
+				action = action
+			});
+		})).RequireAuthorization("SupportChat");
+		webApplication.MapPost("/api/support/chat/presence", (Func<SupportPresenceInput, HttpContext, Database, SupportPresenceTracker, LiveNotificationBroker, CancellationToken, Task<IResult>>)(async (SupportPresenceInput body, HttpContext context, Database db, SupportPresenceTracker tracker, LiveNotificationBroker broker, CancellationToken ct) =>
+		{
+			(string UserId, string Role) scope = UserScope(context);
+			Guid? conversationId = body.ConversationId;
+			string department;
+			if (conversationId.HasValue)
+			{
+				Guid valueOrDefault = conversationId.GetValueOrDefault();
+				string text2 = await db.SupportPresenceContext(valueOrDefault, scope.UserId, scope.Role, ct);
+				if (text2 == null)
+				{
+					return Results.NotFound(new
+					{
+						error = "Conversación no encontrada."
+					});
+				}
+				department = text2;
+			}
+			else
+			{
+				department = scope.Role switch
+				{
+					"Technology" => "TECHNOLOGY", 
+					"GeneralServices" => "GENERAL_SERVICES", 
+					"HumanResources" => "HUMAN_RESOURCES", 
+					_ => "", 
+				};
+			}
+			tracker.Touch(scope.UserId, context.User.FindFirstValue("display_name") ?? "Usuario", scope.Role, department, body.ConversationId, body.IsTyping);
+			broker.Publish("chat-presence");
+			return Results.Ok(tracker.Snapshot(department, body.ConversationId, scope.UserId));
+		})).RequireAuthorization("SupportChat");
+		webApplication.MapGet("/api/support/chat/presence/{conversationId:guid}", (Func<Guid, HttpContext, Database, SupportPresenceTracker, CancellationToken, Task<IResult>>)(async (Guid conversationId, HttpContext context, Database db, SupportPresenceTracker tracker, CancellationToken ct) =>
+		{
+			(string UserId, string Role) scope = UserScope(context);
+			string text2 = await db.SupportPresenceContext(conversationId, scope.UserId, scope.Role, ct);
+			return (text2 == null) ? Results.NotFound() : Results.Ok(tracker.Snapshot(text2, conversationId, scope.UserId));
+		})).RequireAuthorization("SupportChat");
+		webApplication.MapGet("/api/account/contact-profile", (Func<HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			Guid result;
+			return Guid.TryParse(tuple.Item1, out result) ? Results.Ok(await db.ContactProfile(result, ct)) : Results.Ok(new
+			{
+				id = tuple.Item1,
+				email = (context.User.Identity?.Name ?? ""),
+				displayName = (context.User.FindFirstValue("display_name") ?? "Administrador principal"),
+				role = tuple.Item2,
+				contact = (string)null,
+				avatarUrl = (string)null,
+				groups = Array.Empty<string>()
+			});
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapPut("/api/account/contact-profile", (Func<AccountContactUpdate, HttpContext, Database, CancellationToken, Task<IResult>>)(async (AccountContactUpdate body, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			if (!Guid.TryParse(UserScope(context).UserId, out var result))
+			{
+				return Results.Conflict(new
+				{
+					error = "La cuenta de recuperación no guarda un perfil. Crea un usuario administrador permanente."
+				});
+			}
+			if ((body.Contact?.Length ?? 0) > 80)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "La información de contacto supera 80 caracteres."
+				});
+			}
+			await db.UpdateOwnContact(result, body.Contact, ct);
+			return Results.Ok(new
+			{
+				ok = true
+			});
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapPut("/api/admin/audits/{profileId:guid}", (Func<Guid, AuditUpdate, HttpContext, Database, CancellationToken, Task<IResult>>)(async (Guid profileId, AuditUpdate body, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			string text2 = ValidateAuditUpdate(body);
+			if (text2 != null)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = text2
+				});
+			}
+			AuditDetailRow auditDetailRow = await db.UpdateAudit(profileId, body, context.User.Identity?.Name ?? "admin", ct);
+			return ((object)auditDetailRow == null) ? Results.NotFound(new
+			{
+				error = "No encontramos esta auditoría."
+			}) : Results.Ok(auditDetailRow);
+		})).RequireAuthorization("AuditManagement");
+		webApplication.MapDelete("/api/admin/audits/{profileId:guid}", (Func<Guid, HttpContext, Database, CancellationToken, Task<IResult>>)(async (Guid profileId, HttpContext context, Database db, CancellationToken ct) => (await db.DeleteAudit(profileId, context.User.Identity?.Name ?? "admin", ct)) ? Results.Ok(new
+		{
+			ok = true
+		}) : Results.NotFound(new
+		{
+			error = "No encontramos esta auditoría."
+		}))).RequireAuthorization("AuditManagement");
+		webApplication.MapGet("/api/admin/users", (Func<Database, CancellationToken, Task<IResult>>)(async (Database db, CancellationToken ct) => Results.Ok(new
+		{
+			users = (await db.AdminUsers(ct)).Select(WithEffectivePermissions)
+		}))).RequireAuthorization("UserAdministration");
+		webApplication.MapGet("/api/admin/access-profiles", (Func<Database, CancellationToken, Task<IResult>>)(async (Database db, CancellationToken ct) => Results.Ok(new
+		{
+			profiles = await db.UserAccessPresets(ct)
+		}))).RequireAuthorization("UserAdministration");
+		webApplication.MapPut("/api/admin/access-profiles", (Func<UserAccessPreset, HttpContext, Database, CancellationToken, Task<IResult>>)(async (UserAccessPreset body, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			string[] source = new string[16]
+			{
+				"TECHNOLOGY", "GENERAL_SERVICES", "HUMAN_RESOURCES", "ADMINISTRATIVE", "WAREHOUSE", "WORKSHOP", "COMMUNICATION", "COMMERCIALIZATION", "TREASURY", "ACCOUNTING",
+				"GENERAL_AUDIT", "VAULT", "CASHIER", "CALL_CENTER", "TECHNICAL_FAILURE", "SUPERVISION"
+			};
+			string[] source2 = new string[9] { "ADMINISTRATOR", "DEPARTMENT_MANAGER", "SUPPORT", "WAREHOUSE_REQUESTER", "TECHNICIAN", "SUPERVISOR", "ADMINISTRATIVE", "FISCALIZADOR", "VIEWER" };
+			HashSet<string> keys = Permissions("Administrator").Keys.Concat(OperationalPermissions.Defaults("Administrator", null).Keys).ToHashSet();
+			if (!Enumerable.Contains(source, body.Department) || !Enumerable.Contains(source2, body.Profile) || body.Permissions == null || body.Permissions.Count > 100 || body.Permissions.Keys.Any((string key) => !keys.Contains(key)))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Perfil, departamento o permisos no válidos."
+				});
+			}
+			if (body.Profile == "SUPPORT")
+			{
+				return Results.Conflict(new
+				{
+					error = "El perfil Soporte utiliza la configuración compartida cuando está disponible. Puedes ajustar los permisos del usuario en este formulario."
+				});
+			}
+			await db.SaveUserAccessPreset(body, context.User.FindFirstValue("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier") ?? "", ct);
+			return Results.Ok(body);
+		})).RequireAuthorization("UserAdministration").RequireRateLimiting("sensitive-write");
+		webApplication.MapGet("/api/admin/groups-catalog", (Func<Database, CancellationToken, Task<IResult>>)(async (Database db, CancellationToken ct) => Results.Ok(new
+		{
+			groups = await db.AllGroupNames(ct)
+		}))).RequireAuthorization("UserAdministration");
+		webApplication.MapPost("/api/admin/users", (Func<AdminUserCreate, Database, CancellationToken, Task<IResult>>)(async (AdminUserCreate body, Database db, CancellationToken ct) =>
+		{
+			body = body with
+			{
+				Permissions = new Dictionary<string, bool>(body.Permissions ?? new Dictionary<string, bool>())
+				{
+					["usesExplicitPermissions"] = true,
+					["usesCustomizedPermissions"] = true
+				}
+			};
+			if (SupportProfilePolicy.IsSupport(body.Role ?? "", body.SupportTeam, body.Permissions))
+			{
+				body = body with
+				{
+					Permissions = SupportProfilePolicy.ForSave(body.Permissions, Database.SupportStandard)
+				};
+			}
+			string text2 = ValidateUserWithTeam(body.Email, body.DisplayName, body.Role, body.Password, passwordRequired: true, body.SupportTeam);
+			if (text2 != null)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = text2
+				});
+			}
+			try
+			{
+				return Results.Json(WithEffectivePermissions(await db.CreateAdminUser(body, ct)), (JsonSerializerOptions?)null, (string?)null, (int?)201);
+			}
+			catch (AdminUserConflictException)
+			{
+				return Results.Conflict(new
+				{
+					error = "Ya existe una cuenta activa con ese usuario. Usa otro nombre de usuario."
+				});
+			}
+			catch (SqlException ex2) when (((Func<bool>)delegate
+			{
+				// Could not convert BlockContainer to single expression
+				int number = ex2.Number;
+				return (number == 2601 || number == 2627) ? true : false;
+			}).Invoke())
+			{
+				return Results.Conflict(new
+				{
+					error = "Ya existe una cuenta con ese usuario."
+				});
+			}
+		})).RequireAuthorization("UserAdministration");
+		webApplication.MapPut("/api/admin/users/{id:guid}", (Func<Guid, AdminUserUpdate, HttpContext, Database, CancellationToken, Task<IResult>>)(async (Guid id, AdminUserUpdate body, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			body = body with
+			{
+				Permissions = new Dictionary<string, bool>(body.Permissions ?? new Dictionary<string, bool>())
+				{
+					["usesExplicitPermissions"] = true,
+					["usesCustomizedPermissions"] = true
+				}
+			};
+			AdminIdentity existing = await db.Account(id, ct);
+			bool flag = SupportProfilePolicy.IsSupport(body.Role ?? "", body.SupportTeam, body.Permissions);
+			bool flag2 = flag;
+			if (flag2)
+			{
+				string text2 = existing?.Email;
+				bool flag3 = ((text2 == "ross.mariel" || text2 == "ross.mariel@grupotejeda.local") ? true : false);
+				flag2 = !flag3;
+			}
+			if (flag2)
+			{
+				body = body with
+				{
+					Permissions = SupportProfilePolicy.ForSave(body.Permissions, Database.SupportStandard)
+				};
+			}
+			if ((object)existing == null)
+			{
+				return Results.NotFound(new
+				{
+					error = "Usuario no encontrado."
+				});
+			}
+			string text3 = ValidateUserWithTeam(ExistingUserLogin.Unchanged(body.Email, existing.Email) ? "existing.account" : body.Email, body.DisplayName, body.Role, body.Password, passwordRequired: false, body.SupportTeam);
+			if (text3 != null)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = text3
+				});
+			}
+			if (context.User.FindFirstValue("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier") == id.ToString() && (!body.IsActive || body.Role != "ADMINISTRATOR"))
+			{
+				return Results.Conflict(new
+				{
+					error = "No puedes quitarte tu propio acceso de administrador."
+				});
+			}
+			try
+			{
+				AdminUserRow adminUserRow = await db.UpdateAdminUser(id, body, ct);
+				string text2 = existing.Email;
+				if ((text2 == "ross.mariel" || text2 == "ross.mariel@grupotejeda.local") ? true : false)
+				{
+					Database.InvalidateSupportStandard();
+				}
+				return ((object)adminUserRow == null) ? Results.NotFound(new
+				{
+					error = "Usuario no encontrado."
+				}) : Results.Ok(WithEffectivePermissions(adminUserRow));
+			}
+			catch (SqlException ex) when (((Func<bool>)delegate
+			{
+				// Could not convert BlockContainer to single expression
+				int number = ex.Number;
+				return (number == 2601 || number == 2627) ? true : false;
+			}).Invoke())
+			{
+				return Results.Conflict(new
+				{
+					error = "Ya existe una cuenta con ese usuario."
+				});
+			}
+		})).RequireAuthorization("UserAdministration");
+		webApplication.MapDelete("/api/admin/users/{id:guid}", (Func<Guid, HttpContext, Database, CancellationToken, Task<IResult>>)(async (Guid id, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			IResult result = ((context.User.FindFirstValue("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier") == id.ToString()) ? Results.Conflict(new
+			{
+				error = "No puedes eliminar la cuenta con la que estás conectado."
+			}) : ((await db.DeleteAdminUser(id, context.User.Identity?.Name ?? "", ct)) ? Results.Ok(new
+			{
+				ok = true
+			}) : Results.NotFound(new
+			{
+				error = "Usuario no encontrado o ya fue eliminado."
+			})));
+			return result;
+		})).RequireAuthorization("UserAdministration");
+		webApplication.MapPut("/api/account/password", (Func<PasswordChange, HttpContext, Database, CancellationToken, Task<IResult>>)(async (PasswordChange body, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			context.Response.Headers.CacheControl = "no-store";
+			if (string.IsNullOrEmpty(body.CurrentPassword) || string.IsNullOrEmpty(body.NewPassword))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Completa la contraseña actual y la nueva."
+				});
+			}
+			if (body.CurrentPassword.Length > 128 || body.NewPassword.Length < 8 || body.NewPassword.Length > 128 || body.NewPassword == "123456")
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "La nueva contraseña debe tener entre 8 y 128 caracteres y no puede ser la clave temporal."
+				});
+			}
+			(string, string) tuple = UserScope(context);
+			AdminIdentity adminIdentity;
+			if (Guid.TryParse(tuple.Item1, out var result))
+			{
+				adminIdentity = await db.ChangeOwnPassword(result, body.CurrentPassword, body.NewPassword, ct);
+			}
+			else
+			{
+				AdminIdentity adminIdentity2 = ((!(tuple.Item1 == "legacy-admin") || !(tuple.Item2 == "Administrator")) ? null : (await db.ChangeLegacyPassword(context.User.Identity?.Name ?? "", body.CurrentPassword, body.NewPassword, ct)));
+				adminIdentity = adminIdentity2;
+			}
+			AdminIdentity account = adminIdentity;
+			if ((object)account == null)
+			{
+				return Results.Json(new
+				{
+					error = "La contraseña actual no es correcta o este acceso ya fue reemplazado. Revisa tus datos e inicia sesión nuevamente si es necesario."
+				}, (JsonSerializerOptions?)null, (string?)null, (int?)400);
+			}
+			await SignInAccount(context, account);
+			string token = null;
+			try
+			{
+				token = await db.CreatePersistentLoginToken(account.Id, ct, account.RecoveryVersion);
+			}
+			catch (Exception exception) when (!ct.IsCancellationRequested)
+			{
+				context.RequestServices.GetRequiredService<ILogger<Program>>().LogWarning(exception, "Contraseña cambiada; se conserva la cookie actual sin token persistente.");
+			}
+			return Results.Ok(SessionPayload(account, token));
+		})).RequireAuthorization("PortalUser").RequireRateLimiting("login");
+		webApplication.MapPost("/api/account/avatar", (Func<HttpRequest, HttpContext, Database, CancellationToken, Task<IResult>>)(async (HttpRequest request, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			if (!Guid.TryParse(UserScope(context).UserId, out var id))
+			{
+				return Results.Conflict(new
+				{
+					error = "La cuenta de recuperación no admite fotografía."
+				});
+			}
+			if (!request.HasFormContentType)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Selecciona una fotografía."
+				});
+			}
+			IFormFile file = (await request.ReadFormAsync(ct)).Files.GetFile("avatar");
+			if (file == null || file.Length == 0L)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Selecciona una fotografía."
+				});
+			}
+			if (file.Length > 5242880)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "La foto de perfil supera 5 MB."
+				});
+			}
+			HashSet<string> hashSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "image/jpeg", "image/jpg", "image/png", "image/webp" };
+			if (!hashSet.Contains(file.ContentType))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "La foto debe ser JPG, PNG o WebP."
+				});
+			}
+			IResult result;
+			await using (Stream input = file.OpenReadStream())
+			{
+				using MemoryStream buffer = new MemoryStream();
+				await input.CopyToAsync(buffer, ct);
+				byte[] data = buffer.ToArray();
+				if (!ValidEvidenceImage(data, file.ContentType))
+				{
+					result = Results.UnprocessableEntity(new
+					{
+						error = "El archivo no contiene una fotografía válida."
+					});
+				}
+				else
+				{
+					await db.AttachAvatar(id, data, file.ContentType, ct);
+					result = Results.Ok(new
+					{
+						avatarUrl = $"/api/account/avatar/{id}?v={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}"
+					});
+				}
+			}
+			return result;
+		})).RequireAuthorization("PortalUser").RequireRateLimiting("sensitive-write");
+		webApplication.MapGet("/api/account/avatar/{userId:guid}", (Func<Guid, Database, CancellationToken, Task<IResult>>)(async (Guid userId, Database db, CancellationToken ct) =>
+		{
+			(byte[], string)? tuple = await db.Avatar(userId, ct);
+			return (!tuple.HasValue) ? Results.NotFound() : Results.File(tuple.Value.Item1, tuple.Value.Item2, null, enableRangeProcessing: true);
+		})).RequireAuthorization("PortalUser");
+		webApplication.MapPost("/api/submit", (Func<Submit, HttpContext, Database, Tokens, CancellationToken, Task<IResult>>)(async (Submit body, HttpContext http, Database db, Tokens tokens, CancellationToken ct) =>
+		{
+			if (!string.IsNullOrEmpty(body.Website))
+			{
+				return Results.BadRequest(new
+				{
+					error = "Solicitud rechazada."
+				});
+			}
+			if (!Guid.TryParse(body.AgencyId, out var agencyId))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "La agencia no es válida."
+				});
+			}
+			string text2 = Validate(body);
+			if (text2 != null)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = text2
+				});
+			}
+			HashSet<string> allowedDamageTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+			{
+				"WIRING", "SCREENS", "CONNECTIVITY", "FURNITURE", "GENERAL_PAINTING", "GENERAL_INVERTER", "GENERAL_BATTERIES", "GENERAL_RESTRUCTURING", "GENERAL_LIGHTING", "GENERAL_METALWORK",
+				"GENERAL_GENERATOR_REQUEST", "GENERAL_ELECTRICAL", "GENERAL_SHUTTER", "GENERAL_OTHER"
+			};
+			if (body.Answers?.DamageFound == "yes" && (body.Answers.DamageTypes == null || body.Answers.DamageTypes.Count == 0))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Indica al menos un tipo de avería."
+				});
+			}
+			StructuralAnswers? answers = body.Answers;
+			if ((object)answers != null && answers.DamageTypes?.Any((string value) => !allowedDamageTypes.Contains(value)) == true)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "La clasificación de la avería no es válida."
+				});
+			}
+			(string UserId, string Role) scope = UserScope(http);
+			if (!(await db.CanAccessAgency(agencyId, scope.UserId, scope.Role, ct)))
+			{
+				return Results.Forbid();
+			}
+			Guid profileId = await db.Submit(agencyId, body, scope.UserId, http.User.Identity?.Name, http.User.FindFirstValue("display_name"), http.Connection.RemoteIpAddress?.ToString(), http.Request.Headers.UserAgent.ToString(), ct);
+			return Results.Json(new
+			{
+				ok = true,
+				profileId = profileId,
+				uploadToken = tokens.Create(profileId.ToString())
+			}, (JsonSerializerOptions?)null, (string?)null, (int?)201);
+		})).RequireAuthorization("FieldAudit").RequireRateLimiting("sensitive-write");
+		webApplication.MapPost("/api/image", (Func<HttpRequest, Database, Tokens, CancellationToken, Task<IResult>>)(async (HttpRequest request, Database db, Tokens tokens, CancellationToken ct) =>
+		{
+			if (!request.HasFormContentType)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Selecciona una imagen válida."
+				});
+			}
+			IFormCollection form = await request.ReadFormAsync(ct);
+			string text2 = form["profileId"].ToString();
+			string photoType = form["photoType"].ToString();
+			double photoLat = 0.0;
+			double photoLng = 0.0;
+			double photoAccuracy = 0.0;
+			DateTimeOffset photoCaptured = default;
+			bool validGeo = double.TryParse(form["photoLatitude"], NumberStyles.Float, CultureInfo.InvariantCulture, out photoLat) && double.TryParse(form["photoLongitude"], NumberStyles.Float, CultureInfo.InvariantCulture, out photoLng) && double.TryParse(form["photoAccuracy"], NumberStyles.Float, CultureInfo.InvariantCulture, out photoAccuracy) && DateTimeOffset.TryParse(form["photoCapturedAt"], out photoCaptured);
+			if (!Guid.TryParse(text2, out var id))
+			{
+				return Results.Json(new
+				{
+					error = "No se pudo identificar la auditoría de esta fotografía."
+				}, (JsonSerializerOptions?)null, (string?)null, (int?)403);
+			}
+			(string, string) tuple = UserScope(request.HttpContext);
+			bool flag = !tokens.Verify(form["token"].ToString(), text2);
+			bool flag2 = flag;
+			if (flag2)
+			{
+				flag2 = !(await db.CanAccessProfile(id, tuple.Item1, tuple.Item2, ct));
+			}
+			if (flag2)
+			{
+				return Results.Json(new
+				{
+					error = "Tu usuario no tiene acceso a esta auditoría."
+				}, (JsonSerializerOptions?)null, (string?)null, (int?)403);
+			}
+			IFormFile file = form.Files.GetFile("image");
+			if (file == null || file.Length == 0L)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "Selecciona una imagen válida."
+				});
+			}
+			if (file.Length > 20971520)
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "La imagen supera el máximo de 20 MB."
+				});
+			}
+			Dictionary<string, string> dictionary = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+			{
+				["image/jpeg"] = "jpg",
+				["image/jpg"] = "jpg",
+				["image/png"] = "png",
+				["image/webp"] = "webp",
+				["image/heic"] = "heic",
+				["image/heif"] = "heif",
+				["image/heic-sequence"] = "heic",
+				["image/heif-sequence"] = "heif"
+			};
+			if (!dictionary.TryGetValue(file.ContentType, out var _))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "La cámara envió un formato no reconocido. Se aceptan JPG, PNG, WebP, HEIC y HEIF."
+				});
+			}
+			if (!Enumerable.Contains(new string[5] { "frontal", "operativa", "entorno", "inversor", "bateria" }, photoType))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "El tipo de fotografía no es válido."
+				});
+			}
+			if (!validGeo || !FieldAuditGps.ValidCapture(photoLat, photoLng, photoAccuracy, photoCaptured, DateTimeOffset.UtcNow))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "La fotografía no contiene una ubicación GPS válida."
+				});
+			}
+			if (!(await db.PhotoMatchesProfile(id, photoLat, photoLng, photoAccuracy, photoType, ct)))
+			{
+				return Results.UnprocessableEntity(new
+				{
+					error = "La ubicación de esta fotografía no coincide con el punto verificado de la banca."
+				});
+			}
+			IResult result;
+			await using (Stream input = file.OpenReadStream())
+			{
+				using MemoryStream buffer = new MemoryStream();
+				await input.CopyToAsync(buffer, ct);
+				byte[] data = buffer.ToArray();
+				if (!ValidEvidenceImage(data, file.ContentType))
+				{
+					result = Results.UnprocessableEntity(new
+					{
+						error = "El archivo enviado no contiene una imagen válida."
+					});
+				}
+				else
+				{
+					await db.AttachPhoto(id, photoType, data, file.ContentType, photoLat, photoLng, photoAccuracy, photoCaptured.UtcDateTime, ct);
+					result = Results.Ok(new
+					{
+						ok = true
+					});
+				}
+			}
+			return result;
+		})).RequireAuthorization("FieldAudit").RequireRateLimiting("sensitive-write");
+		webApplication.MapGet("/api/images/{profileId:guid}", (Func<Guid, HttpContext, Database, CancellationToken, Task<IResult>>)(async (Guid profileId, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			(string, string) tuple = UserScope(context);
+			if (!(await db.CanAccessProfile(profileId, tuple.Item1, tuple.Item2, ct)))
+			{
+				return Results.Forbid();
+			}
+			(byte[], string)? tuple2 = await db.Photo(profileId, ct);
+			context.Response.Headers.CacheControl = "no-store";
+			return (!tuple2.HasValue) ? Results.NotFound() : Results.File(tuple2.Value.Item1, tuple2.Value.Item2);
+		})).RequireAuthorization("PanelView");
+		webApplication.MapGet("/api/images/{profileId:guid}/{photoType}", (Func<Guid, string, HttpContext, Database, CancellationToken, Task<IResult>>)(async (Guid profileId, string photoType, HttpContext context, Database db, CancellationToken ct) =>
+		{
+			if (!Enumerable.Contains(new string[5] { "frontal", "operativa", "entorno", "inversor", "bateria" }, photoType))
+			{
+				return Results.NotFound();
+			}
+			(string, string) tuple = UserScope(context);
+			if (!(await db.CanAccessProfile(profileId, tuple.Item1, tuple.Item2, ct)))
+			{
+				return Results.Forbid();
+			}
+			(byte[], string)? tuple2 = await db.Photo(profileId, photoType, ct);
+			context.Response.Headers.CacheControl = "no-store";
+			return (!tuple2.HasValue) ? Results.NotFound() : Results.File(tuple2.Value.Item1, tuple2.Value.Item2);
+		})).RequireAuthorization("PanelView");
+		webApplication.Map("/api/{**path}", (Func<IResult>)(() => Results.NotFound(new
+		{
+			error = "La ruta solicitada no existe."
+		})));
+		webApplication.MapFallbackToFile("index.html");
+		webApplication.Run();
+		static Dictionary<string, bool> AccountPermissions(AdminIdentity account)
+		{
+			account = EmmaAdministrativeAccess.Scope(account);
+			string role = account.Role;
+			string role2 = account.Role;
+			bool value = ((role2 == "Administrator" || role2 == "Fiscalizador") ? true : false);
+			Dictionary<string, bool> dictionary = Permissions(role, value, account.Role == "Administrator", account.Permissions);
+			// La auditoría de campo es una capacidad propia del rol Supervisor.
+			// No puede quedar oculta por un permiso personalizado antiguo: el API ya
+			// autoriza a GroupAdministrator para crear auditorías y subir evidencia.
+			if (account.Role == "GroupAdministrator")
+			{
+				dictionary["canAudit"] = true;
+				dictionary["canViewDashboard"] = true;
+			}
+			if (account.Permissions == null || !account.Permissions.ContainsKey("canManageDepartment"))
+			{
+				dictionary["canManageDepartment"] = AreaManagerAccess.Default(account.Role, account.SupportTeam, account.Email);
+			}
+			role2 = account.SupportTeam;
+			value = ((role2 == "WAREHOUSE" || role2 == "WORKSHOP") ? true : false);
+			bool flag = value;
+			if (flag)
+			{
+				string[] array = new string[17]
+				{
+					"canViewDashboard", "canAudit", "canExportAudits", "canManageUsers", "canManageAudits", "canManageAgencies", "canCreateTickets", "canAssignTickets", "canResolveTickets", "canViewAllSupportDepartments",
+					"canConfigureSupport", "canViewSupportFindings", "canManageSupportChat", "canModerateSupportChat", "canDeleteSupportTickets", "canDeleteSupportConversations", "canShareSupportConversations"
+				};
+				foreach (string key in array)
+				{
+					dictionary[key] = false;
+				}
+			}
+			if (account.SupportTeam == "WAREHOUSE")
+			{
+				if (account.Permissions == null || !account.Permissions.ContainsKey("canAuthorizeWarehouseRequests"))
+				{
+					dictionary["canAuthorizeWarehouseRequests"] = true;
+				}
+				if (account.Permissions == null || !account.Permissions.ContainsKey("canLoadWarehouseInventory"))
+				{
+					dictionary["canLoadWarehouseInventory"] = true;
+				}
+			}
+			if (account.Role == "Administrative" || (account.Role == "Department" && DepartmentAccounts.Standalone(account.SupportTeam)))
+			{
+				dictionary["canCreateTickets"] = true;
+			}
+			if (account.Role == "Administrator")
+			{
+				dictionary["canManageUsers"] = true;
+			}
+			bool flag2 = account.Role == "GroupAdministrator";
+			bool flag3 = flag2;
+			if (!flag3)
+			{
+				switch (account.Role)
+				{
+				case "Technology":
+				case "GeneralServices":
+				case "HumanResources":
+					value = true;
+					break;
+				default:
+					value = false;
+					break;
+				}
+				flag3 = value && !flag;
+			}
+			if (flag3)
+			{
+				dictionary["canViewSupportFindings"] = true;
+			}
+			if (IsDepartmentTicketResolver(account.Role, account.SupportTeam))
+			{
+				dictionary["canResolveTickets"] = true;
+			}
+			if (account.Email.Equals("deliana.solis@grupotejeda.local", StringComparison.OrdinalIgnoreCase))
+			{
+				dictionary["canAssignTickets"] = true;
+				dictionary["canViewSupportDashboard"] = true;
+				dictionary["canViewSupportFindings"] = true;
+				dictionary["canCancelFindingWithoutEvidence"] = true;
+				dictionary["canCancelFindingWithReason"] = true;
+				dictionary["canCancelFindingWithoutReason"] = false;
+			}
+			if (account.Role == "GeneralServices")
+			{
+				dictionary["canCreateTickets"] = dictionary["canAssignTickets"] && account.SupportTeam != "WORKSHOP";
+				dictionary["canViewSupportDashboard"] = true;
+			}
+			if (account.Role == "Technology" && IsTechnologySupportTeam(account.SupportTeam))
+			{
+				dictionary["canViewTicketNotifications"] = true;
+			}
+			bool flag4 = account.Role == "Technology";
+			bool flag5 = flag4;
+			if (flag5)
+			{
+				role2 = account.SupportTeam;
+				value = ((role2 == "CALL_CENTER" || role2 == "TECHNICAL_FAILURE") ? true : false);
+				flag5 = value;
+			}
+			if (flag5)
+			{
+				dictionary["canCreateTickets"] = true;
+				dictionary["canAssignTickets"] = true;
+			}
+			if (account.Role == "Technology" && account.SupportTeam == "TECHNICIANS")
+			{
+				dictionary["canUseSupportChat"] = true;
+				dictionary["canShareSupportConversations"] = true;
+				dictionary["canViewTicketNotifications"] = true;
+			}
+			dictionary["canManageAgencies"] = !flag && (account.Role == "Administrator" || (account.Role == "Technology" && IsFranklinAgencyAdministrator(account.Email)));
+			if (account.Role == "Warehouse" || account.SupportTeam == "WAREHOUSE")
+			{
+				dictionary["canCreateTickets"] = true;
+			}
+			if (dictionary.GetValueOrDefault("canManageDepartment"))
+			{
+				dictionary["canViewSupportDashboard"] = true;
+			}
+			if (account.Role != "Administrator")
+			{
+				AreaManagerAccess.ApplyViews(dictionary, account.Permissions);
+			}
+			dictionary["canManage"] = dictionary["canManageUsers"];
+			OperationalPermissions.Apply(dictionary, account.Permissions, account.Role, account.SupportTeam, account.Email);
+			ExplicitUserPermissions.Apply(dictionary, account.Permissions, account.Role);
+			TechnicianResolutionPermissions.Apply(dictionary, account.Permissions, account.Role, account.SupportTeam);
+			CallCenterSupportProfile.Apply(dictionary, account.Permissions, account.Role, account.SupportTeam);
+			WarehouseRequesterProfile.Apply(dictionary, account.Permissions);
+			if (account.Role == "Technology" && IsFranklinAgencyAdministrator(account.Email))
+			{
+				dictionary["canManageAgencies"] = true;
+			}
+			return dictionary;
+		}
+		static bool Bad(string? value, int max)
+		{
+			if (!string.IsNullOrWhiteSpace(value))
+			{
+				return value.Trim().Length > max;
+			}
+			return true;
+		}
+		static bool Bad2(string? value, int max)
+		{
+			if (!string.IsNullOrWhiteSpace(value))
+			{
+				return value.Trim().Length > max;
+			}
+			return true;
+		}
+		static bool Bad3(string? value, int max)
+		{
+			if (!string.IsNullOrWhiteSpace(value))
+			{
+				return value.Trim().Length > max;
+			}
+			return true;
+		}
+		static bool Bad4(string? x, int n)
+		{
+			if (!string.IsNullOrWhiteSpace(x))
+			{
+				return x.Trim().Length > n;
+			}
+			return true;
+		}
+		static string ClientKey(HttpContext context)
+		{
+			return context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+		}
+		static string First(string current, string fallback)
+		{
+			if (!string.IsNullOrWhiteSpace(current))
+			{
+				return current;
+			}
+			return fallback;
+		}
+		static bool Fixed(string? value, string expected)
+		{
+			byte[] bytes = Encoding.UTF8.GetBytes(value ?? "");
+			byte[] bytes2 = Encoding.UTF8.GetBytes(expected);
+			if (bytes.Length == bytes2.Length)
+			{
+				return CryptographicOperations.FixedTimeEquals(bytes, bytes2);
+			}
+			return false;
+		}
+		static bool HasPermission(ClaimsPrincipal user, string key)
+		{
+			return PermissionClaim(user).GetValueOrDefault(key);
+		}
+		static bool IsCrossSiteRequest(HttpRequest request)
+		{
+			string text2 = request.Headers["Sec-Fetch-Site"].ToString();
+			if (string.Equals(text2, "cross-site", StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+			if (!string.IsNullOrWhiteSpace(text2))
+			{
+				return false;
+			}
+			string text3 = request.Headers.Origin.ToString();
+			if (string.IsNullOrWhiteSpace(text3) || !Uri.TryCreate(text3, UriKind.Absolute, out Uri result))
+			{
+				return false;
+			}
+			return !string.Equals(result.Host, request.Host.Host, StringComparison.OrdinalIgnoreCase);
+		}
+		static bool IsDepartmentTicketResolver(string role, string? supportTeam)
+		{
+			bool flag;
+			switch (role)
+			{
+			case "Administrator":
+			case "Technology":
+			case "GeneralServices":
+			case "HumanResources":
+				flag = true;
+				break;
+			default:
+				flag = false;
+				break;
+			}
+			bool flag2 = flag;
+			bool flag3 = flag2;
+			if (flag3)
+			{
+				bool flag4 = ((supportTeam == "WAREHOUSE" || supportTeam == "WORKSHOP") ? true : false);
+				flag3 = !flag4 || (role == "GeneralServices" && supportTeam == "WORKSHOP");
+			}
+			return flag3;
+		}
+		static bool IsFranklinAgencyAdministrator(string? email)
+		{
+			string login = NormalizeLogin(email);
+			return login is "franklin.calderon@grupotejeda.local" or "rosmarlin.vittini@grupotejeda.local" or "jordaniel.ortega@grupotejeda.local";
+		}
+		static bool IsTechnologySupportTeam(string? supportTeam)
+		{
+			switch (supportTeam)
+			{
+			case "CALL_CENTER":
+			case "TECHNICAL_FAILURE":
+			case "TECHNICIANS":
+				return true;
+			default:
+				return false;
+			}
+		}
+		static bool IsTransientSqlFailure(SqlException error)
+		{
+			switch (error.Number)
+			{
+			case -2:
+			case 0:
+			case 40:
+			case 53:
+			case 64:
+			case 233:
+			case 258:
+			case 1205:
+			case 10053:
+			case 10054:
+			case 10060:
+			case 11001:
+			case 40197:
+			case 40501:
+			case 40613:
+			case 49918:
+			case 49919:
+			case 49920:
+				return true;
+			default:
+				return false;
+			}
+		}
+		static bool IsUnsafeMethod(string method)
+		{
+			switch (method)
+			{
+			case "POST":
+			case "PUT":
+			case "PATCH":
+			case "DELETE":
+				return true;
+			default:
+				return false;
+			}
+		}
+		static void LoadEnv(string path)
+		{
+			if (!File.Exists(path))
+			{
+				return;
+			}
+			foreach (string item2 in File.ReadLines(path))
+			{
+				string text2 = item2.Trim();
+				if (text2.Length != 0 && !text2.StartsWith('#'))
+				{
+					int num = text2.IndexOf('=');
+					if (num >= 1)
+					{
+						string variable = text2.Substring(0, num).Trim();
+						string value = text2.Substring(num + 1).Trim().Trim('"', '\'');
+						if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable(variable)))
+						{
+							Environment.SetEnvironmentVariable(variable, value);
+						}
+					}
+				}
+			}
+		}
+		static string NormalizeLogin(string? value)
+		{
+			string text2 = (value ?? "").Trim().ToLowerInvariant();
+			if (!string.IsNullOrWhiteSpace(text2) && !text2.Contains('@'))
+			{
+				return text2 + "@grupotejeda.local";
+			}
+			return text2;
+		}
+		static Dictionary<string, bool> PermissionClaim(ClaimsPrincipal user)
+		{
+			string text2 = user.FindFirstValue("http://schemas.microsoft.com/ws/2008/06/identity/claims/role") ?? "Viewer";
+			string text3 = user.FindFirstValue("support_team");
+			Dictionary<string, bool> dictionary = Permissions(text2);
+			dictionary["canManageDepartment"] = AreaManagerAccess.Allowed(user);
+			Dictionary<string, bool> dictionary2 = null;
+			try
+			{
+				dictionary2 = JsonSerializer.Deserialize<Dictionary<string, bool>>(user.FindFirstValue("permissions_json") ?? "");
+				if (dictionary2 != null)
+				{
+					foreach (KeyValuePair<string, bool> item3 in dictionary2)
+					{
+						if (dictionary.ContainsKey(item3.Key))
+						{
+							dictionary[item3.Key] = item3.Value;
+						}
+					}
+				}
+			}
+			catch
+			{
+			}
+			if (text2 == "Administrative" || (text2 == "Department" && DepartmentAccounts.Standalone(text3)))
+			{
+				dictionary["canCreateTickets"] = true;
+			}
+			if (text2 == "Administrator")
+			{
+				dictionary["canManageUsers"] = true;
+			}
+			bool flag = text2 == "GroupAdministrator";
+			bool flag2 = flag;
+			if (!flag2)
+			{
+				bool flag3;
+				switch (text2)
+				{
+				case "Technology":
+				case "GeneralServices":
+				case "HumanResources":
+					flag3 = true;
+					break;
+				default:
+					flag3 = false;
+					break;
+				}
+				bool flag4 = flag3;
+				bool flag5 = flag4;
+				if (flag5)
+				{
+					bool flag6 = ((text3 == "WAREHOUSE" || text3 == "WORKSHOP") ? true : false);
+					flag5 = !flag6;
+				}
+				flag2 = flag5;
+			}
+			if (flag2)
+			{
+				dictionary["canViewSupportFindings"] = true;
+			}
+			if (IsDepartmentTicketResolver(text2, text3))
+			{
+				dictionary["canResolveTickets"] = true;
+			}
+			if (text2 == "GeneralServices")
+			{
+				dictionary["canCreateTickets"] = dictionary["canAssignTickets"] && text3 != "WORKSHOP";
+				dictionary["canViewSupportDashboard"] = true;
+			}
+			if (text2 == "Technology" && IsTechnologySupportTeam(text3))
+			{
+				dictionary["canViewTicketNotifications"] = true;
+			}
+			bool flag7 = text2 == "Technology";
+			bool flag8 = flag7;
+			if (flag8)
+			{
+				bool flag3 = ((text3 == "CALL_CENTER" || text3 == "TECHNICAL_FAILURE") ? true : false);
+				flag8 = flag3;
+			}
+			if (flag8)
+			{
+				dictionary["canCreateTickets"] = true;
+				dictionary["canAssignTickets"] = true;
+			}
+			if (text2 == "Technology" && text3 == "TECHNICIANS")
+			{
+				dictionary["canUseSupportChat"] = true;
+				dictionary["canShareSupportConversations"] = true;
+			}
+			if (text2 == "Technology" && IsFranklinAgencyAdministrator(user.Identity?.Name))
+			{
+				dictionary["canManageAgencies"] = true;
+			}
+			if (text2 == "Warehouse" || text3 == "WAREHOUSE")
+			{
+				dictionary["canCreateTickets"] = true;
+			}
+			if (text2 != "Administrator")
+			{
+				AreaManagerAccess.ApplyViews(dictionary, dictionary2);
+			}
+			dictionary["canManage"] = dictionary["canManageUsers"];
+			OperationalPermissions.Apply(dictionary, dictionary2, text2, text3, user.Identity?.Name ?? "");
+			ExplicitUserPermissions.Apply(dictionary, dictionary2, text2);
+			TechnicianResolutionPermissions.Apply(dictionary, dictionary2, text2, text3);
+			CallCenterSupportProfile.Apply(dictionary, dictionary2, text2, text3);
+			WarehouseRequesterProfile.Apply(dictionary, dictionary2);
+			if (text2 == "Technology" && IsFranklinAgencyAdministrator(user.Identity?.Name))
+			{
+				dictionary["canManageAgencies"] = true;
+			}
+			return dictionary;
+		}
+		static Dictionary<string, bool> Permissions(string role, bool? exportPermission = null, bool? managePermission = null, Dictionary<string, bool>? custom = null)
+		{
+			bool flag;
+			switch (role)
+			{
+			case "Administrator":
+			case "Technology":
+			case "GeneralServices":
+			case "HumanResources":
+				flag = true;
+				break;
+			default:
+				flag = false;
+				break;
+			}
+			bool flag2 = flag;
+			Dictionary<string, bool> dictionary = new Dictionary<string, bool>
+			{
+				{
+					"canViewFieldAudits",
+					role == "Administrator"
+				},
+				{
+					"canManageDepartment",
+					role == "Administrator"
+				},
+				{ "canView", true },
+				{
+					"canManage",
+					managePermission ?? (role == "Administrator")
+				},
+				{
+					"canManageUsers",
+					role == "Administrator"
+				},
+				{
+					"canManageAudits",
+					role == "Administrator"
+				},
+				{
+					"canManageAgencies",
+					role == "Administrator"
+				}
+			};
+			Dictionary<string, bool> dictionary2 = dictionary;
+			switch (role)
+			{
+			case "Administrator":
+			case "Viewer":
+			case "GroupAdministrator":
+			case "Fiscalizador":
+				flag = true;
+				break;
+			default:
+				flag = false;
+				break;
+			}
+			dictionary2.Add("canViewDashboard", flag);
+			Dictionary<string, bool> dictionary3 = dictionary;
+			bool value = ((role == "Administrator" || role == "GroupAdministrator") ? true : false);
+			dictionary3.Add("canAudit", value);
+			Dictionary<string, bool> dictionary4 = dictionary;
+			bool value2;
+			switch (role)
+			{
+			case "Administrator":
+			case "GroupAdministrator":
+			case "Technology":
+			case "GeneralServices":
+			case "HumanResources":
+				value2 = true;
+				break;
+			default:
+				value2 = false;
+				break;
+			}
+			dictionary4.Add("canCreateTickets", value2);
+			dictionary.Add("canResolveTickets", flag2);
+			dictionary.Add("canAssignTickets", flag2);
+			dictionary.Add("canConfigureProfile", value: true);
+			Dictionary<string, bool> dictionary5 = dictionary;
+			bool? flag3 = exportPermission;
+			bool value3;
+			if (flag3.HasValue)
+			{
+				value3 = flag3 == true;
+			}
+			else
+			{
+				bool flag4 = ((role == "Administrator" || role == "Fiscalizador") ? true : false);
+				value3 = flag4;
+			}
+			dictionary5.Add("canExportAudits", value3);
+			dictionary.Add("canViewSupportDashboard", flag2);
+			dictionary.Add("canViewAllSupportDepartments", role == "Administrator");
+			dictionary.Add("canConfigureSupport", role == "Administrator");
+			dictionary.Add("canViewSupportFindings", flag2 || role == "GroupAdministrator");
+			dictionary.Add("canCancelFindingWithEvidence", flag2);
+			dictionary.Add("canCancelFindingWithoutEvidence", value: false);
+			dictionary.Add("canCancelFindingWithReason", flag2);
+			dictionary.Add("canCancelFindingWithoutReason", value: false);
+			Dictionary<string, bool> dictionary6 = dictionary;
+			bool value4;
+			switch (role)
+			{
+			case "Administrator":
+			case "GroupAdministrator":
+			case "Technology":
+			case "GeneralServices":
+			case "HumanResources":
+				value4 = true;
+				break;
+			default:
+				value4 = false;
+				break;
+			}
+			dictionary6.Add("canUseSupportChat", value4);
+			dictionary.Add("canManageSupportChat", flag2);
+			dictionary.Add("canModerateSupportChat", flag2);
+			dictionary.Add("canDeleteSupportConversations", role == "Administrator");
+			Dictionary<string, bool> dictionary7 = dictionary;
+			bool value5;
+			switch (role)
+			{
+			case "Administrator":
+			case "GroupAdministrator":
+			case "Technology":
+			case "GeneralServices":
+			case "HumanResources":
+				value5 = true;
+				break;
+			default:
+				value5 = false;
+				break;
+			}
+			dictionary7.Add("canShareSupportConversations", value5);
+			dictionary.Add("canDeleteSupportTickets", role == "Administrator");
+			dictionary.Add("canViewTicketNotifications", value: true);
+			dictionary.Add("canAuthorizeWarehouseRequests", role == "Administrator");
+			dictionary.Add("canLoadWarehouseInventory", role == "Administrator");
+			dictionary.Add("canCreateWarehouseArticles", role == "Administrator");
+			Dictionary<string, bool> dictionary8 = dictionary;
+			if (custom != null)
+			{
+				foreach (KeyValuePair<string, bool> item4 in custom)
+				{
+					if (dictionary8.ContainsKey(item4.Key))
+					{
+						dictionary8[item4.Key] = item4.Value;
+					}
+				}
+			}
+			dictionary8["canManage"] = dictionary8["canManageUsers"];
+			dictionary8["canViewTicketNotifications"] = role != "Administrative" || (custom?.GetValueOrDefault("canViewTicketNotifications") ?? false);
+			return dictionary8;
+		}
+		static string Pick(JsonElement element, params string[] keys)
+		{
+			foreach (string propertyName in keys)
+			{
+				if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString()))
+				{
+					return value.GetString();
+				}
+			}
+			return "";
+		}
+		static async Task<T> RetryDatabaseAsync<T>(Func<Task<T>> action, CancellationToken ct, string operation) where T : notnull
+		{
+			SqlException last = null;
+			for (int attempt = 0; attempt < 3; attempt++)
+			{
+				try
+				{
+					return await action();
+				}
+				catch (SqlException ex) when (!ct.IsCancellationRequested && IsTransientSqlFailure(ex))
+				{
+					last = ex;
+					Console.Error.WriteLine($"SQL {operation} (reintento {attempt + 1}/3): {ex.Message}");
+					if (attempt < 2)
+					{
+						await Task.Delay(400 * (attempt + 1), ct);
+					}
+				}
+			}
+			if (last != null)
+			{
+				throw last;
+			}
+			throw new InvalidOperationException("MSSQL_RETRY:No fue posible completar la operación de base de datos.");
+		}
+		static object SessionPayload(AdminIdentity account, string? persistentSessionToken = null)
+		{
+			account = EmmaAdministrativeAccess.Scope(account);
+			string role = account.Role;
+			bool flag = ((role == "Administrator" || role == "Fiscalizador") ? true : false);
+			bool flag2 = flag;
+			bool flag3 = account.Role == "Administrator";
+			string id = account.Id;
+			string email = account.Email;
+			string displayName = account.DisplayName;
+			string role2 = account.Role;
+			bool mustChangePassword = account.MustChangePassword;
+			string avatarUrl = account.AvatarUrl;
+			string text2 = ((account.Role == "Department") ? account.SupportTeam : null);
+			string text3 = ((account.Role == "Department") ? null : account.SupportTeam);
+			string text4;
+			if (account.Role == "GroupAdministrator")
+			{
+				text4 = "assigned-groups";
+			}
+			else
+			{
+				switch (account.Role)
+				{
+				case "Technology":
+				case "GeneralServices":
+				case "HumanResources":
+				case "Warehouse":
+				case "Department":
+					flag = true;
+					break;
+				default:
+					flag = false;
+					break;
+				}
+				text4 = (flag ? "support-department" : "all");
+			}
+			string id2 = id;
+			string email2 = email;
+			string displayName2 = displayName;
+			string role3 = role2;
+			bool mustChangePassword2 = mustChangePassword;
+			string avatarUrl2 = avatarUrl;
+			string assignedDepartment = text2;
+			string supportTeam = text3;
+			string scope = text4;
+			string supportDepartment;
+			if (account.Role == "Administrative")
+			{
+				supportDepartment = "ADMINISTRATIVE";
+			}
+			else if (account.Role == "Department")
+			{
+				supportDepartment = account.SupportTeam;
+			}
+			else if (account.Role == "Technology")
+			{
+				supportDepartment = "TECHNOLOGY";
+			}
+			else if (account.Role == "GeneralServices")
+			{
+				supportDepartment = "GENERAL_SERVICES";
+			}
+			else
+			{
+				supportDepartment = ((account.Role == "HumanResources") ? "HUMAN_RESOURCES" : null);
+			}
+			return new
+			{
+				authenticated = true,
+				id = id2,
+				email = email2,
+				displayName = displayName2,
+				role = role3,
+				mustChangePassword = mustChangePassword2,
+				avatarUrl = avatarUrl2,
+				assignedDepartment = assignedDepartment,
+				supportTeam = supportTeam,
+				scope = scope,
+				supportDepartment = supportDepartment,
+				permissions = AccountPermissions(account),
+				persistentSessionToken = persistentSessionToken
+			};
+		}
+		static object SessionPayloadFromContext(HttpContext context)
+		{
+			string text2 = context.User.FindFirstValue("http://schemas.microsoft.com/ws/2008/06/identity/claims/role") ?? "Viewer";
+			string id = context.User.FindFirstValue("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier") ?? "";
+			string email = context.User.Identity?.Name ?? "";
+			string displayName = context.User.FindFirstValue("display_name") ?? "Usuario";
+			string role = text2;
+			bool mustChangePassword = context.User.FindFirstValue("must_change_password") == "true";
+			string avatarUrl = (string.IsNullOrWhiteSpace(context.User.FindFirstValue("avatar_url")) ? null : context.User.FindFirstValue("avatar_url"));
+			string assignedDepartment = ((text2 == "Department") ? context.User.FindFirstValue("support_team") : null);
+			string supportTeam;
+			if (text2 == "Department")
+			{
+				supportTeam = null;
+			}
+			else
+			{
+				supportTeam = (string.IsNullOrWhiteSpace(context.User.FindFirstValue("support_team")) ? null : context.User.FindFirstValue("support_team"));
+			}
+			string scope;
+			bool flag;
+			switch (text2)
+			{
+			case "GroupAdministrator":
+				scope = "assigned-groups";
+				break;
+			case "Technology":
+			case "GeneralServices":
+			case "HumanResources":
+			case "Warehouse":
+			case "Department":
+				flag = true;
+				goto IL_0177;
+			default:
+				{
+					flag = false;
+					goto IL_0177;
+				}
+				IL_0177:
+				scope = (flag ? "support-department" : "all");
+				break;
+			}
+			return new
+			{
+				authenticated = true,
+				id = id,
+				email = email,
+				displayName = displayName,
+				role = role,
+				mustChangePassword = mustChangePassword,
+				avatarUrl = avatarUrl,
+				assignedDepartment = assignedDepartment,
+				supportTeam = supportTeam,
+				scope = scope,
+				supportDepartment = text2 switch
+				{
+					"HumanResources" => "HUMAN_RESOURCES", 
+					"GeneralServices" => "GENERAL_SERVICES", 
+					"Technology" => "TECHNOLOGY", 
+					"Department" => context.User.FindFirstValue("support_team"), 
+					_ => null, 
+				},
+				permissions = PermissionClaim(context.User)
+			};
+		}
+		static async Task SignInAccount(HttpContext context, AdminIdentity account)
+		{
+			account = EmmaAdministrativeAccess.Scope(account);
+			Dictionary<string, bool> value = AccountPermissions(account);
+			string operationalSessionId = context.User.FindFirstValue("operational_session_id") ?? "";
+			if (string.IsNullOrWhiteSpace(operationalSessionId))
+			{
+				try
+				{
+					operationalSessionId = await context.RequestServices.GetRequiredService<Database>().BeginOperationalSession(account, context.RequestAborted);
+				}
+				catch (Exception exception) when (!context.RequestAborted.IsCancellationRequested)
+				{
+					context.RequestServices.GetRequiredService<ILogger<Program>>().LogWarning(exception, "No se pudo iniciar el registro de actividad del usuario.");
+				}
+			}
+			ClaimsIdentity identity = new ClaimsIdentity(new _003C_003Ez__ReadOnlyArray<Claim>(new Claim[10]
+			{
+				new Claim("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier", account.Id),
+				new Claim("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name", account.Email),
+				new Claim("recovery_version", account.RecoveryVersion),
+				new Claim("display_name", account.DisplayName),
+				new Claim("http://schemas.microsoft.com/ws/2008/06/identity/claims/role", account.Role),
+				new Claim("must_change_password", account.MustChangePassword ? "true" : "false"),
+				new Claim("avatar_url", account.AvatarUrl ?? ""),
+				new Claim("support_team", account.SupportTeam ?? ""),
+				new Claim("permissions_json", JsonSerializer.Serialize(value)),
+				new Claim("operational_session_id", operationalSessionId)
+			}), "Cookies");
+			ClaimsPrincipal principal = (context.User = new ClaimsPrincipal(identity));
+			await context.SignInAsync("Cookies", principal, new AuthenticationProperties
+			{
+				IsPersistent = true,
+				AllowRefresh = true,
+				ExpiresUtc = DateTimeOffset.UtcNow.AddYears(10)
+			});
+		}
+		static IResult TicketActionResponse(TicketActionResult result)
+		{
+			return result.Code switch
+			{
+				"FORBIDDEN" => Results.Json(new
+				{
+					error = result.Error
+				}, (JsonSerializerOptions?)null, (string?)null, (int?)403), 
+				"NOT_FOUND" => Results.NotFound(new
+				{
+					error = result.Error
+				}), 
+				"CONFLICT" => Results.Conflict(new
+				{
+					error = result.Error
+				}), 
+				_ => Results.UnprocessableEntity(new
+				{
+					error = result.Error
+				}), 
+			};
+		}
+		static (string UserId, string Role) UserScope(HttpContext context)
+		{
+			return (UserId: context.User.FindFirstValue("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier") ?? "", Role: DepartmentAccounts.SupportScopeRole(context.User, context.Request.Path.Value ?? "", AreaManagerAccess.Allowed(context.User)));
+		}
+		static bool ValidAudio(byte[] data, string contentType)
+		{
+			switch (contentType)
+			{
+			case "audio/webm":
+				return data.Length > 4 && data[0] == 26 && data[1] == 69 && data[2] == 223 && data[3] == 163;
+			case "audio/ogg":
+				return data.Length > 4 && Encoding.ASCII.GetString(data, 0, 4) == "OggS";
+			case "audio/mp4":
+				return data.Length > 12 && Encoding.ASCII.GetString(data, 4, 4) == "ftyp";
+			case "audio/mpeg":
+				return data.Length > 3 && (Encoding.ASCII.GetString(data, 0, 3) == "ID3" || (data[0] == byte.MaxValue && (data[1] & 0xE0) == 224));
+			case "audio/wav":
+			case "audio/x-wav":
+				return data.Length > 12 && Encoding.ASCII.GetString(data, 0, 4) == "RIFF" && Encoding.ASCII.GetString(data, 8, 4) == "WAVE";
+			default:
+				return false;
+			}
+		}
+		static bool ValidEvidenceImage(byte[] data, string contentType)
+		{
+			string text2 = contentType.ToLowerInvariant();
+			if (text2 != null)
+			{
+				int length = text2.Length;
+				if (length != 9)
+				{
+					if (length != 10)
+					{
+						if (length == 19)
+						{
+							char c = text2[9];
+							if (c != 'c')
+							{
+								if (c == 'f' && text2 == "image/heif-sequence")
+								{
+									goto IL_01cd;
+								}
+							}
+							else if (text2 == "image/heic-sequence")
+							{
+								goto IL_01cd;
+							}
+						}
+					}
+					else
+					{
+						switch (text2[9])
+						{
+						case 'g':
+							break;
+						case 'p':
+							if (text2 == "image/webp")
+							{
+								return data.Length > 12 && Encoding.ASCII.GetString(data, 0, 4) == "RIFF" && Encoding.ASCII.GetString(data, 8, 4) == "WEBP";
+							}
+							goto IL_024b;
+						case 'c':
+							goto IL_00ba;
+						case 'f':
+							goto IL_00cf;
+						default:
+							goto IL_024b;
+						}
+						if (text2 == "image/jpeg")
+						{
+							goto IL_0132;
+						}
+					}
+				}
+				else
+				{
+					char c = text2[6];
+					if (c != 'j')
+					{
+						if (c == 'p' && text2 == "image/png")
+						{
+							return data.Length > 8 && data[0] == 137 && data[1] == 80 && data[2] == 78 && data[3] == 71;
+						}
+					}
+					else if (text2 == "image/jpg")
+					{
+						goto IL_0132;
+					}
+				}
+			}
+			goto IL_024b;
+			IL_00ba:
+			if (text2 == "image/heic")
+			{
+				goto IL_01cd;
+			}
+			goto IL_024b;
+			IL_0132:
+			return data.Length > 3 && data[0] == byte.MaxValue && data[1] == 216 && data[2] == byte.MaxValue;
+			IL_01cd:
+			return data.Length > 12 && Encoding.ASCII.GetString(data, 4, 4) == "ftyp" && Enumerable.Contains(new string[8] { "heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1" }, Encoding.ASCII.GetString(data, 8, 4));
+			IL_024b:
+			return false;
+			IL_00cf:
+			if (text2 == "image/heif")
+			{
+				goto IL_01cd;
+			}
+			goto IL_024b;
+		}
+		static string? Validate(Submit b)
+		{
+			if (Bad4(b.EmployeeName, 160))
+			{
+				return "El nombre del empleado es obligatorio.";
+			}
+			if (Bad4(b.Direccion, 300))
+			{
+				return "La dirección es obligatoria.";
+			}
+			if (Bad4(b.Sector, 120))
+			{
+				return "El sector es obligatorio.";
+			}
+			if (Bad4(b.Municipio, 120))
+			{
+				return "El municipio es obligatorio.";
+			}
+			if (Bad4(b.Provincia, 120))
+			{
+				return "La provincia es obligatoria.";
+			}
+			if (b.TipoEstablecimiento != "Banca de lotería")
+			{
+				return "El establecimiento debe registrarse como banca de lotería.";
+			}
+			if ((b.Observations?.Length ?? 0) > 1000)
+			{
+				return "La observación supera el máximo de 1,000 caracteres.";
+			}
+			StructuralAnswers answers = b.Answers;
+			string[] source = new string[2] { "yes", "no" };
+			string[] source2 = new string[3] { "yes", "no", "not_applicable" };
+			string[] cashBoxTypes = new string[3] { "cash_register", "wooden_box", "none" };
+			if ((object)answers == null || !Enumerable.Contains(source, answers.Painted) || !Enumerable.Contains(source, answers.RazaSticker) || !Enumerable.Contains(source, answers.RealSticker) || !Enumerable.Contains(source, answers.LotekaRemoved) || !Enumerable.Contains(source, answers.DamageFound) || !Enumerable.Contains(source2, answers.PrinterMaintained) || !Enumerable.Contains(source2, answers.InverterPresent) || !Enumerable.Contains(source2, answers.BatteryPresent) || !Enumerable.Contains(cashBoxTypes, answers.CashBoxType))
+			{
+				return "Completa las nueve verificaciones del formulario.";
+			}
+			Geo geolocation = b.Geolocation;
+			if ((object)geolocation == null || !FieldAuditGps.Valid(geolocation.Latitude, geolocation.Longitude, geolocation.AccuracyMeters))
+			{
+				return "La ubicación o la precisión GPS no es válida.";
+			}
+			if (geolocation.Source != "browser_geolocation")
+			{
+				return "La ubicación debe capturarse desde el dispositivo.";
+			}
+			if (!geolocation.CapturedAt.HasValue)
+			{
+				return "La evidencia de ubicación no tiene una fecha válida.";
+			}
+			double totalSeconds = (DateTimeOffset.UtcNow - geolocation.CapturedAt.Value).TotalSeconds;
+			if (totalSeconds < -120.0)
+			{
+				return "La fecha de la ubicación está en el futuro. Vuelve a capturarla.";
+			}
+			return null;
+		}
+		static string? ValidateAgencyDirectoryImport(AgencyDirectoryImport body)
+		{
+			if (body.Agencies == null || body.Agencies.Count == 0)
+			{
+				return "El archivo no contiene agencias para importar.";
+			}
+			if (body.Agencies.Count > 5000)
+			{
+				return "El archivo supera el límite de 5,000 agencias por importación.";
+			}
+			if ((body.FileName?.Length ?? 0) > 200)
+			{
+				return "El nombre del archivo es demasiado largo.";
+			}
+			Dictionary<string, int> dictionary = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+			int num = 0;
+			while (num < body.Agencies.Count)
+			{
+				AgencyDirectoryImportRow agencyDirectoryImportRow = body.Agencies[num];
+				int value = ((agencyDirectoryImportRow.RowNumber > 1) ? agencyDirectoryImportRow.RowNumber : (num + 2));
+				if (Bad2(agencyDirectoryImportRow.Codigo, 100) || Bad2(agencyDirectoryImportRow.Terminal, 300) || Bad2(agencyDirectoryImportRow.Grupo, 150))
+				{
+					return $"Fila {value}: completa Código, Terminal y Grupo.";
+				}
+				string text2 = agencyDirectoryImportRow.Codigo.Trim();
+				if (dictionary.TryGetValue(text2, out var value2))
+				{
+					return $"Fila {value}: el código {text2} ya aparece en la fila {value2}.";
+				}
+				dictionary[text2] = value;
+				if ((agencyDirectoryImportRow.Region?.Length ?? 0) > 120 || (agencyDirectoryImportRow.Direccion?.Length ?? 0) > 300 || (agencyDirectoryImportRow.Sector?.Length ?? 0) > 120 || (agencyDirectoryImportRow.Municipio?.Length ?? 0) > 120 || (agencyDirectoryImportRow.Provincia?.Length ?? 0) > 120)
+				{
+					return $"Fila {value}: uno de los campos opcionales supera el tamaño permitido.";
+				}
+				if (agencyDirectoryImportRow.Latitude.HasValue != agencyDirectoryImportRow.Longitude.HasValue)
+				{
+					return $"Fila {value}: completa juntas la latitud y la longitud.";
+				}
+				double? latitude = agencyDirectoryImportRow.Latitude;
+				bool flag;
+				if (latitude.HasValue)
+				{
+					double valueOrDefault = latitude.GetValueOrDefault();
+					if (valueOrDefault < -90.0 || valueOrDefault > 90.0)
+					{
+						flag = true;
+						goto IL_029a;
+					}
+				}
+				flag = false;
+				goto IL_029a;
+				IL_029a:
+				bool flag2 = flag;
+				bool flag3 = flag2;
+				bool flag4;
+				if (!flag3)
+				{
+					double? longitude = agencyDirectoryImportRow.Longitude;
+					if (longitude.HasValue)
+					{
+						double valueOrDefault2 = longitude.GetValueOrDefault();
+						if (valueOrDefault2 < -180.0 || valueOrDefault2 > 180.0)
+						{
+							flag4 = true;
+							goto IL_02e2;
+						}
+					}
+					flag4 = false;
+					goto IL_02e2;
+				}
+				goto IL_02e6;
+				IL_02e6:
+				if (flag3 || (agencyDirectoryImportRow.Latitude == 0.0 && agencyDirectoryImportRow.Longitude == 0.0))
+				{
+					return $"Fila {value}: las coordenadas no son válidas.";
+				}
+				num++;
+				continue;
+				IL_02e2:
+				flag3 = flag4;
+				goto IL_02e6;
+			}
+			return null;
+		}
+		static string? ValidateAgencyDirectoryUpdate(AgencyDirectoryUpdate body)
+		{
+			if (Bad(body.Codigo, 100) || Bad(body.Terminal, 300) || Bad(body.Grupo, 150))
+			{
+				return "Completa el código, la terminal y el grupo de la agencia.";
+			}
+			if ((body.Direccion?.Length ?? 0) > 300 || (body.Sector?.Length ?? 0) > 120 || (body.Municipio?.Length ?? 0) > 120 || (body.Provincia?.Length ?? 0) > 120)
+			{
+				return "La dirección de la agencia supera el tamaño permitido.";
+			}
+			if (body.Latitude.HasValue != body.Longitude.HasValue)
+			{
+				return "Completa juntas la latitud y la longitud.";
+			}
+			double? latitude = body.Latitude;
+			bool flag;
+			if (latitude.HasValue)
+			{
+				double valueOrDefault = latitude.GetValueOrDefault();
+				if (valueOrDefault < -90.0 || valueOrDefault > 90.0)
+				{
+					flag = true;
+					goto IL_00f4;
+				}
+			}
+			flag = false;
+			goto IL_00f4;
+			IL_00f4:
+			bool flag2 = flag;
+			bool flag3 = flag2;
+			bool flag4;
+			if (!flag3)
+			{
+				double? longitude = body.Longitude;
+				if (longitude.HasValue)
+				{
+					double valueOrDefault2 = longitude.GetValueOrDefault();
+					if (valueOrDefault2 < -180.0 || valueOrDefault2 > 180.0)
+					{
+						flag4 = true;
+						goto IL_0139;
+					}
+				}
+				flag4 = false;
+				goto IL_0139;
+			}
+			goto IL_013d;
+			IL_0139:
+			flag3 = flag4;
+			goto IL_013d;
+			IL_013d:
+			if (flag3 || (body.Latitude == 0.0 && body.Longitude == 0.0))
+			{
+				return "Las coordenadas de la agencia no son válidas.";
+			}
+			return null;
+		}
+		static string? ValidateAuditUpdate(AuditUpdate b)
+		{
+			if (Bad3(b.Codigo, 100) || Bad3(b.Terminal, 300) || Bad3(b.Grupo, 150))
+			{
+				return "Completa el código, terminal y grupo.";
+			}
+			if (Bad3(b.EmployeeName, 160) || Bad3(b.Direccion, 300) || Bad3(b.Sector, 120) || Bad3(b.Municipio, 120) || Bad3(b.Provincia, 120))
+			{
+				return "Completa los datos del empleado y la dirección.";
+			}
+			if (!FieldAuditGps.Valid(b.Latitude, b.Longitude, b.Accuracy))
+			{
+				return "Las coordenadas o la precisión no son válidas.";
+			}
+			if ((b.Observations?.Length ?? 0) > 1000)
+			{
+				return "La observación supera 1,000 caracteres.";
+			}
+			StructuralAnswers answers = b.Answers;
+			string[] source = new string[2] { "yes", "no" };
+			string[] source2 = new string[3] { "yes", "no", "not_applicable" };
+			string[] cashBoxTypes = new string[3] { "cash_register", "wooden_box", "none" };
+			if ((object)answers == null || !Enumerable.Contains(source, answers.Painted) || !Enumerable.Contains(source, answers.RazaSticker) || !Enumerable.Contains(source, answers.RealSticker) || !Enumerable.Contains(source, answers.LotekaRemoved) || !Enumerable.Contains(source, answers.DamageFound) || !Enumerable.Contains(source2, answers.PrinterMaintained) || !Enumerable.Contains(source2, answers.InverterPresent) || !Enumerable.Contains(source2, answers.BatteryPresent) || answers.CashBoxType != null && !Enumerable.Contains(cashBoxTypes, answers.CashBoxType))
+			{
+				return "Completa las respuestas de la auditoría.";
+			}
+			return null;
+		}
+		static string? ValidateTicket(TicketCreate body)
+		{
+			string[] source = new string[4] { "LOW", "MEDIUM", "HIGH", "CRITICAL" };
+			if (!body.AgencyId.HasValue)
+			{
+				return "Selecciona una agencia.";
+			}
+			bool flag;
+			switch (body.TicketType)
+			{
+			case null:
+			case "SUPPORT":
+			case "INTERNAL":
+				flag = true;
+				break;
+			default:
+				flag = false;
+				break;
+			}
+			if (!flag)
+			{
+				return "Selecciona un tipo de ticket válido.";
+			}
+			if (string.IsNullOrWhiteSpace(body.Category) || body.Category.Length > 60)
+			{
+				return "Selecciona una categoría válida.";
+			}
+			if (string.IsNullOrWhiteSpace(body.AssignedDepartment) || body.AssignedDepartment.Length > 40)
+			{
+				return "Selecciona un departamento válido.";
+			}
+			if (!Enumerable.Contains(source, body.Priority))
+			{
+				return "Selecciona una prioridad válida.";
+			}
+			if (string.IsNullOrWhiteSpace(body.Subject) || body.Subject.Trim().Length > 180)
+			{
+				return "Escribe un asunto de hasta 180 caracteres.";
+			}
+			if (string.IsNullOrWhiteSpace(body.Description) || body.Description.Trim().Length > 2000)
+			{
+				return "Describe la incidencia en un máximo de 2,000 caracteres.";
+			}
+			return null;
+		}
+		static string? ValidateTicketRoute(TicketRoute body)
+		{
+			if (string.IsNullOrWhiteSpace(body.AssignedDepartment) || body.AssignedDepartment.Length > 40)
+			{
+				return "Selecciona un departamento válido.";
+			}
+			bool flag;
+			switch (body.AssignedTeam)
+			{
+			case null:
+			case "CALL_CENTER":
+			case "TECHNICAL_FAILURE":
+			case "TECHNICIANS":
+				flag = true;
+				break;
+			default:
+				flag = false;
+				break;
+			}
+			if (!flag)
+			{
+				return "Selecciona un equipo de Tecnología válido.";
+			}
+			if (body.AssignedDepartment != "TECHNOLOGY" && body.AssignedTeam != null)
+			{
+				return "Los equipos Call Center, Avería Técnica y Técnicos solo pertenecen a Tecnología.";
+			}
+			if ((body.Comment?.Length ?? 0) > 1000)
+			{
+				return "El comentario supera 1,000 caracteres.";
+			}
+			return null;
+		}
+		static string? ValidateTicketUpdate(TicketUpdate body)
+		{
+			string[] source = new string[6] { "OPEN", "IN_PROGRESS", "PENDING", "RESOLVED", "CLOSED", "CANCELLED" };
+			string[] source2 = new string[4] { "LOW", "MEDIUM", "HIGH", "CRITICAL" };
+			if (!Enumerable.Contains(source, body.Status))
+			{
+				return "Selecciona un estado válido.";
+			}
+			if (!Enumerable.Contains(source2, body.Priority))
+			{
+				return "Selecciona una prioridad válida.";
+			}
+			if ((body.Resolution?.Length ?? 0) > 2000)
+			{
+				return "La solución o motivo supera 2,000 caracteres.";
+			}
+			bool flag;
+			switch (body.Status)
+			{
+			case "PENDING":
+			case "RESOLVED":
+			case "CLOSED":
+			case "CANCELLED":
+				flag = true;
+				break;
+			default:
+				flag = false;
+				break;
+			}
+			if (flag && string.IsNullOrWhiteSpace(body.Resolution))
+			{
+				if (!(body.Status == "PENDING"))
+				{
+					if (!(body.Status == "CANCELLED"))
+					{
+						return "Escribe la solución antes de resolver o cerrar el ticket.";
+					}
+					return "Escribe el motivo de la anulación.";
+				}
+				return "Escribe el motivo por el que el ticket quedará pendiente.";
+			}
+			string status = body.Status;
+			flag = ((status == "PENDING" || status == "CANCELLED") ? true : false);
+			if (flag && body.Resolution.Trim().Length < 5)
+			{
+				return "El motivo debe tener al menos 5 caracteres.";
+			}
+			return null;
+		}
+		static string? ValidateUser(string? email, string? displayName, string? role, string? password, bool passwordRequired)
+		{
+			string input = (email ?? "").Trim().ToLowerInvariant().Replace("@grupotejeda.local", "");
+			if (!Regex.IsMatch(input, "^[a-z0-9]+\\.[a-z0-9]+$"))
+			{
+				return "El usuario debe usar el formato nombre.apellido.";
+			}
+			if (string.IsNullOrWhiteSpace(displayName) || displayName.Length > 160)
+			{
+				return "Escribe el nombre del usuario.";
+			}
+			if (role != "ADMINISTRATOR" && role != "ADMINISTRATIVE" && role != "VIEWER" && role != "GROUP_ADMIN" && role != "FISCALIZADOR" && role != "TECHNOLOGY" && role != "GENERAL_SERVICES" && role != "HUMAN_RESOURCES" && role != "WAREHOUSE" && role != "DEPARTMENT")
+			{
+				return "Selecciona un rol válido.";
+			}
+			if (passwordRequired && string.IsNullOrWhiteSpace(password))
+			{
+				return "La contraseña es obligatoria.";
+			}
+			if (!string.IsNullOrEmpty(password) && password != "123456" && password.Length < 8)
+			{
+				return "La nueva contraseña debe tener al menos 8 caracteres.";
+			}
+			if ((password?.Length ?? 0) > 128)
+			{
+				return "La contraseña es demasiado larga.";
+			}
+			return null;
+		}
+		static string? ValidateUserWithTeam(string? email, string? displayName, string? role, string? password, bool passwordRequired, string? supportTeam)
+		{
+			if (role == "DEPARTMENT")
+			{
+				if (DepartmentAccounts.Valid(supportTeam))
+				{
+					return ValidateUser(email, displayName, role, password, passwordRequired);
+				}
+				return "Selecciona un departamento válido.";
+			}
+			if (!string.IsNullOrWhiteSpace(supportTeam))
+			{
+				bool flag = role == "TECHNOLOGY";
+				bool flag2 = flag;
+				if (flag2)
+				{
+					bool flag3;
+					switch (supportTeam)
+					{
+					case "CALL_CENTER":
+					case "TECHNICAL_FAILURE":
+					case "TECHNICIANS":
+					case "WAREHOUSE":
+					case "WORKSHOP":
+						flag3 = true;
+						break;
+					default:
+						flag3 = false;
+						break;
+					}
+					flag2 = flag3;
+				}
+				if (!flag2 && (!(role == "GENERAL_SERVICES") || !(supportTeam == "WORKSHOP")) && (!(role == "WAREHOUSE") || !(supportTeam == "WAREHOUSE")))
+				{
+					return "El área asignada no corresponde con el departamento del usuario.";
+				}
+			}
+			return ValidateUser(email, displayName, role, password, passwordRequired);
+		}
+		static AdminUserRow WithEffectivePermissions(AdminUserRow user)
+		{
+			string role = user.Role switch
+			{
+				"ADMINISTRATOR" => "Administrator", 
+				"ADMINISTRATIVE" => "Administrative", 
+				"GROUP_ADMIN" => "GroupAdministrator", 
+				"FISCALIZADOR" => "Fiscalizador", 
+				"TECHNOLOGY" => "Technology", 
+				"GENERAL_SERVICES" => "GeneralServices", 
+				"HUMAN_RESOURCES" => "HumanResources", 
+				"WAREHOUSE" => "Warehouse", 
+				"DEPARTMENT" => "Department", 
+				_ => "Viewer", 
+			};
+			return user with
+			{
+				EffectivePermissions = AccountPermissions(new AdminIdentity(user.Id.ToString(), user.Email, user.DisplayName, role, user.MustChangePassword, user.AvatarUrl, user.Permissions, user.SupportTeam))
+			};
+		}
+	}
 }
-record TicketEvidenceUpload(string FileName,string ContentType,byte[] Data,double? Latitude=null,double? Longitude=null,double? AccuracyMeters=null,DateTime? LocationCapturedAt=null);
-record FindingAssignment(string? AssignedTechnicianId);
-record FindingEvidenceUpload(string FileName,string ContentType,byte[] Data,double? Latitude=null,double? Longitude=null,double? AccuracyMeters=null,DateTime? LocationCapturedAt=null);
-record FindingEvidenceRow(Guid Id,string FileName,string ContentType,DateTime CapturedAt);
-record SupportDepartmentInput(string? Code,string? Name,string? Description,string? AccentColor,int DisplayOrder,bool IsActive);
-record SupportCategoryInput(string? DepartmentCode,string? Code,string? Name,string? Description,string? DefaultPriority,bool RequiresDetail,string? DetailLabel,List<string>? Options,int DisplayOrder,bool IsActive);
-record SupportCategoryRow(Guid Id,string Code,string Name,string? Description,string DefaultPriority,bool RequiresDetail,string? DetailLabel,List<string>? Options,int DisplayOrder,bool IsActive);
-record SupportDepartmentRow(string Code,string Name,string? Description,string AccentColor,int DisplayOrder,bool IsActive,List<SupportCategoryRow> Categories);
-record AuditUpdate(string? Codigo,string? Terminal,string? Grupo,string? EmployeeName,string? EmployeeCode,string? Direccion,string? Sector,string? Municipio,string? Provincia,double Latitude,double Longitude,double Accuracy,StructuralAnswers? Answers,string? Observations);
-record Submit(string? AgencyId,string? Direccion,string? Sector,string? Municipio,string? Provincia,string? TipoEstablecimiento,string? TipoEstablecimientoOtro,string? EmployeeName,string? EmployeeCode,Geo? Geolocation,StructuralAnswers? Answers,string? Website,string? Observations);
-record Geo(double Latitude,double Longitude,double AccuracyMeters,DateTimeOffset? CapturedAt,string? Source);
-record StructuralAnswers(string? Painted,string? RazaSticker,string? RealSticker,string? LotekaRemoved,string? DamageFound,string? PrinterMaintained,string? InverterPresent,string? BatteryPresent,List<string>? DamageTypes);
-record GroupRow(string Grupo,int Pending); record AgencyRow(Guid Id,string Codigo,string Terminal,double? ExpectedLatitude,double? ExpectedLongitude);
-record DashboardRow(int Total,int Completed,int Pending,int Review,int Percent,int GroupsTotal,int GroupsReady,List<DashboardGroup> Groups,List<DashboardAgency> Agencies,List<DashboardAdministrator> Administrators,List<CompletedAudit> Audits); record DashboardGroup(string Grupo,int Total,int Completed,int Pending,int Percent,DateTime? LastUpdated);record DashboardAgency(string Codigo,string Terminal,string Grupo,string Status,int Percent,DateTime? LastUpdated);record DashboardAdministrator(Guid Id,string DisplayName,string Email,string? Region,int Groups,int Total,int Completed,int Pending,int Review,int Percent,DateTime? LastUpdated);record CompletedAudit(string Codigo,string Terminal,string Grupo,string Municipio,string Provincia,string Type,double Latitude,double Longitude,double Accuracy,DateTime SubmittedAt,Guid ProfileId,string? Observations,string? EmployeeName,string? SubmittedByLogin);
-record AuditPhotoRow(string PhotoType,string Url,double Latitude,double Longitude,double Accuracy,DateTime CapturedAt);record AuditDetailRow(string Codigo,string Terminal,string Grupo,string Municipio,string Provincia,string Type,double Latitude,double Longitude,double Accuracy,DateTime SubmittedAt,Guid ProfileId,string? Observations,string EmployeeName,string? EmployeeCode,string Direccion,string Sector,System.Text.Json.JsonElement Answers,string? SubmittedByLogin,List<AuditPhotoRow> Photos);
-record TicketAgencyRow(Guid Id,string Codigo,string Terminal,string Grupo,string? Direccion,string? Sector,string? Municipio,string? Provincia,double? Latitude,double? Longitude);
-record AgencyDirectoryUpdate(string? Codigo,string? Terminal,string? Grupo,string? Direccion,string? Sector,string? Municipio,string? Provincia,double? Latitude,double? Longitude);
-record AgencyDirectoryImport(string? FileName,List<AgencyDirectoryImportRow>? Agencies);
-record AgencyDirectoryImportRow(int RowNumber,string? Codigo,string? Terminal,string? Grupo,string? Region,string? Direccion,string? Sector,string? Municipio,string? Provincia,double? Latitude,double? Longitude);
-record AgencyDirectoryImportResult(int Total,int Created,int Skipped,List<string> Duplicates);
-record SupportTicketRow(Guid Id,long TicketNumber,string Codigo,string Terminal,string Grupo,string Category,string AssignedDepartment,string Priority,string Status,string Subject,string Description,string? Resolution,string CreatedByName,string CreatedByUsername,DateTime CreatedAt,DateTime UpdatedAt,DateTime? ClosedAt,bool IsAutomatic,string TicketType,string? AssignedTechnicianId,string? AssignedTechnicianName,string? Direccion,string? Sector,string? Municipio,string? Provincia,double? Latitude,double? Longitude,string? AssignedTeam,List<string> SharedWithDepartments,List<TicketHistoryRow> History,List<TicketEvidenceRow> Evidence,string? ResolvedByName)
-{
-    public bool IsAssignedToCurrentUser { get; init; }
-    public SupportTicketRow(Guid id,long ticketNumber,string codigo,string terminal,string grupo,string category,string assignedDepartment,string priority,string status,string subject,string description,string? resolution,string createdByName,string createdByUsername,DateTime createdAt,DateTime updatedAt,DateTime? closedAt,bool isAutomatic,string ticketType,string? assignedTechnicianId,string? assignedTechnicianName,string? direccion,string? sector,string? municipio,string? provincia,double? latitude,double? longitude)
-        :this(id,ticketNumber,codigo,terminal,grupo,category,assignedDepartment,priority,status,subject,description,resolution,createdByName,createdByUsername,createdAt,updatedAt,closedAt,isAutomatic,ticketType,assignedTechnicianId,assignedTechnicianName,direccion,sector,municipio,provincia,latitude,longitude,null,[],[],[],null){}
-}
-record TicketHistoryRow(Guid Id,string Action,string? FromDepartment,string? ToDepartment,string? FromTeam,string? ToTeam,string ActorName,string? Comment,DateTime CreatedAt);
-record TicketEvidenceRow(Guid Id,string FileName,string ContentType,DateTime CapturedAt,string Url,double? Latitude=null,double? Longitude=null,double? AccuracyMeters=null,DateTime? LocationCapturedAt=null);
-record SupportTechnicianRow(string Id,string Name,string Department,string Role,List<string> Groups,bool IsAgencySupervisor,string? SupportTeam,bool IsTechnician)
-{
-    public SupportTechnicianRow(string id,string name,string department):this(id,name,department,department,[],false,null,true){}
-}
-record TicketNotificationRow(Guid Id,long TicketNumber,string Codigo,string Terminal,string Grupo,string AssignedDepartment,string Subject,string? Resolution,string Status,DateTime UpdatedAt,string EventType,string? Message,string? ActorName,Guid NotificationId,string TicketType,bool IsRead)
-{
-    public TicketNotificationRow(Guid id,long ticketNumber,string codigo,string terminal,string grupo,string assignedDepartment,string subject,string? resolution,string status,DateTime updatedAt):this(id,ticketNumber,codigo,terminal,grupo,assignedDepartment,subject,resolution,status,updatedAt,status is "RESOLVED" or "CLOSED"?status:"CREATED",null,null,id,"SUPPORT",false){}
-}
-record TicketStatisticsResult(DateTime From,DateTime To,int Active,int Resolved,List<TicketTechnicianStatistic> ByTechnician,List<TicketCategoryStatistic> ByCategory,List<TicketDepartmentStatistic> ByDepartment,List<TicketHistoryPoint> History);
-record TicketTechnicianStatistic(string? TechnicianId,string TechnicianName,string Department,int Resolved,int Closed,int TotalResolved,double AverageResolutionHours);
-record TicketCategoryStatistic(string Department,string Category,int Resolved,int Closed,int TotalResolved,double AverageResolutionHours);
-record TicketDepartmentStatistic(string Department,int Open,int InProgress,int Resolved,int Closed,int Total,double AverageResolutionHours);
-record TicketHistoryPoint(DateTime Date,string Department,int Resolved);
-record AgencyTransitionCreate(Guid? AgencyId,string? ProjectType,string? Notes);
-record AgencyTransitionStageUpdate(string? Status,string? Notes);
-record AgencyTransitionStatusUpdate(string? Status,string? Reason);
-record AgencyTransitionStageEdit(string? Notes);
-record AgencyTransitionAssignmentUpdate(string? AssignmentType,string? TechnicianUserId,string? ContractorName);
-record AgencyTransitionProgressUpdate(string? Note,string? Status);
-record AgencyTransitionEvidenceUpload(string FileName,string ContentType,byte[] Data,double? Latitude=null,double? Longitude=null,double? AccuracyMeters=null,DateTime? LocationCapturedAt=null);
-record AgencyTransitionEvidenceRow(Guid Id,string FileName,string ContentType,DateTime CapturedAt,string Url,double? Latitude=null,double? Longitude=null,double? AccuracyMeters=null,DateTime? LocationCapturedAt=null,string? UploadedByName=null);
-record AgencyTransitionProgressRow(Guid Id,string Note,string ProgressStatus,string EntryType,string CreatedByName,DateTime CreatedAt,DateTime? UpdatedAt,List<AgencyTransitionEvidenceRow> Evidence);
-record AgencyTransitionStageRow(Guid Id,string Department,int StageOrder,string Status,string? Notes,DateTime? StartedAt,DateTime? CompletedAt,string? CompletedByName,DateTime UpdatedAt,List<AgencyTransitionProgressRow> Progress);
-record AgencyTransitionRow(Guid Id,Guid AgencyId,string Codigo,string Terminal,string Grupo,string ProjectType,string Status,string CurrentStage,string? Notes,string CreatedByName,DateTime CreatedAt,DateTime UpdatedAt,DateTime? CompletedAt,List<AgencyTransitionStageRow> Stages);
-record MaintenanceMovementCreate(Guid? AgencyId,Guid? TicketId,string? TechnicianUserId,string? TechnicianName,string? MovementType,string? EquipmentType,string? ComponentType,string? FailureCause,string? SerialNumber,int Quantity,string? Notes,string? Department,string? OperationalArea,string? DocumentNumber,string? QrToken,string? DeliveredByName,string? ReceivedByName,string? DestinationName,string? SignatureData,DateTime? OccurredAt);
-record MaintenanceMovementRow(Guid Id,Guid? AgencyId,string Codigo,string Terminal,string Grupo,Guid? TicketId,string Department,string? TechnicianUserId,string TechnicianName,string MovementType,string EquipmentType,string? ComponentType,string FailureCause,string? SerialNumber,int Quantity,string? Notes,string CreatedByName,DateTime CreatedAt,string OperationalArea,string DocumentNumber,string QrToken,string? DeliveredByName,string? ReceivedByName,string? DestinationName,string? SignatureData,DateTime OccurredAt,string? ReceivedByLogin);
-record MaintenanceProductRow(Guid Id,string Department,string ScanCode,string ProductName,string? ComponentType,DateTime UpdatedAt);
-record MaintenanceSupplierCreate(string? Name,string? TaxId,string? ContactName,string? Phone,string? Email);
-record MaintenanceRequisitionCreate(string? Department,string? ProductName,int Quantity,string? Priority,string? Notes);
-record MaintenancePurchaseOrderCreate(Guid SupplierId,Guid? RequisitionId,string? Department,string? ProductName,int Quantity,decimal UnitCost,DateTime? ExpectedAt,string? Notes);
-record MaintenancePurchaseOrderReceive(int Quantity,string? SerialNumber,string? ReceivedByName,string? Notes);
-record MaintenanceReturnCreate(Guid? SupplierId,Guid? PurchaseOrderId,string? Department,string? ProductName,string? SerialNumber,int Quantity,string? Reason,string? Notes);
-record MaintenanceSupplierRow(Guid Id,string Name,string? TaxId,string? ContactName,string? Phone,string? Email,bool IsActive,DateTime CreatedAt);
-record MaintenanceRequisitionRow(Guid Id,string RequisitionNumber,string Department,string ProductName,int QuantityRequested,int QuantityFulfilled,string Priority,string Status,string RequestedByName,DateTime CreatedAt,DateTime UpdatedAt,string? Notes);
-record MaintenancePurchaseOrderRow(Guid Id,string OrderNumber,Guid SupplierId,string SupplierName,Guid? RequisitionId,string Department,string ProductName,int QuantityOrdered,int QuantityReceived,decimal UnitCost,string Status,DateTime? ExpectedAt,string CreatedByName,DateTime CreatedAt,DateTime UpdatedAt,string? Notes);
-record MaintenanceReturnRow(Guid Id,string ReturnNumber,Guid? SupplierId,string? SupplierName,Guid? PurchaseOrderId,string Department,string ProductName,string SerialNumber,int Quantity,string Reason,string Status,string CreatedByName,DateTime CreatedAt,string? Notes);
-record MaintenanceProcurementSnapshot(List<MaintenanceSupplierRow> Suppliers,List<MaintenanceRequisitionRow> Requisitions,List<MaintenancePurchaseOrderRow> PurchaseOrders,List<MaintenanceReturnRow> Returns);
-record SupportConversationRow(Guid Id,string SupervisorUserId,string SupervisorName,string SupervisorUsername,string? SupervisorContact,string? SupervisorAvatarUrl,List<string> Groups,string AssignedDepartment,string? Category,string Status,bool RequestedAgent,DateTime CreatedAt,DateTime UpdatedAt,DateTime LastMessageAt,string LastMessage,bool IsMuted,bool IsRestricted,bool IsBlocked);
-record SupportMessageRow(Guid Id,Guid ConversationId,string? SenderUserId,string SenderName,string SenderRole,string? AvatarUrl,string Message,bool IsBot,DateTime CreatedAt,string? VoiceNoteUrl,bool IsDeleted);
-record SupportChatNotificationRow(Guid Id,Guid ConversationId,string AssignedDepartment,string SupervisorName,string SenderName,string SenderRole,string Message,DateTime CreatedAt,bool IsRead);
-record NotificationStateInput(List<string>? Keys,string? Action);
-record PushSubscriptionInput(string? Endpoint,PushSubscriptionKeys? Keys);
-record PushSubscriptionKeys(string? P256dh,string? Auth);
-record SupportConversationCreate(string? Department,string? Category,bool RequestedAgent);
-record SupportDirectConversationCreate(string? TargetUserId);
-record SupportContactRow(string Id,string DisplayName,string Username,string Role,string? Contact,string? AvatarUrl,List<string> Groups);
-record SupportMessageCreate(string? Message);
-record SupportConversationStatus(string? Status);
-record SupportConversationControl(string? Action);
-record SupportPresenceInput(Guid? ConversationId,bool IsTyping);
-record AccountContactUpdate(string? Contact);
-record AccountContactProfileRow(Guid Id,string Email,string DisplayName,string Role,string? Contact,string? AvatarUrl,List<string> Groups);
-record AutomaticFindingRow(Guid Id,Guid ProfileId,string Codigo,string Terminal,string Grupo,DateTime SubmittedAt,string FindingKey,string Title,string Detail,string Department,string Priority,string Status,string? Diagnosis,string? Resolution,string? Verification,string? Recommendations,DateTime? ResolvedAt,int? ResolutionMinutes,string? ResolvedByName,List<FindingEvidenceRow> Evidence,string? AssignedTechnicianId,string? AssignedTechnicianName,string? Direccion,string? Sector,string? Municipio,string? Provincia,double? Latitude,double? Longitude);
-sealed class AgencyConflict : Exception;
-
-sealed class LiveNotificationBroker
-{
-    private readonly ConcurrentDictionary<Guid, Channel<string>> subscribers = new();
-
-    public LiveSubscription Subscribe()
-    {
-        var id = Guid.NewGuid();
-        var channel = Channel.CreateBounded<string>(new BoundedChannelOptions(20)
-        {
-            FullMode = BoundedChannelFullMode.DropOldest,
-            SingleReader = true,
-            SingleWriter = false
-        });
-        subscribers[id] = channel;
-        return new LiveSubscription(id, channel.Reader);
-    }
-
-    public void Publish(string message)
-    {
-        var payload = $"{message}:{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
-        foreach (var channel in subscribers.Values) channel.Writer.TryWrite(payload);
-    }
-
-    public void Unsubscribe(Guid id)
-    {
-        if (subscribers.TryRemove(id, out var channel)) channel.Writer.TryComplete();
-    }
-}
-
-sealed record LiveSubscription(Guid Id, ChannelReader<string> Reader);
-
-sealed class SupportPresenceTracker
-{
-    sealed record Presence(string Name,string Role,string Department,Guid? ConversationId,bool IsTyping,DateTimeOffset UpdatedAt);
-    readonly ConcurrentDictionary<string,Presence> users=new();
-    public void Touch(string userId,string name,string role,string department,Guid? conversationId,bool isTyping)=>users[userId]=new(name,role,department,conversationId,isTyping,DateTimeOffset.UtcNow);
-    public object Snapshot(string department,Guid? conversationId,string excludeUserId)
-    {
-        var now=DateTimeOffset.UtcNow;foreach(var stale in users.Where(item=>(now-item.Value.UpdatedAt).TotalMinutes>3).Select(item=>item.Key).ToList())users.TryRemove(stale,out _);
-        var active=users.Where(item=>item.Key!=excludeUserId&&(now-item.Value.UpdatedAt).TotalSeconds<40).Select(item=>item.Value).ToList();
-        var supportOnline=active.Any(item=>item.Role is "Administrator" or "Technology" or "GeneralServices" or "HumanResources");
-        var typing=active.Where(item=>item.IsTyping&&item.ConversationId==conversationId&&(now-item.UpdatedAt).TotalSeconds<5).Select(item=>item.Name).Distinct().ToList();
-        return new{supportOnline,typing,onlineCount=active.Count};
-    }
-}
-
-sealed class Tokens { readonly byte[] secret=Encoding.UTF8.GetBytes(Environment.GetEnvironmentVariable("APP_SECRET")??throw new InvalidOperationException("Falta APP_SECRET en .env.local."));public string Create(string id)=>$"{id}.{Sign(id)}";public bool Verify(string token,string id){var p=token.Split('.');string payload,signature;if(p.Length==2&&p[0]==id){payload=id;signature=p[1];}else if(p.Length==3&&p[0]==id&&long.TryParse(p[1],out _)){payload=$"{p[0]}.{p[1]}";signature=p[2];}else{return false;}return CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(Sign(payload)),Encoding.ASCII.GetBytes(signature));}string Sign(string value)=>Convert.ToHexString(HMACSHA256.HashData(secret,Encoding.UTF8.GetBytes(value))).ToLowerInvariant(); }
-
-#if MYSQL_LEGACY
-sealed class Database {
-    readonly List<(string Value,string Mode)> connections=[];
-    readonly string? configurationError;
-    public Database(IConfiguration configuration){
-      var raw=FirstValue(Environment.GetEnvironmentVariable("MYSQL_CONNECTION_STRING"),configuration["MYSQL_CONNECTION_STRING"],configuration.GetConnectionString("DefaultConnection"),Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection"));
-      if(string.IsNullOrWhiteSpace(raw)){configurationError="No se encontró la conexión. Agrega ConnectionStrings__DefaultConnection o MYSQL_CONNECTION_STRING en MonsterASP y reinicia el sitio.";return;}
-      try{
-        raw=raw.Trim();
-        if(raw.StartsWith("MYSQL_CONNECTION_STRING=",StringComparison.OrdinalIgnoreCase))raw=raw["MYSQL_CONNECTION_STRING=".Length..].Trim();
-        if(raw.Length>=2&&((raw[0]=='\"'&&raw[^1]=='\"')||(raw[0]=='\''&&raw[^1]=='\'')))raw=raw[1..^1];
-        var configured=new MySqlConnectionStringBuilder(raw){AllowUserVariables=true};
-        if(string.IsNullOrWhiteSpace(configured.Server)||string.IsNullOrWhiteSpace(configured.Database)||string.IsNullOrWhiteSpace(configured.UserID)){configurationError="La conexión MySQL está incompleta: debe contener Server, Database y User ID.";return;}
-        if(configured.ConnectionTimeout==0)configured.ConnectionTimeout=30;
-        if(configured.DefaultCommandTimeout==0)configured.DefaultCommandTimeout=30;
-        var internalHost=configured.Server.Replace(".public.databaseasp.net",".databaseasp.net",StringComparison.OrdinalIgnoreCase);
-        if(!string.Equals(internalHost,configured.Server,StringComparison.OrdinalIgnoreCase)){
-          var internalConnection=new MySqlConnectionStringBuilder(configured.ConnectionString){Server=internalHost};
-          connections.Add((internalConnection.ConnectionString,"monster-internal"));
-        }
-        connections.Add((configured.ConnectionString,configured.Server.Contains(".public.databaseasp.net",StringComparison.OrdinalIgnoreCase)?"monster-public":"configured"));
-        connections=connections.DistinctBy(item=>item.Value,StringComparer.Ordinal).ToList();
-      }catch(Exception error){Console.Error.WriteLine($"MySQL connection configuration: {error.Message}");configurationError="El formato de la conexión MySQL no es válido. Copia la cadena completa desde el panel de MonsterASP.";}
-    }
-    static string? FirstValue(params string?[] values)=>values.FirstOrDefault(value=>!string.IsNullOrWhiteSpace(value));
-    async Task<MySqlConnection> Open(CancellationToken ct){
-      if(configurationError is not null)throw new InvalidOperationException("MYSQL_CONFIG:"+configurationError);
-      Exception? last=null;
-      foreach(var candidate in connections){var c=new MySqlConnection(candidate.Value);try{await c.OpenAsync(ct);return c;}catch(Exception error) when(!ct.IsCancellationRequested){last=error;Console.Error.WriteLine($"MySQL {candidate.Mode}: {error.Message}");await c.DisposeAsync();}}
-      throw last??new InvalidOperationException("MYSQL_CONFIG:No existe una conexión MySQL utilizable.");
-    }
-    static byte[] PasswordHash(string password,byte[] salt,int iterations)=>Rfc2898DeriveBytes.Pbkdf2(password,salt,iterations,HashAlgorithmName.SHA256,32);
-    static string ClaimRole(string databaseRole)=>databaseRole=="ADMINISTRATOR"?"Administrator":"Viewer";
-    public async Task<AdminIdentity?> AuthenticateUser(string email,string password,CancellationToken ct){await using var c=await Open(ct);string id,storedEmail,name,role;byte[] salt,hash;int iterations;await using(var cmd=new MySqlCommand("SELECT id,email,display_name,role,password_salt,password_hash,password_iterations FROM admin_users WHERE email=@email AND is_active=1 LIMIT 1",c)){cmd.Parameters.AddWithValue("@email",email);await using var r=await cmd.ExecuteReaderAsync(ct);if(!await r.ReadAsync(ct))return null;id=r.GetString(0);storedEmail=r.GetString(1);name=r.GetString(2);role=r.GetString(3);salt=(byte[])r[4];hash=(byte[])r[5];iterations=r.GetInt32(6);}var candidate=PasswordHash(password,salt,iterations);if(candidate.Length!=hash.Length||!CryptographicOperations.FixedTimeEquals(candidate,hash))return null;await using(var update=new MySqlCommand("UPDATE admin_users SET last_login_at=UTC_TIMESTAMP(3) WHERE id=@id",c)){update.Parameters.AddWithValue("@id",id);await update.ExecuteNonQueryAsync(ct);}return new(id,storedEmail,name,ClaimRole(role));}
-    public async Task<List<AdminUserRow>> AdminUsers(CancellationToken ct){await using var c=await Open(ct);await using var cmd=new MySqlCommand("SELECT id,email,display_name,role,is_active,last_login_at,created_at FROM admin_users ORDER BY role,email",c);await using var r=await cmd.ExecuteReaderAsync(ct);var users=new List<AdminUserRow>();while(await r.ReadAsync(ct))users.Add(new(Guid.Parse(r.GetString(0)),r.GetString(1),r.GetString(2),r.GetString(3),r.GetBoolean(4),r.IsDBNull(5)?null:r.GetDateTime(5),r.GetDateTime(6)));return users;}
-    async Task<AdminUserRow?> AdminUser(Guid id,CancellationToken ct){await using var c=await Open(ct);await using var cmd=new MySqlCommand("SELECT id,email,display_name,role,is_active,last_login_at,created_at FROM admin_users WHERE id=@id",c);cmd.Parameters.AddWithValue("@id",id.ToString());await using var r=await cmd.ExecuteReaderAsync(ct);return await r.ReadAsync(ct)?new(Guid.Parse(r.GetString(0)),r.GetString(1),r.GetString(2),r.GetString(3),r.GetBoolean(4),r.IsDBNull(5)?null:r.GetDateTime(5),r.GetDateTime(6)):null;}
-    public async Task<AdminUserRow> CreateAdminUser(AdminUserCreate body,CancellationToken ct){var id=Guid.NewGuid();var salt=RandomNumberGenerator.GetBytes(16);var hash=PasswordHash(body.Password!,salt,210000);await using var c=await Open(ct);await using var cmd=new MySqlCommand("INSERT INTO admin_users(id,email,display_name,role,password_salt,password_hash,password_iterations,is_active) VALUES(@id,@email,@name,@role,@salt,@hash,210000,1)",c);cmd.Parameters.AddWithValue("@id",id.ToString());cmd.Parameters.AddWithValue("@email",body.Email!.Trim().ToLowerInvariant());cmd.Parameters.AddWithValue("@name",body.DisplayName!.Trim());cmd.Parameters.AddWithValue("@role",body.Role);cmd.Parameters.AddWithValue("@salt",salt);cmd.Parameters.AddWithValue("@hash",hash);await cmd.ExecuteNonQueryAsync(ct);return (await AdminUser(id,ct))!;}
-    public async Task<AdminUserRow?> UpdateAdminUser(Guid id,AdminUserUpdate body,CancellationToken ct){await using var c=await Open(ct);var hasPassword=!string.IsNullOrEmpty(body.Password);var sql=hasPassword?"UPDATE admin_users SET email=@email,display_name=@name,role=@role,is_active=@active,password_salt=@salt,password_hash=@hash,password_iterations=210000 WHERE id=@id":"UPDATE admin_users SET email=@email,display_name=@name,role=@role,is_active=@active WHERE id=@id";await using var cmd=new MySqlCommand(sql,c);cmd.Parameters.AddWithValue("@id",id.ToString());cmd.Parameters.AddWithValue("@email",body.Email!.Trim().ToLowerInvariant());cmd.Parameters.AddWithValue("@name",body.DisplayName!.Trim());cmd.Parameters.AddWithValue("@role",body.Role);cmd.Parameters.AddWithValue("@active",body.IsActive);if(hasPassword){var salt=RandomNumberGenerator.GetBytes(16);cmd.Parameters.AddWithValue("@salt",salt);cmd.Parameters.AddWithValue("@hash",PasswordHash(body.Password!,salt,210000));}if(await cmd.ExecuteNonQueryAsync(ct)==0)return null;return await AdminUser(id,ct);}
-    public async Task<DatabaseHealth> Health(CancellationToken ct){
-      if(configurationError is not null)return new(false,"MYSQL_CONFIG",configurationError,null);
-      try{await using var c=await Open(ct);await using(var cmd=new MySqlCommand("SELECT 1",c)){await cmd.ExecuteScalarAsync(ct);}await using(var schema=new MySqlCommand("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='agencies'",c)){if(Convert.ToInt32(await schema.ExecuteScalarAsync(ct))==0)return new(false,"MYSQL_SCHEMA","MySQL conectó, pero falta la tabla agencies. Ejecuta 01_EJECUTAR_EN_MYSQL.sql.",null);}return new(true,"OK","Conexión MySQL activa.",ConnectionMode(c.ConnectionString));}
-      catch(Exception error) when(!ct.IsCancellationRequested){Console.Error.WriteLine(error);var diagnostic=DescribeConnectionError(error);return new(false,diagnostic.Code,diagnostic.Message,null);}
-    }
-    static string ConnectionMode(string value){var builder=new MySqlConnectionStringBuilder(value);return builder.Server.Contains(".public.databaseasp.net",StringComparison.OrdinalIgnoreCase)?"monster-public":builder.Server.EndsWith(".databaseasp.net",StringComparison.OrdinalIgnoreCase)?"monster-internal":"configured";}
-    public static DatabaseDiagnostic DescribeConnectionError(Exception error){
-      if(error is InvalidOperationException invalid&&invalid.Message.StartsWith("MYSQL_CONFIG:",StringComparison.Ordinal))return new("MYSQL_CONFIG",invalid.Message["MYSQL_CONFIG:".Length..]);
-      if(error is TimeoutException)return new("MYSQL_TIMEOUT","MySQL tardó demasiado en responder. Verifica el servidor y reinicia el sitio.");
-      if(error is MySqlException mysql)return mysql.Number switch{
-        1045=>new("MYSQL_AUTH","MySQL rechazó el usuario o la contraseña. Copia nuevamente la cadena desde MonsterASP."),
-        1049=>new("MYSQL_DATABASE","La base de datos indicada no existe o el nombre no coincide con el panel de MonsterASP."),
-        1146=>new("MYSQL_SCHEMA","MySQL conectó, pero falta una tabla. Ejecuta los archivos SQL de configuración en orden."),
-        2002 or 2003 or 2005 or 2006=>new("MYSQL_HOST","No se pudo alcanzar el servidor MySQL. En el sitio alojado usa el host sin .public; la API también probará ese host automáticamente."),
-        _ when mysql.Message.Contains("SSL",StringComparison.OrdinalIgnoreCase)=>new("MYSQL_SSL","MySQL rechazó la configuración SSL. Usa SslMode=Preferred en la cadena."),
-        _=>new($"MYSQL_{mysql.Number}","MySQL rechazó la conexión o la consulta. Revisa el registro de la aplicación en MonsterASP.")};
-      return new("MYSQL_CONNECTION","No fue posible abrir la conexión con MySQL. Revisa las variables del sitio y reinícialo.");
-    }
-    public async Task<List<GroupRow>> Groups(CancellationToken ct){await using var c=await Open(ct);await using var cmd=new MySqlCommand("SELECT grupo, COUNT(*) pending FROM agencies WHERE status='PENDING' GROUP BY grupo ORDER BY grupo",c);await using var r=await cmd.ExecuteReaderAsync(ct);var list=new List<GroupRow>();while(await r.ReadAsync(ct))list.Add(new(r.GetString(0),r.GetInt32(1)));return list;}
-    public async Task<List<AgencyRow>> Agencies(string group,CancellationToken ct){await using var c=await Open(ct);await using var cmd=new MySqlCommand("SELECT id,codigo,terminal,expected_latitude,expected_longitude FROM agencies WHERE status='PENDING' AND grupo=@group ORDER BY terminal",c);cmd.Parameters.AddWithValue("@group",group);await using var r=await cmd.ExecuteReaderAsync(ct);var list=new List<AgencyRow>();while(await r.ReadAsync(ct))list.Add(new(Guid.Parse(r.GetString(0)),r.GetString(1),r.GetString(2),r.IsDBNull(3)?null:r.GetDouble(3),r.IsDBNull(4)?null:r.GetDouble(4)));return list;}
-    public async Task<DashboardRow> Dashboard(CancellationToken ct){await using var c=await Open(ct);var groups=new List<DashboardGroup>();var total=0;var completed=0;var pending=0;var review=0;await using(var cmd=new MySqlCommand("SELECT a.grupo,COUNT(*) total,SUM(a.status='COMPLETED') completed,SUM(a.status='PENDING') pending,SUM(a.status='REVIEW_REQUIRED') review_count,MAX(p.submitted_at) last_updated FROM agencies a LEFT JOIN agency_profiles p ON p.agency_id=a.id GROUP BY a.grupo ORDER BY a.grupo",c)){await using var r=await cmd.ExecuteReaderAsync(ct);while(await r.ReadAsync(ct)){var gt=r.GetInt32(1);var gc=Convert.ToInt32(r.GetValue(2));var gp=Convert.ToInt32(r.GetValue(3));var gr=Convert.ToInt32(r.GetValue(4));groups.Add(new(r.GetString(0),gt,gc,gp,gt==0?0:(int)Math.Round(gc*100d/gt),r.IsDBNull(5)?null:r.GetDateTime(5)));total+=gt;completed+=gc;pending+=gp;review+=gr;}}var audits=new List<CompletedAudit>();await using(var cmd=new MySqlCommand("SELECT a.codigo,a.terminal,a.grupo,p.municipio,p.provincia,p.tipo_establecimiento,p.latitude,p.longitude,p.accuracy_meters,p.submitted_at,p.id,p.observations,p.employee_name FROM agencies a JOIN agency_profiles p ON p.agency_id=a.id ORDER BY p.submitted_at DESC LIMIT 200",c)){await using var r=await cmd.ExecuteReaderAsync(ct);while(await r.ReadAsync(ct))audits.Add(new(r.GetString(0),r.GetString(1),r.GetString(2),r.GetString(3),r.GetString(4),r.GetString(5),r.GetDouble(6),r.GetDouble(7),r.GetDouble(8),r.GetDateTime(9),Guid.Parse(r.GetString(10)),r.IsDBNull(11)?null:r.GetString(11),r.IsDBNull(12)?null:r.GetString(12)));}var percent=total==0?0:(int)Math.Round(completed*100d/total);return new(total,completed,pending,review,percent,groups.Count,groups.Count(g=>g.Percent==100),groups,audits);}
-    public async Task<AuditDetailRow?> AuditDetail(Guid id,CancellationToken ct){await using var c=await Open(ct);string codigo,terminal,grupo,municipio,provincia,type,employeeName,direccion,sector;string? employeeCode,observations;double latitude,longitude,accuracy;DateTime submittedAt;System.Text.Json.JsonElement answers;await using(var cmd=new MySqlCommand("SELECT a.codigo,a.terminal,a.grupo,p.municipio,p.provincia,p.tipo_establecimiento,p.latitude,p.longitude,p.accuracy_meters,p.submitted_at,p.observations,p.employee_name,p.employee_code,p.direccion,p.sector,p.structural_answers FROM agencies a JOIN agency_profiles p ON p.agency_id=a.id WHERE p.id=@id",c)){cmd.Parameters.AddWithValue("@id",id.ToString());await using var r=await cmd.ExecuteReaderAsync(ct);if(!await r.ReadAsync(ct))return null;codigo=r.GetString(0);terminal=r.GetString(1);grupo=r.GetString(2);municipio=r.GetString(3);provincia=r.GetString(4);type=r.GetString(5);latitude=r.GetDouble(6);longitude=r.GetDouble(7);accuracy=r.GetDouble(8);submittedAt=r.GetDateTime(9);observations=r.IsDBNull(10)?null:r.GetString(10);employeeName=r.IsDBNull(11)?"Sin nombre registrado":r.GetString(11);employeeCode=r.IsDBNull(12)?null:r.GetString(12);direccion=r.GetString(13);sector=r.GetString(14);using var document=System.Text.Json.JsonDocument.Parse(r.IsDBNull(15)?"{}":r.GetString(15));answers=document.RootElement.Clone();}var photos=new List<AuditPhotoRow>();await using(var cmd=new MySqlCommand("SELECT photo_type,latitude,longitude,accuracy_meters,captured_at FROM audit_photos WHERE profile_id=@id ORDER BY FIELD(photo_type,'frontal','operativa','entorno')",c)){cmd.Parameters.AddWithValue("@id",id.ToString());await using var r=await cmd.ExecuteReaderAsync(ct);while(await r.ReadAsync(ct)){var photoType=r.GetString(0);photos.Add(new(photoType,$"/api/images/{id}/{photoType}",r.GetDouble(1),r.GetDouble(2),r.GetDouble(3),r.GetDateTime(4)));}}return new(codigo,terminal,grupo,municipio,provincia,type,latitude,longitude,accuracy,submittedAt,id,observations,employeeName,employeeCode,direccion,sector,answers,photos);}
-    public async Task<AuditDetailRow?> UpdateAudit(Guid id,AuditUpdate body,string actor,CancellationToken ct){var before=await AuditDetail(id,ct);if(before is null)return null;await using var c=await Open(ct);await using var tx=await c.BeginTransactionAsync(IsolationLevel.Serializable,ct);try{string? agencyId=null;await using(var find=new MySqlCommand("SELECT agency_id FROM agency_profiles WHERE id=@id FOR UPDATE",c,tx)){find.Parameters.AddWithValue("@id",id.ToString());agencyId=(string?)await find.ExecuteScalarAsync(ct);}if(agencyId is null){await tx.RollbackAsync(ct);return null;}await using(var agency=new MySqlCommand("UPDATE agencies SET codigo=@codigo,terminal=@terminal,grupo=@grupo,status='COMPLETED',updated_at=UTC_TIMESTAMP(3) WHERE id=@agency",c,tx)){agency.Parameters.AddWithValue("@codigo",body.Codigo!.Trim());agency.Parameters.AddWithValue("@terminal",body.Terminal!.Trim());agency.Parameters.AddWithValue("@grupo",body.Grupo!.Trim());agency.Parameters.AddWithValue("@agency",agencyId);await agency.ExecuteNonQueryAsync(ct);}await using(var profile=new MySqlCommand("UPDATE agency_profiles SET employee_name=@employeeName,employee_code=@employeeCode,direccion=@direccion,sector=@sector,municipio=@municipio,provincia=@provincia,latitude=@latitude,longitude=@longitude,accuracy_meters=@accuracy,structural_answers=@answers,observations=@observations,updated_at=UTC_TIMESTAMP(3) WHERE id=@id",c,tx)){profile.Parameters.AddWithValue("@employeeName",body.EmployeeName!.Trim());profile.Parameters.AddWithValue("@employeeCode",string.IsNullOrWhiteSpace(body.EmployeeCode)?null:body.EmployeeCode.Trim());profile.Parameters.AddWithValue("@direccion",body.Direccion!.Trim());profile.Parameters.AddWithValue("@sector",body.Sector!.Trim());profile.Parameters.AddWithValue("@municipio",body.Municipio!.Trim());profile.Parameters.AddWithValue("@provincia",body.Provincia!.Trim());profile.Parameters.AddWithValue("@latitude",body.Latitude);profile.Parameters.AddWithValue("@longitude",body.Longitude);profile.Parameters.AddWithValue("@accuracy",body.Accuracy);profile.Parameters.AddWithValue("@answers",System.Text.Json.JsonSerializer.Serialize(body.Answers));profile.Parameters.AddWithValue("@observations",string.IsNullOrWhiteSpace(body.Observations)?null:body.Observations.Trim());profile.Parameters.AddWithValue("@id",id.ToString());await profile.ExecuteNonQueryAsync(ct);}await using(var log=new MySqlCommand("INSERT INTO audit_log(entity_type,entity_id,action,before_data,after_data,actor_email) VALUES('agency_profile',@id,'PROFILE_CORRECTED',@before,@after,@actor)",c,tx)){log.Parameters.AddWithValue("@id",id.ToString());log.Parameters.AddWithValue("@before",System.Text.Json.JsonSerializer.Serialize(before));log.Parameters.AddWithValue("@after",System.Text.Json.JsonSerializer.Serialize(body));log.Parameters.AddWithValue("@actor",actor);await log.ExecuteNonQueryAsync(ct);}await tx.CommitAsync(ct);}catch{await tx.RollbackAsync(ct);throw;}return await AuditDetail(id,ct);}
-    public async Task<bool> DeleteAudit(Guid id,string actor,CancellationToken ct){var before=await AuditDetail(id,ct);if(before is null)return false;await using var c=await Open(ct);await using var tx=await c.BeginTransactionAsync(IsolationLevel.Serializable,ct);try{string? agencyId=null;await using(var find=new MySqlCommand("SELECT agency_id FROM agency_profiles WHERE id=@id FOR UPDATE",c,tx)){find.Parameters.AddWithValue("@id",id.ToString());agencyId=(string?)await find.ExecuteScalarAsync(ct);}if(agencyId is null){await tx.RollbackAsync(ct);return false;}await using(var delete=new MySqlCommand("DELETE FROM agency_profiles WHERE id=@id",c,tx)){delete.Parameters.AddWithValue("@id",id.ToString());await delete.ExecuteNonQueryAsync(ct);}await using(var reopen=new MySqlCommand("UPDATE agencies SET status='PENDING',updated_at=UTC_TIMESTAMP(3) WHERE id=@agency",c,tx)){reopen.Parameters.AddWithValue("@agency",agencyId);await reopen.ExecuteNonQueryAsync(ct);}await using(var log=new MySqlCommand("INSERT INTO audit_log(entity_type,entity_id,action,before_data,actor_email) VALUES('agency_profile',@id,'PROFILE_DELETED_AND_AGENCY_REOPENED',@before,@actor)",c,tx)){log.Parameters.AddWithValue("@id",id.ToString());log.Parameters.AddWithValue("@before",System.Text.Json.JsonSerializer.Serialize(before));log.Parameters.AddWithValue("@actor",actor);await log.ExecuteNonQueryAsync(ct);}await tx.CommitAsync(ct);return true;}catch{await tx.RollbackAsync(ct);throw;}}
-    public async Task<Guid> Submit(Guid agency,Submit b,string? ip,string? agent,CancellationToken ct){
-      await using var c=await Open(ct);await using var tx=await c.BeginTransactionAsync(IsolationLevel.Serializable,ct);
-      try{
-        string? status=null;double? expectedLat=null,expectedLng=null;
-        await using(var check=new MySqlCommand("SELECT status,expected_latitude,expected_longitude FROM agencies WHERE id=@id FOR UPDATE",c,tx)){check.Parameters.AddWithValue("@id",agency.ToString());await using var row=await check.ExecuteReaderAsync(ct);if(await row.ReadAsync(ct)){status=row.GetString(0);expectedLat=row.IsDBNull(1)?null:row.GetDouble(1);expectedLng=row.IsDBNull(2)?null:row.GetDouble(2);}}
-        if(status!="PENDING")throw new AgencyConflict();var id=Guid.NewGuid();var g=b.Geolocation!;double? distance=expectedLat.HasValue&&expectedLng.HasValue?Haversine(g.Latitude,g.Longitude,expectedLat.Value,expectedLng.Value):null;
-        await using var insert=new MySqlCommand(@"INSERT INTO agency_profiles(id,agency_id,employee_name,employee_code,direccion,sector,municipio,provincia,tipo_establecimiento,tipo_establecimiento_otro,latitude,longitude,accuracy_meters,distance_from_agency_meters,location_captured_at,location_source,structural_answers,observations,completion_percent,submitted_by_context) VALUES(@id,@agency,@employeeName,@employeeCode,@direccion,@sector,@municipio,@provincia,@tipo,@otro,@lat,@lng,@accuracy,@distance,@captured,@source,@answers,@observations,100,@context); UPDATE agencies SET status='COMPLETED',updated_at=UTC_TIMESTAMP(3) WHERE id=@agency; INSERT INTO audit_log(entity_type,entity_id,action,after_data) VALUES('agency_profile',@id,'PROFILE_CREATED',JSON_OBJECT('id',@id,'agency_id',@agency,'completion_percent',100));",c,tx);
-        insert.Parameters.AddWithValue("@id",id.ToString());insert.Parameters.AddWithValue("@agency",agency.ToString());insert.Parameters.AddWithValue("@employeeName",b.EmployeeName!.Trim());insert.Parameters.AddWithValue("@employeeCode",string.IsNullOrWhiteSpace(b.EmployeeCode)?null:b.EmployeeCode.Trim());insert.Parameters.AddWithValue("@direccion",b.Direccion!.Trim());insert.Parameters.AddWithValue("@sector",b.Sector!.Trim());insert.Parameters.AddWithValue("@municipio",b.Municipio!.Trim());insert.Parameters.AddWithValue("@provincia",b.Provincia!.Trim());insert.Parameters.AddWithValue("@tipo",b.TipoEstablecimiento);insert.Parameters.AddWithValue("@otro",null);insert.Parameters.AddWithValue("@lat",g.Latitude);insert.Parameters.AddWithValue("@lng",g.Longitude);insert.Parameters.AddWithValue("@accuracy",g.AccuracyMeters);insert.Parameters.AddWithValue("@distance",distance);insert.Parameters.AddWithValue("@captured",g.CapturedAt!.Value.UtcDateTime);insert.Parameters.AddWithValue("@source",g.Source);insert.Parameters.AddWithValue("@answers",System.Text.Json.JsonSerializer.Serialize(b.Answers));insert.Parameters.AddWithValue("@observations",string.IsNullOrWhiteSpace(b.Observations)?null:b.Observations.Trim());insert.Parameters.AddWithValue("@context",System.Text.Json.JsonSerializer.Serialize(new{ip,userAgent=agent,submittedAt=DateTimeOffset.UtcNow}));await insert.ExecuteNonQueryAsync(ct);await tx.CommitAsync(ct);return id;
-      }catch{await tx.RollbackAsync(ct);throw;}
-    }
-    static double Haversine(double lat1,double lon1,double lat2,double lon2){const double radius=6371000;double dLat=(lat2-lat1)*Math.PI/180,dLon=(lon2-lon1)*Math.PI/180;double a=Math.Sin(dLat/2)*Math.Sin(dLat/2)+Math.Cos(lat1*Math.PI/180)*Math.Cos(lat2*Math.PI/180)*Math.Sin(dLon/2)*Math.Sin(dLon/2);return Math.Round(radius*2*Math.Atan2(Math.Sqrt(a),Math.Sqrt(1-a)),1);}
-    public async Task<bool> PhotoMatchesProfile(Guid id,double lat,double lng,double maximumMeters,CancellationToken ct){await using var c=await Open(ct);await using var cmd=new MySqlCommand("SELECT latitude,longitude FROM agency_profiles WHERE id=@id",c);cmd.Parameters.AddWithValue("@id",id.ToString());await using var r=await cmd.ExecuteReaderAsync(ct);return await r.ReadAsync(ct)&&Haversine(lat,lng,r.GetDouble(0),r.GetDouble(1))<=maximumMeters;}
-    public async Task AttachPhoto(Guid id,string type,byte[] data,string mime,double lat,double lng,double accuracy,DateTime captured,CancellationToken ct){await using var c=await Open(ct);await using var cmd=new MySqlCommand("INSERT INTO audit_photos(id,profile_id,photo_type,photo_data,content_type,latitude,longitude,accuracy_meters,captured_at) VALUES(@photoId,@id,@type,@data,@mime,@lat,@lng,@accuracy,@captured) ON DUPLICATE KEY UPDATE photo_data=VALUES(photo_data),content_type=VALUES(content_type),latitude=VALUES(latitude),longitude=VALUES(longitude),accuracy_meters=VALUES(accuracy_meters),captured_at=VALUES(captured_at),created_at=UTC_TIMESTAMP(3)",c);cmd.Parameters.AddWithValue("@photoId",Guid.NewGuid().ToString());cmd.Parameters.AddWithValue("@id",id.ToString());cmd.Parameters.AddWithValue("@type",type);cmd.Parameters.AddWithValue("@data",data);cmd.Parameters.AddWithValue("@mime",mime);cmd.Parameters.AddWithValue("@lat",lat);cmd.Parameters.AddWithValue("@lng",lng);cmd.Parameters.AddWithValue("@accuracy",accuracy);cmd.Parameters.AddWithValue("@captured",captured);await cmd.ExecuteNonQueryAsync(ct);}
-    public async Task<(byte[] Data,string Mime)?> Photo(Guid id,CancellationToken ct){await using var c=await Open(ct);await using var cmd=new MySqlCommand("SELECT photo_data,content_type FROM audit_photos WHERE profile_id=@id ORDER BY FIELD(photo_type,'frontal','operativa','entorno') LIMIT 1",c);cmd.Parameters.AddWithValue("@id",id.ToString());await using var r=await cmd.ExecuteReaderAsync(CommandBehavior.SequentialAccess,ct);if(!await r.ReadAsync(ct))return null;return((byte[])r[0],r.GetString(1));}
-    public async Task<(byte[] Data,string Mime)?> Photo(Guid id,string type,CancellationToken ct){await using var c=await Open(ct);await using var cmd=new MySqlCommand("SELECT photo_data,content_type FROM audit_photos WHERE profile_id=@id AND photo_type=@type LIMIT 1",c);cmd.Parameters.AddWithValue("@id",id.ToString());cmd.Parameters.AddWithValue("@type",type);await using var r=await cmd.ExecuteReaderAsync(CommandBehavior.SequentialAccess,ct);if(!await r.ReadAsync(ct))return null;return((byte[])r[0],r.GetString(1));}
-}
-#endif
-
-sealed record DatabaseHealth(bool Ok,string Code,string Message,string? Mode);
-sealed record DatabaseDiagnostic(string Code,string Message);

@@ -99,3 +99,36 @@
 .mc-hub .native-doc-page .native-folder-grid>button>span{width:48px;height:48px;border-radius:13px;background:#123d55;border-color:#34738f}
 .mc-hub .native-doc-page .native-folder-grid>button strong{font-size:16px}
 @media(max-width:620px){.mc-hub .native-doc-page .native-document-list{grid-template-columns:1fr}.mc-hub .native-doc-page .native-document-list article{grid-template-columns:44px 1fr}.mc-hub .native-doc-page .native-document-list .doc-status{position:static;grid-column:1/-1;width:max-content}}
+
+/* V337: visor PDF profesional a ancho completo, sin panel lateral y con zoom centrado. */
+.mc-hub .native-doc-detail{gap:16px}
+.mc-hub .native-doc-detail-toolbar{align-items:center;flex-wrap:wrap;padding:15px;border-radius:14px;background:linear-gradient(135deg,#112e46,#0d2439);box-shadow:0 14px 32px #020b1738}
+.mc-hub .native-doc-detail-toolbar>div{min-width:260px}
+.mc-hub .native-doc-detail-toolbar h2{font-size:18px;line-height:1.25;overflow-wrap:anywhere}
+.mc-hub .native-doc-detail-toolbar button,.mc-hub .native-doc-detail-toolbar a{border-radius:9px;font-size:11px}
+.id-document-workspace{min-width:0;overflow:hidden;border:1px solid #345b74;border-radius:16px;background:linear-gradient(145deg,#0b2135,#081828);box-shadow:0 20px 50px #020a1438}
+.id-document-viewer-header{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:14px 17px;border-bottom:1px solid #31526a;background:linear-gradient(120deg,#102e47,#0d253c)}
+.id-document-viewer-header>div:first-child{display:flex;min-width:0;flex-direction:column;gap:3px}
+.id-document-viewer-header small{color:#6bd9ee;font-size:8px;font-weight:900;letter-spacing:1.15px}
+.id-document-viewer-header strong{color:#eefaff;font-size:14px;letter-spacing:.2px}
+.id-document-viewer-header span{color:#9bb9ca;font-size:10px}
+.id-document-zoom{display:flex;flex:0 0 auto;align-items:center;gap:7px;padding:6px;border:1px solid #3a6179;border-radius:11px;background:#081b2c}
+.id-document-zoom button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:36px;height:36px;padding:0 9px;border:1px solid #3a627b;border-radius:8px;background:#16364e;color:#e8f8ff;font:inherit;font-size:10px;font-weight:800;cursor:pointer}
+.id-document-zoom button:hover:not(:disabled){border-color:#6dd9ee;background:#1c4761}
+.id-document-zoom button:disabled{cursor:not-allowed;opacity:.4}
+.id-document-zoom button svg{width:17px;height:17px}
+.id-document-zoom label{display:flex;align-items:center;gap:8px;padding:0 4px}
+.id-document-zoom label>span{color:#bad2df;font-size:9px;font-weight:800;text-transform:uppercase}
+.id-document-zoom input{width:120px;accent-color:#4ec9e2}
+.id-document-zoom output{display:inline-flex;align-items:center;justify-content:center;min-width:45px;height:28px;border-radius:7px;background:#12344c;color:#7de0f2;font-size:10px;font-weight:900}
+.id-document-workspace .native-doc-detail-body{display:block;min-height:0;padding:0}
+.id-document-workspace .native-doc-detail-body>div{min-width:0}
+.id-document-workspace .id-pdf{padding:0 0 14px}
+.id-document-workspace .id-pdf nav{min-height:48px;padding:9px 14px;background:#0b1d2e}
+.id-document-workspace .id-pdf nav span{min-width:92px;color:#a9c5d5;font-size:11px;font-weight:750;text-align:center}
+.id-document-workspace .id-pdf-scroll{max-height:min(78vh,980px);min-height:560px;overflow:auto;padding:12px;background:radial-gradient(circle at 50% 0,#18354a 0,#071522 62%);scrollbar-color:#4b7a95 #091a2a;scrollbar-width:thin}
+.id-document-workspace .id-pdf-stage{display:flex;min-height:100%;justify-content:center;box-sizing:border-box;padding:0 12px}
+.id-document-workspace .id-pdf-paper{flex:0 0 auto;margin:0;transition:width .16s ease}
+.id-document-workspace .id-pdf-paper canvas{border:1px solid #d3dee6;background:#fff;box-shadow:0 16px 42px #0008}
+@media(max-width:760px){.id-document-viewer-header{align-items:stretch;flex-direction:column}.id-document-zoom{align-self:stretch;justify-content:center}.id-document-zoom label{flex:1;justify-content:center}.id-document-zoom input{min-width:70px;width:100%}.id-document-zoom .fit{font-size:0}.id-document-zoom .fit svg{margin:0}.id-document-workspace .id-pdf-scroll{min-height:430px}.mc-hub .native-doc-detail-toolbar>div{min-width:100%;order:-1}}
+@media(max-width:480px){.id-document-viewer-header{padding:12px}.id-document-viewer-header span{line-height:1.45}.id-document-zoom{gap:4px;padding:5px}.id-document-zoom button{min-width:32px;height:33px;padding:0 7px}.id-document-zoom label>span{display:none}.id-document-zoom output{min-width:39px}.id-document-workspace .id-pdf-scroll{padding:7px}.id-document-workspace .id-pdf-stage{padding:0 7px}}

@@ -1,0 +1,4 @@
+import React from 'react';import {createRoot} from 'react-dom/client';import AdminPanel from '../src/components/vite/AdminPanel';import type {PortalSession} from '../src/lib/session';
+const manager=location.search.includes('manager');
+const session={authenticated:true,id:'qa',email:'qa@example.invalid',displayName:manager?'Bryan Arias':'Administrador principal',role:manager?'Warehouse':'Administrator',supportTeam:manager?'WAREHOUSE':null,scope:'all',permissions:{canView:true,canManageDepartment:true,canViewFieldAudits:true,canViewDashboard:true,canManage:!manager,canManageUsers:!manager,canManageAudits:!manager,canExportAudits:false}} as PortalSession;
+createRoot(document.getElementById('root')!).render(<AdminPanel session={session} initialSection={manager?'audits':'groups'} onSessionExpired={()=>{throw Error('session expired');}}/>);

@@ -1,0 +1,195 @@
+/* V528: recuperación integral de la apariencia V520.
+   Esta capa es deliberadamente específica: no modifica formularios ni módulos completos. */
+
+/* Los centros de notificaciones y mensajes viven en document.body mediante portal. */
+body:has(.notification-center-backdrop) { overflow: hidden !important; }
+.notification-center-backdrop {
+  position: fixed !important;
+  z-index: 10000 !important;
+  inset: 0 !important;
+  display: flex !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 24px !important;
+  overflow: hidden !important;
+  background: rgb(1 8 17 / 84%) !important;
+  backdrop-filter: blur(10px) saturate(120%) !important;
+  box-sizing: border-box !important;
+}
+.notification-center {
+  position: relative !important;
+  display: flex !important;
+  width: min(1240px, calc(100vw - 48px)) !important;
+  height: min(820px, calc(100dvh - 48px)) !important;
+  min-width: 0 !important;
+  max-width: 1240px !important;
+  min-height: 0 !important;
+  max-height: calc(100dvh - 48px) !important;
+  flex-direction: column !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  border: 1px solid #34769d !important;
+  border-radius: 24px !important;
+  background: linear-gradient(160deg, #07192c, #061426 58%, #081c32) !important;
+  box-shadow: 0 34px 110px rgb(0 0 0 / 82%), inset 0 1px rgb(139 229 255 / 15%) !important;
+  box-sizing: border-box !important;
+}
+.notification-center * { box-sizing: border-box; }
+.notification-center > header,
+.notification-center > .notification-summary { flex: 0 0 auto !important; }
+.notification-center > header { min-height: 118px; }
+.notification-tables {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: auto !important;
+  padding: 16px !important;
+}
+.notification-table-section { min-width: 0 !important; overflow: hidden !important; }
+.notification-table-section .resolved-ticket-table {
+  width: 100% !important;
+  max-height: none !important;
+  overflow: auto !important;
+}
+.notification-table-section .resolved-ticket-row {
+  width: 100% !important;
+  min-width: 980px !important;
+  grid-template-columns: 100px minmax(190px, 1fr) 160px minmax(300px, 1.65fr) 170px !important;
+}
+
+/* Recupera botones de acción con jerarquía y contraste, sin afectar otros formularios. */
+.ticket-hero-actions {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  width: 100% !important;
+}
+.ticket-hero-actions > button {
+  min-width: 0 !important;
+  min-height: 48px !important;
+  flex-direction: row !important;
+  gap: 8px !important;
+  padding: 11px 16px !important;
+  border: 1px solid #3c7da4 !important;
+  border-radius: 12px !important;
+  background: linear-gradient(145deg, #174c6c, #0b2c47) !important;
+  color: #f5fbff !important;
+  font-size: 11px !important;
+  line-height: 1.2 !important;
+  box-shadow: inset 0 1px rgb(255 255 255 / 13%), 0 9px 20px rgb(0 8 18 / 30%) !important;
+}
+.ticket-hero-actions > button:nth-last-child(2),
+.ticket-hero-actions > button:only-child {
+  border-color: #63e2ef !important;
+  background: linear-gradient(135deg, #09a9c2, #087a9f) !important;
+  box-shadow: inset 0 1px rgb(255 255 255 / 22%), 0 10px 25px rgb(0 139 170 / 26%) !important;
+}
+.ticket-hero-actions > button:hover {
+  transform: translateY(-2px) !important;
+  filter: brightness(1.1);
+}
+.ticket-hero-actions > button svg { width: 18px !important; height: 18px !important; }
+
+/* Tarjetas regionales 3D, conservando estructura y comportamiento V520. */
+.ticket-center .support-primary-three {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 16px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  perspective: 1200px;
+}
+.ticket-center .support-primary-three > button {
+  position: relative !important;
+  display: grid !important;
+  min-height: 190px !important;
+  grid-template-columns: 64px minmax(0, 1fr) !important;
+  grid-template-rows: 1fr auto !important;
+  align-items: center !important;
+  gap: 16px !important;
+  padding: 24px !important;
+  overflow: hidden !important;
+  border: 1px solid #2d7195 !important;
+  border-radius: 22px !important;
+  background:
+    radial-gradient(circle at 90% 8%, rgb(46 185 225 / 18%), transparent 32%),
+    linear-gradient(145deg, #123f60 0%, #0b2b48 48%, #071e35 100%) !important;
+  color: #fff !important;
+  text-align: left !important;
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 12%),
+    inset 0 -12px 30px rgb(0 8 20 / 16%),
+    0 18px 34px rgb(0 10 24 / 28%),
+    0 3px 0 #061828 !important;
+  transform: translateZ(0);
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease !important;
+}
+.ticket-center .support-primary-three > button::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 44%;
+  background: linear-gradient(180deg, rgb(255 255 255 / 7%), transparent);
+  pointer-events: none;
+  content: "";
+}
+.ticket-center .support-primary-three > button:nth-child(even) {
+  border-color: #5269a8 !important;
+  background:
+    radial-gradient(circle at 88% 10%, rgb(142 104 230 / 22%), transparent 34%),
+    linear-gradient(145deg, #183f62 0%, #152c4e 52%, #101d38 100%) !important;
+}
+.ticket-center .support-primary-three > button:hover {
+  z-index: 2;
+  transform: translateY(-6px) rotateX(1deg) !important;
+  border-color: #65e4ef !important;
+  box-shadow: inset 0 1px rgb(255 255 255 / 16%), 0 26px 50px rgb(0 10 24 / 42%), 0 4px 0 #09283d !important;
+}
+.ticket-center .support-primary-three .support-section-icon {
+  position: relative;
+  z-index: 1;
+  width: 62px !important;
+  height: 62px !important;
+  border: 1px solid #35b9d5 !important;
+  border-radius: 17px !important;
+  background: linear-gradient(145deg, #176d8c, #0d405f) !important;
+  box-shadow: inset 0 1px rgb(255 255 255 / 18%), 0 10px 22px rgb(0 10 24 / 30%) !important;
+}
+.ticket-center .support-primary-three .support-section-count {
+  grid-column: 1 / -1 !important;
+  padding-top: 14px !important;
+  border-top: 1px solid rgb(73 151 184 / 42%) !important;
+}
+.ticket-center > section[aria-label="Regiones del departamento"] > button {
+  border: 1px solid #3b7597 !important;
+  background: linear-gradient(145deg, #153b58, #0a263f) !important;
+  color: #e8f7ff !important;
+  box-shadow: inset 0 1px rgb(255 255 255 / 10%), 0 8px 18px rgb(0 8 18 / 25%) !important;
+}
+
+/* Profundidad ligera para tarjetas principales existentes, sin cambiar su layout. */
+:is(.dashboard-card, .department-card-grid > button, .ticket-navigation-card-grid > button,
+  .report-module-selector > button, .user-department-cards > button, .personnel-kind-cards > button) {
+  box-shadow: inset 0 1px rgb(255 255 255 / 10%), 0 15px 32px rgb(0 9 21 / 24%) !important;
+}
+:is(.department-card-grid > button, .ticket-navigation-card-grid > button,
+  .report-module-selector > button, .user-department-cards > button, .personnel-kind-cards > button):hover {
+  transform: translateY(-4px) !important;
+  box-shadow: inset 0 1px rgb(255 255 255 / 13%), 0 23px 42px rgb(0 9 21 / 35%) !important;
+}
+
+@media (max-width: 760px) {
+  .notification-center-backdrop { padding: 0 !important; }
+  .notification-center { width: 100% !important; height: 100dvh !important; max-height: 100dvh !important; border: 0 !important; border-radius: 0 !important; }
+  .notification-table-section .resolved-ticket-row { min-width: 0 !important; }
+  .ticket-center .support-primary-three { grid-template-columns: 1fr !important; gap: 11px !important; }
+  .ticket-center .support-primary-three > button { min-height: 160px !important; padding: 18px !important; }
+  .ticket-hero-actions { grid-template-columns: 1fr !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticket-center .support-primary-three > button { transition: none !important; }
+}

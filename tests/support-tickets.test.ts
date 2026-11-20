@@ -56,6 +56,10 @@ const center = readFileSync(
   resolve(process.cwd(), "src/components/vite/TicketCenter.tsx"),
   "utf8",
 );
+const warehousePdfRequests = readFileSync(
+  resolve(process.cwd(), "src/components/vite/WarehousePdfRequests.tsx"),
+  "utf8",
+);
 const portalLogin = readFileSync(
   resolve(process.cwd(), "src/components/vite/PortalLogin.tsx"),
   "utf8",
@@ -296,19 +300,28 @@ describe("centro de soporte por agencia", () => {
     expect(supportCatalogMigration).toContain("'TECHNOLOGY','CPU_FAILURE',N'Falla CPU'");
     expect(app).toContain("isWarehouseOperator || isDepartmentManager");
     expect(app).toContain("isWorkshopOperator || isDepartmentManager");
-    expect(center).toContain("isTechnologyDepartmentManager ||");
-    expect(center).toContain('session.role==="Administrator"&&workspaceDepartment==="TECHNOLOGY"');
-    expect(center).toContain('setMaintenanceArea(isTechnologyWarehouseRequester?"WAREHOUSE"');
-    expect(center).toContain('setMaintenanceView(isTechnologyWarehouseRequester?"history"');
+    expect(center).toContain("isWarehouseRequestDepartmentManager ||");
+    expect(center).toContain('["TECHNOLOGY","GENERAL_SERVICES","HUMAN_RESOURCES"].includes(session.supportDepartment||"")');
+    expect(center).toContain('["TECHNOLOGY","GENERAL_SERVICES","HUMAN_RESOURCES"].includes(workspaceDepartment||"")');
+    expect(center).toContain('setMaintenanceArea(isDepartmentWarehouseRequester?"WAREHOUSE"');
+    expect(center).toContain('setMaintenanceView(isDepartmentWarehouseRequester?"history"');
     expect(center).toContain('!isDedicatedWarehousePortal&&!isWarehouseOperator');
-    expect(center).toContain('openMaintenanceForm(false,maintenanceArea,isTechnologyWarehouseRequester?"REQUEST":undefined)');
-    expect(center).not.toContain('!isTechnologyWarehouseRequester&&<div className="maintenance-quick-actions"');
+    expect(center).toContain('const [maintenanceFormMenuOpen,setMaintenanceFormMenuOpen]=useState(false)');
+    expect(center).toContain('aria-controls="maintenance-form-menu"');
+    expect(center).toContain('maintenanceFormMenuOpen?"Cerrar formulario":"Nueva solicitud"');
+    expect(center).toContain('{maintenanceFormMenuOpen&&<section id="maintenance-form-menu"');
+    expect(center).toContain('setMaintenanceFormMenuOpen(false);if(movement==="REQUEST"');
+    expect(center).toContain('isWarehouseDepartmentRequester?[["REQUEST","Solicitud de equipo"]]');
+    expect(center).not.toContain('!isDepartmentWarehouseRequester&&<div className="maintenance-quick-actions"');
+    expect(center).toContain('isDepartmentWarehouseRequester?`ALMACÉN · SOLICITUDES DE ${departments[maintenanceDepartment]||maintenanceDepartment}`');
+    expect(center).toContain('isDepartmentWarehouseRequester?<strong>Solicitudes a Almacén</strong>');
     expect(center).toContain('"Agencia que requiere el equipo (obligatoria)"');
-    expect(center).toContain('"Técnico que instalará el equipo (obligatorio)"');
+    expect(center).not.toContain('"Técnico que instalará el equipo (obligatorio)"');
+    expect(center).not.toContain("Escanear QR o código");
     expect(center).toContain('maintenanceDraft.movementType!=="REQUEST"');
     expect(program).toContain('missingRequestRoute=movement=="REQUEST"&&body.AgencyId is null');
     expect(database).toContain('var serialNumber=string.IsNullOrWhiteSpace(body.SerialNumber)?null');
-    expect(database).toContain('movementType is ("REQUEST" or "EXIT" or "NEW_DELIVERY")');
+    expect(database).toContain('movementType is ("EXIT" or "NEW_DELIVERY")');
     expect(workshopWorkflow).toContain('Role=="Technology"&&Team is null');
     expect(database).toContain('technologyManager&&department!="TECHNOLOGY"');
   });
@@ -473,19 +486,19 @@ describe("centro de soporte por agencia", () => {
     expect(program).toContain(
       'MapDelete("/api/agency-transitions/{id:guid}/stages/{stageId:guid}"',
     );
-    expect(program).toContain('version = "2026.09.12.330"');
-    expect(program).toContain('X-Application-Release"]="V330"');
+    expect(program).toContain('version = "2026.09.17.372"');
+    expect(program).toContain('X-Application-Release"]="V372"');
     expect(program).toContain("AddResponseCompression");
     expect(program).toContain('CacheControl = "public,max-age=31536000,immutable"');
     expect(program).toContain('form["locationCapturedAt"]');
     expect(database).toContain("accuracy_meters decimal(8,2)");
     expect(apiProject).toContain(
-      "<AssemblyName>RegistroAgencias.SqlServer.V330</AssemblyName>",
+      "<AssemblyName>RegistroAgencias.SqlServer.V372</AssemblyName>",
     );
     expect(webConfig).toContain(
-      'processPath=".\\RegistroAgencias.SqlServer.V330.exe"',
+      'processPath=".\\RegistroAgencias.SqlServer.V372.exe"',
     );
-    expect(releaseGuard).toContain('var release = "V330"');
+    expect(releaseGuard).toContain('var release = "V372"');
     expect(v228Styles).toContain("z-index: 4600 !important");
     expect(v228Styles).toContain("overflow-y: auto !important");
     expect(v228Styles).toContain(".notification-tables");
@@ -632,7 +645,7 @@ describe("centro de soporte por agencia", () => {
 
   it("inicia incidencias desde la agencia sin selector ni modal visual", () => {
     expect(app).toContain('const isAdministrator = session.role === "Administrator"');
-    expect(app).toContain('!isSupervisor && !isMaintenanceOperator && session.permissions.canViewSupportDashboard');
+    expect(app).toContain('!isSupervisor && (!isMaintenanceOperator || session.role === "GeneralServices" && isWorkshopOperator) && session.permissions.canViewSupportDashboard');
     expect(app).toContain('authenticated.role === "GroupAdministrator"');
     expect(app).toContain("setView(initialViewForSession(authenticated))");
     expect(app).toContain("Reportar incidencia");
@@ -644,7 +657,7 @@ describe("centro de soporte por agencia", () => {
     expect(center).toContain("AGENCIA SELECCIONADA");
     expect(center).toContain("incident-report-view");
     expect(supportStyles).not.toContain(":not(.supervisor-assigned-cases)");
-    expect(app).toContain("Web V330");
+    expect(app).toContain("Web V372");
   });
 
   it("abre el tablero departamental del supervisor y protege tickets duplicados", () => {
@@ -867,8 +880,8 @@ describe("centro de soporte por agencia", () => {
     expect(professionalSidebarV254).toContain(".portal-main-column");
     expect(professionalSidebarV254).toContain("@media (max-width: 900px)");
     expect(professionalSidebarV254).toContain("transform: translateX(-105%)");
-    expect(applicationIndex).toContain('name="app-release" content="V330"');
-    expect(applicationIndex).toContain('/release-guard.js?v=V330');
+    expect(applicationIndex).toContain('name="app-release" content="V372"');
+    expect(applicationIndex).toContain('/release-guard.js?v=V372');
   });
 
   it("abre Avería en el menú operativo y adapta la cola con zoom y barra azul", () => {
@@ -916,7 +929,8 @@ describe("centro de soporte por agencia", () => {
   it("abre Almacén y Taller directamente, sin tareas pendientes, y conserva avisos", () => {
     expect(center).not.toContain("pending-task-checklist");
     expect(center).not.toContain("Tareas pendientes por resolver");
-    expect(center).toContain("<WorkshopBoard");
+    expect(center).not.toContain("<WorkshopBoard");
+    expect(center).toContain('["WAREHOUSE","WORKSHOP"].includes(maintenanceArea)');
     expect(center).not.toContain('className="warehouse-department-selector"');
     expect(center).toContain('useState<string|null>(null)');
     expect(center).toContain('<MaintenanceOverview area={maintenanceArea}');
@@ -952,12 +966,53 @@ describe("centro de soporte por agencia", () => {
   });
 
   it("guarda mantenimiento con validación visible y controla el abastecimiento completo", () => {
+    const maintenanceCommandBar = center.slice(
+      center.indexOf('<div className="maintenance-command-bar">'),
+      center.indexOf('{maintenanceView==="dashboard"?'),
+    );
+    const warehouseDashboard = center.slice(
+      center.indexOf('{maintenanceView==="dashboard"?'),
+      center.indexOf(':maintenanceView==="inventory"?'),
+    );
     expect(center).toContain('className="maintenance-form-error" role="alert"');
     expect(center).toContain('type="button" className="primary" disabled={saving} onClick={()=>void createMaintenanceMovement()}');
     expect(center).toContain("No se pudo guardar todavía");
     expect(center).toContain('maintenanceView==="dashboard"');
     expect(center).toContain("Artículos de mayor consumo");
     expect(center).toContain("Stock crítico");
+    expect(maintenanceCommandBar).not.toContain("Compras y requisiciones");
+    expect(warehouseDashboard).toContain("SOLICITUDES DE TECNOLOGÍA");
+    expect(warehouseDashboard).toContain("SOLICITUDES DE SERVICIOS GENERALES");
+    expect(warehouseDashboard).toContain("ENVÍOS A TALLER");
+    expect(center).toContain('<FileText/> Solicitudes');
+    expect(center).not.toContain("Inventario asignado");
+    expect(center).toContain("Solicitud origen:");
+    expect(center).not.toContain('kind:"RETURN"');
+    expect(center).toContain('aria-label="Inventario real de Almacén"');
+    expect(center).toContain("EXISTENCIAS REALES · ACTUALIZACIÓN AUTOMÁTICA");
+    expect(center).toContain('maintenanceView==="requests"?<WarehousePdfRequests embedded');
+    expect(warehousePdfRequests).not.toContain("inventoryMode");
+    const inventoryView=center.slice(center.indexOf(':maintenanceView==="inventory"?'),center.indexOf(':maintenanceView==="procurement"?'));
+    expect(inventoryView).not.toContain("Preparar entrega");
+    expect(inventoryView).toContain("Crear formulario de entrega");
+    expect(inventoryView).not.toContain("WarehousePdfRequests");
+    expect(warehousePdfRequests).not.toContain("inventoryAssetRows");
+    expect(warehousePdfRequests).toContain("Autorizadas");
+    expect(warehousePdfRequests).toContain("Rechazadas");
+    expect(center).toContain('actions.has("APPROVED")');
+    expect(center).toContain('newMaintenanceDraft("WAREHOUSE","NEW_DELIVERY")');
+    expect(center).toContain("Solicitud autorizada");
+    expect(center).toContain("deliveredByName:session.displayName");
+    expect(center).toContain("receivedByName:qrMovement.technicianName");
+    expect(center).toContain("LOTE-");
+    expect(center).toContain("Serial es opcional para existencias por lote");
+    expect(center).not.toContain('aria-label="Filtrar inventario por fecha"');
+    expect(center).toContain("Historial de formularios");
+    expect(center).toContain('setMaintenanceView("inventory");setMaintenanceQuery("");setMaintenanceMovementFilter("ALL")');
+    expect(warehouseDashboard).not.toContain("warehouse-department-pdf");
+    expect(warehouseDashboard).not.toContain("Nueva requisición");
+    expect(warehouseDashboard).not.toContain("Órdenes de compra recientes");
+    expect(warehouseDashboard).not.toContain("Recepciones recientes");
     expect(center).toContain("Requisiciones pendientes");
     expect(center).toContain("Recepción física contra orden");
     expect(center).toContain("Proveedores");
@@ -988,6 +1043,7 @@ describe("centro de soporte por agencia", () => {
     expect(adminPanel).toContain("Login auditor");
     expect(adminPanel).toContain("Fecha y hora");
     expect(adminPanel).toContain("submittedByLogin");
+    expect(adminPanel).toContain("stats.auditsTotal");
     expect(database).toContain("JSON_VALUE(p.submitted_by_context,'$.login')");
     expect(database).toContain("JSON_VALUE(p.submitted_by_context,'$.userId')");
     expect(database).toContain("canonicalLogin = submitterReader.GetString(0)");
@@ -1024,7 +1080,8 @@ describe("centro de soporte por agencia", () => {
     expect(database).toContain("DepartmentForRole(role)");
     expect(center).toContain("Hallazgos automáticos");
     expect(center).toContain("findingsByType");
-    expect(center).toContain("Filtrar grupo");
+    expect(center).toContain('title="regiones"');
+    expect(center).toContain('title="grupos"');
     expect(center).toContain("finding-table-card");
   });
 

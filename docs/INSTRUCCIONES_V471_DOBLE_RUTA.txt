@@ -1,0 +1,29 @@
+ACTUALIZACION V471 - PRONUNCIACION NATURAL DE NOMBRES Y LUGARES - MONSTERASP
+
+CAMBIOS V471
+1. Oficina Virtual ya no deletrea los nombres ni los lugares durante sus respuestas.
+2. Los nombres de agencias, grupos, lugares, fallas y artículos se pronuncian como palabras completas.
+3. La voz elimina los códigos auxiliares, números entre paréntesis, barras y prefijos que vienen incluidos en algunos nombres del directorio.
+4. Ejemplo: “010189 | 659 - PUNTA SPORT / VILLA MELLA (92737)” se pronuncia “Punta Sport, Villa Mella”.
+5. Los códigos de agencia continúan pronunciándose en pares, como fue solicitado.
+6. Las referencias alfanuméricas también se leen en voz alta: la parte numérica se agrupa en pares y las letras del código se pronuncian claramente como referencia.
+7. Términos técnicos se expresan naturalmente: CPU como procesador, SIM como tarjeta sim, GPS como geolocalización y PDF como documento digital.
+8. Cuando existen artículos con nombres iguales, el robot lee cada nombre junto con su código y permite elegir opción uno, opción dos, etc.
+9. Conserva la activación manual de la palabra clave y la conversación ordenada por turnos de V470.
+10. Conserva todas las validaciones reales de tickets, agencias, fallas, inventario y solicitudes de Almacén.
+
+USO
+1. Pulsa una vez el icono del robot para autorizar la palabra clave.
+2. Di “Oficina Virtual”.
+3. Espera a que el robot termine de hablar y responde cuando indique “Ahora te escucho”.
+
+INSTALACION
+1. Detén el sitio y el Application Pool en MonsterASP.
+2. Extrae el ZIP conservando su estructura y reemplaza la publicación anterior.
+3. No borres App_Data, uploads ni la base de datos del servidor.
+4. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V471.exe.
+5. Inicia el sitio y confirma V471 en /api/version y /version-web.json.
+6. Abre por HTTPS, permite micrófono y sonido, y recarga con Ctrl+F5.
+
+SEGURIDAD
+Este paquete contiene configuración privada de almacenamiento. No lo compartas públicamente.

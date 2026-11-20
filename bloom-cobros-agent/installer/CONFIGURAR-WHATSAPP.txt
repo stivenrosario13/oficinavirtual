@@ -1,0 +1,35 @@
+CONFIGURAR WHATSAPP CLOUD API
+============================
+
+La aplicacion ya contiene el conector oficial de envio.
+
+Necesitas proporcionar dentro del boton de configuracion:
+
+1. Version de Graph API.
+2. Phone Number ID.
+3. Access Token permanente.
+4. Nombre exacto de una plantilla aprobada.
+5. Codigo de idioma de esa plantilla.
+6. Numero receptor de prueba (tu numero personal con codigo de pais).
+
+La plantilla debe tener dos parametros en el cuerpo:
+
+  {{1}} Nombre del cliente
+  {{2}} Balance formateado
+
+Primero deja activo el modo simulacion. Usa Probar conexion y realiza una
+campana pequena antes de aumentar el limite. Para una prueba real, escribe tu
+numero, desactiva Modo simulacion y pulsa Enviar prueba. La aplicacion pedira
+confirmacion y enviara solamente un mensaje.
+
+MODO TEMPORAL PLAYWRIGHT
+------------------------
+
+Selecciona un cliente y pulsa Playwright asistido. Se abrira Microsoft Edge
+con un perfil persistente y una conversacion con el texto preparado. La
+primera vez vincula WhatsApp Web mediante el codigo QR. Revisa el destinatario
+y confirma el envio manualmente.
+
+El envio automatico por lotes esta disponible mediante Cloud API. Playwright
+no pulsa Enviar automaticamente porque ese uso no oficial puede bloquear la
+cuenta y no sustituye la API oficial.

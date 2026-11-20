@@ -1,0 +1,24 @@
+ACTUALIZACION V465 - VOZ Y EXPLORADOR AVANZADO - MONSTERASP
+
+CAMBIOS V465
+1. IA por voz en Crear ticket interno: reconoce instrucciones en español, agencia, departamento, tipo de soporte, asunto y descripción.
+2. IA por voz en Solicitudes a Almacén: reconoce agencia, artículos del catálogo, cantidades y motivo.
+3. El usuario revisa los datos reconocidos y confirma con el botón de envío normal; se conservan permisos y validaciones.
+4. Los archivos pueden arrastrarse directamente hacia una carpeta del árbol.
+5. Carpetas compartidas muestra primero las carpetas compartidas y sus archivos solamente al abrirlas.
+6. Nueva carpeta y Subir archivos funcionan en ubicaciones con permiso de escritura y también aparecen al hacer clic derecho en un espacio vacío.
+7. El buscador superior consulta archivos y carpetas en todo el árbol.
+8. El árbol usa el tema oscuro institucional, incluso en la carpeta seleccionada.
+9. Se conservan todos los cambios acumulados hasta V464.
+
+INSTALACION
+1. Detén el sitio y el Application Pool en MonsterASP.
+2. Extrae el ZIP conservando su estructura.
+3. Copia el contenido en la raíz publicada. El paquete incluye también wwwroot para instalaciones de doble ruta.
+4. No borres App_Data, uploads ni la base de datos del servidor.
+5. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V465.exe.
+6. Inicia el sitio y confirma V465 en /api/version y /version-web.json.
+7. Para dictado, abre el sitio mediante HTTPS y permite el micrófono cuando el navegador lo solicite.
+
+SEGURIDAD
+Este paquete contiene configuración privada de almacenamiento. No lo compartas públicamente.

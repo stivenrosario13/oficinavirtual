@@ -1,0 +1,65 @@
+/* A single stable work area for the catalogue and every administrative form. */
+.adw-dialog-backdrop:has(>.admin-request-form){
+  z-index:4700;
+  padding:18px;
+  background:#020b16e8;
+  backdrop-filter:blur(8px);
+}
+.adw-dialog.admin-request-form{
+  box-sizing:border-box;
+  display:flex;
+  flex-direction:column;
+  width:min(1180px,calc(100vw - 36px))!important;
+  max-width:none!important;
+  height:min(780px,calc(100dvh - 36px));
+  min-height:0;
+  max-height:calc(100dvh - 36px);
+  padding:0;
+  overflow:auto;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+  border-radius:22px;
+}
+.adw-dialog.admin-request-form>*{flex-shrink:0;min-width:0}
+.adw-dialog.admin-request-form>:not(header):not(footer){margin-left:24px;margin-right:24px}
+.adw-dialog.admin-request-form>header,
+.adw-dialog.admin-request-form>footer{
+  position:sticky;
+  z-index:2;
+  padding:18px 24px;
+  background:inherit;
+}
+.adw-dialog.admin-request-form>header{top:0;border-bottom:1px solid #42647b}
+.adw-dialog.admin-request-form>footer{bottom:0;margin-top:auto;border-top:1px solid #42647b;flex-wrap:wrap}
+.adw-dialog.admin-request-form>.admin-routing-directory{margin-bottom:24px}
+.adw-dialog.admin-request-form input,
+.adw-dialog.admin-request-form select,
+.adw-dialog.admin-request-form textarea{box-sizing:border-box;min-width:0;max-width:100%}
+@media(max-width:650px){
+  .adw-dialog-backdrop:has(>.admin-request-form){padding:4px}
+  .adw-dialog.admin-request-form{width:calc(100vw - 8px)!important;height:calc(100dvh - 8px);max-height:calc(100dvh - 8px);border-radius:12px}
+  .adw-dialog.admin-request-form>header,.adw-dialog.admin-request-form>footer{padding:16px}
+  .adw-dialog.admin-request-form>:not(header):not(footer){margin-left:16px;margin-right:16px}
+  .adw-dialog.admin-request-form>footer>button{flex:1;min-height:42px}
+  .adw-dialog.admin-request-form label{font-size:14px;line-height:1.5}
+  .adw-dialog.admin-request-form input,.adw-dialog.admin-request-form select,.adw-dialog.admin-request-form textarea{font-size:16px;min-height:48px}
+  .adw-dialog.admin-request-form button{min-height:44px;font-size:15px}
+}
+
+/* Loaded last with the form: native controls always use the institutional navy palette. */
+.adw-dialog-backdrop>.adw-dialog.admin-request-form.admin-special-form.admin-contract-form input:not([type="checkbox"]):not([type="radio"]),
+.adw-dialog-backdrop>.adw-dialog.admin-request-form.admin-special-form.admin-contract-form select,
+.adw-dialog-backdrop>.adw-dialog.admin-request-form.admin-special-form.admin-contract-form textarea{
+  border-color:#47718b!important;
+  background-color:#071b2f!important;
+  background-image:none!important;
+  color:#fff!important;
+  -webkit-text-fill-color:#fff!important;
+  caret-color:#71def4!important;
+  color-scheme:dark!important;
+  box-shadow:inset 0 1px 2px #0005!important;
+}
+.adw-dialog-backdrop>.adw-dialog.admin-request-form.admin-special-form.admin-contract-form :is(input,textarea)::placeholder{color:#8eb0c3!important;-webkit-text-fill-color:#8eb0c3!important;opacity:1}
+.adw-dialog-backdrop>.adw-dialog.admin-request-form.admin-special-form.admin-contract-form select option{background-color:#071b2f!important;color:#fff!important}
+.adw-dialog-backdrop>.adw-dialog.admin-request-form.admin-special-form.admin-contract-form input:-webkit-autofill{-webkit-box-shadow:0 0 0 1000px #071b2f inset!important;-webkit-text-fill-color:#fff!important}
+.adw-dialog-backdrop>.adw-dialog.admin-request-form.admin-special-form.admin-contract-form input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(1) brightness(1.7);opacity:.9}

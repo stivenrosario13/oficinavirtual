@@ -1,0 +1,18 @@
+ACTUALIZACION V517 - YESSICA MERCEDES: INFORMES DE INCIDENTES DE SUPERVISORES
+
+CORRECCION
+- Yessica Mercedes ahora tiene una entrada visible "Informes de incidentes" en escritorio y móvil.
+- Al iniciar sesión, su vista inicial abre directamente la bandeja de incidentes.
+- Puede ver todos los informes existentes y futuros creados por supervisores.
+- Conserva el mismo alcance que Lucianny González para recibir, firmar, aprobar o rechazar cada ticket y autorizar el informe.
+- Se reconocen yessica.mercedes y yesica.mercedes, con o sin @grupotejeda.local.
+- Se refuerzan en la base de datos los permisos de ver, recibir, firmar y decidir documentos.
+- Incluye todas las correcciones V516 de Taller y estabilidad contra errores 503.
+
+INSTALACION
+1. Respalde el sitio y la base de datos.
+2. Detenga el sitio y sustituya completamente la versión anterior con este ZIP.
+3. Confirme que web.config apunta a RegistroAgencias.SqlServer.V517.exe.
+4. Inicie el sitio y compruebe /api/version: V517-WEB-20261113-1715.
+5. Yessica debe cerrar sesión, volver a entrar y presionar Ctrl+F5.
+6. Debe aparecer "Informes de incidentes" y mostrar los formularios existentes de Steven y los demás supervisores.

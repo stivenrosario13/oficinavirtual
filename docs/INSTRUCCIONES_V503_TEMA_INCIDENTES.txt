@@ -1,0 +1,17 @@
+ACTUALIZACION V503 - TEMA VISUAL DE INCIDENTES
+==============================================
+
+- El panel Decision individual ahora utiliza el azul oscuro institucional.
+- Titulos, tickets, contactos, estados y detalles utilizan letras blancas.
+- Los estados aprobados conservan verde oscuro y los rechazados rojo oscuro.
+- Los botones Aprobar y Rechazar mantienen alto contraste.
+- Incluye las correcciones V502 de visibilidad global del administrador,
+  diseño organizado y sellos únicamente en la primera página.
+
+INSTALACION
+1. Conserva App_Data, uploads, logs y la configuración privada existente.
+2. Extrae el ZIP en la raíz del sitio y permite reemplazar archivos.
+3. Reinicia la aplicación desde MonsterASP.
+4. Abre una ventana privada y confirma V503-WEB-20261112-1900.
+
+No requiere migración SQL.

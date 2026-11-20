@@ -1,0 +1,23 @@
+ACTUALIZACION V489 - DOS CALENDARIOS EN REPORTE DE MANTENIMIENTO
+
+CAMBIO PRINCIPAL
+- En Call Center > Reporte de mantenimiento por agente se reemplazaron Fecha final y Periodo.
+- Ahora aparecen dos calendarios independientes: Desde y Hasta.
+- El rango seleccionado se aplica a la pantalla, Excel, PDF e impresion.
+
+ARCHIVOS Y CARPETAS COMPARTIDAS
+- Los participantes autorizados pueden abrir y descargar los archivos aunque sean antiguos.
+- Cada archivo muestra botones visibles: Abrir, Descargar y Opciones.
+- Los participantes pueden subir archivos y crear subcarpetas dentro de la carpeta compartida.
+- Se corrigieron diferencias de mayusculas en usuarios y metadatos antiguos de departamento.
+
+INSTALACION EN MONSTERASP
+1. Deten el sitio o grupo de aplicaciones.
+2. Extrae el ZIP.
+3. Reemplaza todos los archivos de las dos rutas incluidas.
+4. Sube web.config al final; debe apuntar a .\RegistroAgencias.SqlServer.V489.exe.
+5. Inicia el sitio y confirma V489 en /api/version.
+6. Cierra sesion, vuelve a entrar y abre el reporte. Deben verse Desde y Hasta.
+
+IMPORTANTE
+Este paquete contiene configuracion privada. No lo publiques ni lo compartas fuera del servidor autorizado.

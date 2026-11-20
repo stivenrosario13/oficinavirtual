@@ -1,0 +1,24 @@
+.automatic-findings:has(.finding-checklist-actions){overflow:visible!important}
+.automatic-findings:has(.finding-checklist-actions)>header{position:relative;z-index:4}
+.automatic-finding-actions.finding-checklist-actions{display:flex!important;flex-wrap:wrap!important;overflow:visible!important;align-items:stretch!important}
+.automatic-finding-actions.finding-checklist-actions>.finding-checklist-filter{position:relative;flex:1 1 190px!important;min-width:min(190px,100%)!important;max-width:none!important;z-index:5}
+.finding-checklist-trigger{width:100%;min-height:82px;display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #2b6283;border-radius:8px;background:#061a2e;color:#b7d8e8;text-align:left;cursor:pointer}
+.finding-checklist-trigger>svg:first-child{width:18px;height:18px;flex:none;color:#62d8ff}
+.finding-checklist-trigger>span{display:grid;gap:5px;min-width:0;flex:1}
+.finding-checklist-trigger strong{font-size:11px;font-weight:800}
+.finding-checklist-trigger small{font-size:12px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.finding-checklist-trigger>svg:last-child{width:16px;height:16px;flex:none;transition:transform .15s}
+.finding-checklist-trigger>svg:last-child.open{transform:rotate(180deg)}
+.finding-checklist-trigger:focus-visible{outline:2px solid #62d8ff;outline-offset:2px}
+.finding-checklist-menu{position:absolute;top:calc(100% + 6px);left:0;width:max(100%,270px);max-width:min(360px,calc(100vw - 34px));padding:10px;border:1px solid #367698;border-radius:10px;background:#0a2036;box-shadow:0 18px 40px #0009;z-index:30}
+.finding-checklist-menu-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 3px 9px;color:#e6f4ff;font-size:12px}
+.finding-checklist-menu-head button{padding:5px 8px;border:1px solid #367698;border-radius:6px;background:#183b55;color:#d8f3ff;font-size:11px;cursor:pointer}
+.finding-checklist-menu-head button:disabled{opacity:.5;cursor:default}
+.finding-checklist-options{max-height:260px;overflow-y:auto;display:grid;gap:3px}
+.automatic-finding-actions .finding-checklist-options label{display:flex!important;align-items:center!important;gap:9px!important;min-height:38px!important;padding:7px 9px!important;border:0!important;border-radius:6px!important;background:transparent!important;color:#e6f4ff!important;font-size:12px!important;cursor:pointer}
+.automatic-finding-actions .finding-checklist-options label:hover{background:#1a405c!important}
+.finding-checklist-options input{width:17px;height:17px;margin:0;accent-color:#51c8ec;flex:none}
+.finding-checklist-options label span{flex:1;min-width:0;overflow-wrap:anywhere}
+.finding-checklist-options label svg{width:15px;height:15px;color:#6be0ff}
+.finding-checklist-options p{margin:8px;color:#aec7d6;font-size:12px}
+@media(max-width:640px){.automatic-finding-actions.finding-checklist-actions>.finding-checklist-filter{flex-basis:100%!important}.finding-checklist-menu{width:100%;max-width:100%}}

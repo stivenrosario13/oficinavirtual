@@ -272,7 +272,8 @@
 }
 :where(.ticket-filter-stack, .ticket-report-filters, .automatic-finding-actions) > label > svg { width: 17px !important; color: var(--v185-accent) !important; }
 :where(.ticket-filter-stack, .ticket-report-filters, .automatic-finding-actions) > label > select,
-:where(.ticket-filter-stack, .ticket-report-filters, .automatic-finding-actions) select {
+:where(.ticket-filter-stack, .ticket-report-filters, .automatic-finding-actions) select,
+:where(.ticket-report-filters) input[type="date"] {
   grid-column: 1 / -1 !important;
   width: 100% !important;
   min-width: 0 !important;

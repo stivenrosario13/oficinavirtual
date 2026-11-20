@@ -1,0 +1,25 @@
+ACTUALIZACIÓN V524 · HALLAZGOS EN REPORTE EJECUTIVO
+==================================================
+
+1. Realice copia de seguridad del sitio y la base de datos.
+2. Detenga temporalmente la aplicación en MonsterASP.
+3. Extraiga el ZIP y cargue todo su contenido en la raíz del sitio.
+4. No elimine App_Data, cargas, logs ni configuraciones privadas.
+5. Inicie la aplicación y confirme /api/version: V524-WEB-20261116-1740.
+6. Cierre sesión, pulse Ctrl+F5 e inicie sesión nuevamente.
+
+CORRECCIONES Y MEJORAS
+- Corrige el error SQL que bloqueaba el Reporte ejecutivo global.
+- Los datos históricos incompatibles ya no cancelan las demás secciones.
+- Agrega detalle individual de todos los hallazgos automáticos del período.
+- Muestra agencia, grupo, departamento, hallazgo, prioridad y estado.
+- Incluye diagnóstico, solución aplicada, verificación y recomendaciones.
+- Incluye supervisor, técnico asignado, responsable final y ubicación.
+- Muestra apertura, cierre, duración y cantidad de evidencias vinculadas.
+- Incorpora el detalle en el PDF global y en un PDF exclusivo descargable.
+- Diseño expandible y adaptable para evitar una pantalla sobrecargada.
+- Conserva todas las funciones y optimizaciones de V523 y anteriores.
+
+EJECUTABLE
+- RegistroAgencias.SqlServer.V524.exe
+

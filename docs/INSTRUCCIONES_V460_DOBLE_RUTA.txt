@@ -1,0 +1,21 @@
+ACTUALIZACION V460 - SOLICITUDES DE AVERIA TECNICA - MONSTERASP
+
+CAMBIOS V460
+- Vittini puede ver y abrir las solicitudes de Almacén creadas por Manauri y por cualquier usuario activo asignado a Avería Técnica.
+- Incluye solicitudes históricas que se guardaron como Tecnología antes de separar el equipo de Avería Técnica.
+- Las cuentas simplificadas de Avería Técnica guardan desde ahora sus solicitudes en el departamento correcto.
+- El acceso global del equipo se concede únicamente a Vittini; los demás usuarios conservan su alcance normal.
+- El permiso es de consulta y seguimiento. No concede acceso a solicitudes de otras áreas ni funciones administrativas de Almacén.
+- Conserva el botón de edición de Diorly/Ana, los buscadores, el tema institucional y la corrección GPS de versiones anteriores.
+
+INSTALACION
+1. Guarda una copia de los archivos actuales y del web.config ACTIVO.
+2. Detén el sitio desde MonsterASP.
+3. Extrae el ZIP en la carpeta del web.config ACTIVO y reemplaza los archivos, sin crear otra carpeta.
+4. Conserva App_Data, uploads, appsettings y las variables propias del servidor.
+5. El web.config ACTIVO debe apuntar a .\RegistroAgencias.SqlServer.V460.exe.
+6. Inicia el sitio y confirma V460 en /api/version y /version-web.json.
+7. Vittini debe cerrar sesión, iniciar nuevamente y recargar con Ctrl+F5.
+
+PRIVACIDAD
+El ZIP contiene la clave privada de almacenamiento en web.config. No lo publiques ni lo compartas.

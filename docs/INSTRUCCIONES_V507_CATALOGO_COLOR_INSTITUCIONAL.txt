@@ -1,0 +1,18 @@
+ACTUALIZACION V507 - CATALOGO CON COLOR INSTITUCIONAL
+=====================================================
+
+- La ventana “¿Qué solicitud necesitas?” utiliza siempre el azul oscuro de la página.
+- El encabezado, fondo, tarjetas, iconos y bloque de responsables usan la paleta
+  institucional con textos blancos y secundarios legibles.
+- El tema ya no depende de entrar desde una ruta específica; se conserva al abrir el
+  catálogo desde Administración, la vista global o la sección de Incidentes.
+- Se mantienen el desplazamiento corregido para supervisores, todos los formularios
+  administrativos y la carga optimizada de las versiones anteriores.
+
+INSTALACION
+1. Conserva App_Data, uploads, logs y la configuración privada existente.
+2. Extrae el ZIP en la raíz del sitio y permite reemplazar archivos.
+3. Reinicia la aplicación desde MonsterASP.
+4. Abre una ventana privada y confirma V507-WEB-20261112-2025.
+
+No requiere migración SQL.

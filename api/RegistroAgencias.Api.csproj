@@ -1,15 +1,32 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
-    <AssemblyName>RegistroAgencias.SqlServer.V330</AssemblyName>
+    <AssemblyName>RegistroAgencias.SqlServer.V536</AssemblyName>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <PublishSingleFile>false</PublishSingleFile>
     <SelfContained>false</SelfContained>
     <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
     <AspNetCoreHostingModel>InProcess</AspNetCoreHostingModel>
+    <LangVersion>preview</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
   <ItemGroup><PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.3" /><PackageReference Include="WebPush" Version="1.0.13" /></ItemGroup>
   <ItemGroup><Content Remove="App_Data\**" /><None Remove="App_Data\**" /></ItemGroup>
-  <ItemGroup><None Update="Data\agency-locations-sonadora-20260907.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="../shared/call-center-support.json" LogicalName="CallCenterSupportProfile.json" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Data/sandra-fuel-20261020.json" LogicalName="SandraFuel20261020.json" /><Content Remove="Data/sandra-fuel-20261020.json" /><None Remove="Data/sandra-fuel-20261020.json" /></ItemGroup>
+  <ItemGroup><None Update="Data\agency-locations-sonadora-20260907.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" /><None Update="Data\warehouse-products-2026-09-17.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" /></ItemGroup>
+  <ItemGroup><None Update="Data\warehouse-products-2026-09-28.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" /></ItemGroup>
+  <ItemGroup><Content Update="Data\workshop-fiscalized-20260930.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" /><None Update="Data\workshop-fiscalized-20260930.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" /></ItemGroup>
+  <ItemGroup><Content Update="Data\warehouse-products-2026-10-27.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" /><None Update="Data\warehouse-products-2026-10-27.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" /></ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="OperationalErrorAudit.cs" />
+    <Compile Include="OperationalUserActivity.cs" />
+    <Compile Include="ExecutiveReport.cs" />
+    <Compile Include="HomeDashboardSummary.cs" />
+    <Compile Include="WarehouseArticleCreationAccess.cs" />
+    <Compile Include="..\.codex\decompiled-v495\**\*.cs" Exclude="..\.codex\decompiled-v495\Program.cs" />
+  </ItemGroup>
 </Project>

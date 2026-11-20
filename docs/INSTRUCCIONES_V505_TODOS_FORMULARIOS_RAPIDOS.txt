@@ -1,0 +1,22 @@
+ACTUALIZACION V505 - TODOS LOS FORMULARIOS ADMINISTRATIVOS RAPIDOS
+==================================================================
+
+- El administrador principal vuelve a ver todos los formularios administrativos,
+  sin limitarse al departamento desde el que abrió la sección.
+- Incluye formularios actuales, históricos, incidentes de supervisores y solicitudes
+  administrativas creadas por otros departamentos.
+- La consulta dedicada selecciona únicamente registros con formulario administrativo;
+  ya no descarga solicitudes de Almacén para descartarlas en el navegador.
+- Conserva la carga resumida: firmas, historial y archivos pesados se solicitan solo
+  cuando se abre el formulario.
+- Al volver a la sección se muestra inmediatamente el último listado y se actualiza
+  silenciosamente en segundo plano.
+- Conserva todas las correcciones V501 a V504.
+
+INSTALACION
+1. Conserva App_Data, uploads, logs y la configuración privada existente.
+2. Extrae el ZIP en la raíz del sitio y permite reemplazar archivos.
+3. Reinicia la aplicación desde MonsterASP.
+4. Abre una ventana privada y confirma V505-WEB-20261112-1935.
+
+No requiere migración SQL.

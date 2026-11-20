@@ -1,0 +1,35 @@
+ACTUALIZACION V472 - OPCIONES VISUALES Y SOLICITUDES POR VOZ PARA VARIAS AGENCIAS - MONSTERASP
+
+CAMBIOS V472
+1. Cuando Oficina Virtual encuentra varias agencias posibles, muestra tarjetas en pantalla con número de opción, código, nombre y grupo.
+2. El Administrador principal puede responder por voz diciendo “opción uno”, el código o el nombre de la agencia.
+3. Las tarjetas también pueden seleccionarse con un clic como alternativa accesible.
+4. Las solicitudes de Almacén por voz admiten una sola agencia o varias agencias.
+5. Es posible mencionar varias agencias al comenzar; el robot las conserva y trabaja con ellas en orden.
+6. Para cada agencia pregunta sus artículos y cantidades, valida el catálogo y guarda el bloque antes de pasar a la siguiente.
+7. La frase “terminé con esta agencia, continuemos con la otra” cierra el bloque actual y abre el siguiente.
+8. La frase “crear solicitudes” termina la conversación y envía todos los bloques confirmados.
+9. En pantalla se mantiene un resumen con cada agencia y sus artículos confirmados.
+10. Se genera una solicitud y un PDF independientes para cada agencia.
+11. El límite de 10,000 unidades se valida por solicitud y agencia, no sobre la suma de todas las agencias.
+12. Se conservan la activación por palabra clave, los turnos ordenados, la pronunciación natural y todas las validaciones de tickets e inventario.
+
+EJEMPLO DE CONVERSACION
+1. “Oficina Virtual, crea una solicitud de Almacén para las agencias 6011055 y 6012040”.
+2. El robot solicita los artículos de la primera agencia.
+3. “Dos módems y cinco cables de red”.
+4. “Terminé con esta agencia, continuemos con la otra”.
+5. El robot solicita los artículos de la segunda agencia.
+6. “Una computadora y dos teclados”.
+7. “Crear solicitudes”.
+
+INSTALACION
+1. Detén el sitio y el Application Pool en MonsterASP.
+2. Extrae el ZIP conservando su estructura y reemplaza la publicación anterior.
+3. No borres App_Data, uploads ni la base de datos del servidor.
+4. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V472.exe.
+5. Inicia el sitio y confirma V472 en /api/version y /version-web.json.
+6. Abre por HTTPS, permite micrófono y sonido, y recarga con Ctrl+F5.
+
+SEGURIDAD
+Este paquete contiene configuración privada de almacenamiento. No lo compartas públicamente.

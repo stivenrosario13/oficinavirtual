@@ -1,0 +1,19 @@
+ACTUALIZACION V487 - CARPETAS COMPARTIDAS Y RANGO DE REPORTES
+
+CAMBIOS
+- Corrige el acceso de Eddi Bono, Jordaniel Ortega y Yessica Mercedes a la carpeta ventas de Darwin.
+- Reconoce los identificadores de usuario sin depender de mayusculas o minusculas.
+- Mantiene carpetas compartidas con hasta 20 cuentas de cualquier perfil o departamento.
+- Reportes y estadisticas incluye dos calendarios: Desde y Hasta.
+- El rango seleccionado filtra tickets, hallazgos, informes y exportaciones.
+- Mantiene los tres reportes de Taller y Taller en Totales por area.
+
+INSTALACION
+1. Detiene el sitio y el Application Pool.
+2. Extrae el ZIP reemplazando la publicacion anterior.
+3. Conserva App_Data, uploads, logs, .env y la base de datos.
+4. Sube web.config al final; debe apuntar a .\RegistroAgencias.SqlServer.V487.exe.
+5. Inicia el sitio y confirma V487 en /api/version.
+6. Los usuarios deben cerrar sesion, volver a entrar y usar Ctrl+F5.
+
+No requiere ejecutar SQL manualmente. El paquete contiene configuracion privada; no lo compartas publicamente.

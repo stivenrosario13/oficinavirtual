@@ -1,0 +1,22 @@
+ACTUALIZACION V500 - OPTIMIZACION MOVIL Y CARGA BAJO DEMANDA
+
+1. Deten el sitio en MonsterASP.
+2. Extrae el ZIP y sube todos los archivos conservando las carpetas.
+3. Sube el contenido a la raiz publica y a wwwroot cuando el hosting use doble ruta.
+4. Sube web.config al final; debe apuntar a .\RegistroAgencias.SqlServer.V500.exe.
+5. Inicia el sitio y confirma "release":"V500" en /api/version.
+6. En el telefono, cierra la pestana anterior o borra la cache una vez y vuelve a iniciar sesion.
+
+CAMBIOS DE RENDIMIENTO
+- El robot y sus estilos se separan del paquete inicial para que la pagina principal aparezca antes.
+- Los catalogos completos de agencias, fallas e inventario solo cargan al activar el robot.
+- El directorio global de empleados solo se consulta al pulsar Ver usuarios en un departamento.
+- Las pestanas ocultas dejan de consultar notificaciones y se actualizan al volver a mostrarse.
+- En pantallas moviles, el intervalo de notificaciones pasa de 10 a 30 segundos para reducir red, bateria y bloqueos.
+- Se evita duplicar cargas del catalogo si el usuario pulsa varias veces mientras una consulta sigue en curso.
+
+VERIFICACION
+- Version de interfaz, API, ejecutable y cache: V500.
+- TypeScript y compilacion de produccion sin errores.
+- Pruebas de rendimiento movil, robot y centro operativo aprobadas.
+- JavaScript inicial reducido; robot publicado como modulo independiente.

@@ -1,0 +1,163 @@
+{
+  "name": "Bloom | Campaña WhatsApp Cloud API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bloom-cobros/campaign",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "f0150a31-3e6c-4e0b-8bc4-572c1682a201",
+      "name": "Entrada de campaña",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-980, 120],
+      "webhookId": "bloom-cobros-campaign"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst body = input.body ?? input;\nconst customers = Array.isArray(body.customers) ? body.customers : [];\nconst campaignId = String(body.campaign_id || `campaign-${Date.now()}`);\nconst templateName = String(body.template_name || '').trim();\nconst language = String(body.language || 'es').trim();\nconst clean = (v) => String(v ?? '').replace(/[\\u0000-\\u001F\\u007F]/g, ' ').replace(/\\s+/g, ' ').trim();\nconst money = (v) => { const s = String(v ?? '').replace(/RD\\$/gi, '').replace(/\\$/g, '').replace(/,/g, '').trim(); const n = Number(s); return Number.isFinite(n) ? Math.round(n * 100) / 100 : NaN; };\nconst phone = (v) => { let d = String(v ?? '').replace(/\\D/g, ''); if (d.startsWith('00')) d = d.slice(2); if (d.length === 10) d = `1${d}`; return /^\\d{11,15}$/.test(d) ? d : ''; };\nconst yes = (v) => ['si','sí','yes','true','1','autorizado'].includes(clean(v).toLowerCase());\nconst noContact = (v) => yes(v);\nconst normalized = customers.map((raw, row) => {\n  const firstName = clean(raw.first_name ?? raw.nombre);\n  const lastName = clean(raw.last_name ?? raw.apellido);\n  const fullName = clean(`${firstName} ${lastName}`) || 'Cliente';\n  const balance = money(raw.balance ?? raw.saldo ?? raw.monto);\n  const normalizedPhone = phone(raw.phone ?? raw.telefono ?? raw.celular);\n  const status = clean(raw.status ?? raw.estatus ?? raw.estado).toLowerCase();\n  const contract = clean(raw.contract ?? raw.contrato ?? raw.referencia);\n  const clientId = clean(raw.id ?? raw.cliente_id);\n  let eligible = true; let reason = 'OK';\n  if (!contract && !clientId) { eligible = false; reason = 'MISSING_ID'; }\n  else if (!normalizedPhone) { eligible = false; reason = 'INVALID_PHONE'; }\n  else if (!Number.isFinite(balance) || balance <= 0) { eligible = false; reason = 'INVALID_OR_ZERO_BALANCE'; }\n  else if (!yes(raw.whatsapp_consent ?? raw.consentimiento_whatsapp ?? raw.consentimiento)) { eligible = false; reason = 'NO_CONSENT'; }\n  else if (noContact(raw.do_not_contact ?? raw.no_contactar ?? raw.excluir)) { eligible = false; reason = 'DO_NOT_CONTACT'; }\n  else if (status.includes('legal')) { eligible = false; reason = 'LEGAL_BLOCKED'; }\n  return { campaign_id: campaignId, row: row + 1, client_id: clientId, contract, first_name: firstName || 'Cliente', full_name: fullName, phone: normalizedPhone, balance, balance_text: `RD$${balance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, status, template_name: templateName, language, eligible, reason };\n});\nconst counts = new Map();\nfor (const c of normalized) if (c.phone) counts.set(c.phone, (counts.get(c.phone) || 0) + 1);\nfor (const c of normalized) if (c.eligible && counts.get(c.phone) > 1) { c.eligible = false; c.reason = 'DUPLICATE_PHONE_IN_CAMPAIGN'; }\nif (!normalized.length) return [{ json: { campaign_id: campaignId, eligible: false, reason: 'EMPTY_CAMPAIGN', row: 0 } }];\nreturn normalized.map((json) => ({ json }));"
+      },
+      "id": "a88827b3-e5d0-48d2-b57f-87dc547cbf41",
+      "name": "Validar y normalizar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-740, 120]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            {
+              "id": "c1087710-a457-4d3d-bc8c-d7222a45ad13",
+              "leftValue": "={{ $json.eligible }}",
+              "rightValue": "",
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2b744e83-8d65-4837-91f2-374c7e27984b",
+      "name": "¿Cliente elegible?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-500, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({ json: { ...item.json, outcome: 'SKIPPED', processed_at: new Date().toISOString(), detail: `Omitido de forma segura: ${item.json.reason}` } }));"
+      },
+      "id": "1daf544c-3b16-426e-8baa-cac025a43702",
+      "name": "Registrar omitidos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-240, 300]
+    },
+    {
+      "parameters": { "batchSize": 1, "options": { "reset": false } },
+      "id": "24ea2e63-d2d1-4661-82d5-68a854e8bb68",
+      "name": "Lote individual",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [-240, 20]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://graph.facebook.com/' + ($vars.WA_GRAPH_VERSION || 'v23.0') + '/' + $vars.WA_PHONE_NUMBER_ID + '/messages' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $json.phone, type: 'template', template: { name: $json.template_name || $vars.WA_TEMPLATE_NAME, language: { code: $json.language || $vars.WA_TEMPLATE_LANGUAGE || 'es' }, components: [{ type: 'body', parameters: [{ type: 'text', text: $json.first_name }, { type: 'text', text: $json.balance_text }] }] } }) }}",
+        "options": {
+          "response": { "response": { "fullResponse": true, "neverError": true } },
+          "timeout": 30000
+        }
+      },
+      "id": "6fa15a43-9ffc-49f9-a2a1-1aca1ec6f5bb",
+      "name": "Enviar plantilla oficial",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [20, 20],
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nlet customer = {};\ntry { customer = $('Lote individual').item.json; } catch {}\nconst statusCode = Number(response.statusCode ?? response.status ?? 0);\nconst body = response.body ?? response;\nconst messageId = body?.messages?.[0]?.id ?? '';\nconst ok = statusCode >= 200 && statusCode < 300 && Boolean(messageId);\nconst error = body?.error?.message ?? response.error?.message ?? (ok ? '' : `Respuesta no aceptada (HTTP ${statusCode || 'desconocido'})`);\nreturn [{ json: { ...customer, outcome: ok ? 'ACCEPTED' : 'FAILED_CONTINUED', http_status: statusCode, message_id: messageId, error, processed_at: new Date().toISOString() } }];"
+      },
+      "id": "b21ed891-37c1-4e22-85a5-0d5186ff19c5",
+      "name": "Auditar resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [270, 20]
+    },
+    {
+      "parameters": {
+        "amount": "={{ Number($vars.WA_DELAY_SECONDS || 3) }}",
+        "unit": "seconds"
+      },
+      "id": "5e040a71-fd23-4a13-a4d4-49e22236a155",
+      "name": "Control de velocidad",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [510, 20],
+      "webhookId": "bloom-rate-limit-wait"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json); return [{ json: { completed_at: new Date().toISOString(), processed: rows.length, message: 'Campaña finalizada; consulta la ejecución para resultados por cliente.' } }];"
+      },
+      "id": "f36e3ad0-9b3c-4a42-8d50-5000d894333f",
+      "name": "Finalizar campaña",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [20, -150]
+    }
+  ],
+  "connections": {
+    "Entrada de campaña": { "main": [[{ "node": "Validar y normalizar", "type": "main", "index": 0 }]] },
+    "Validar y normalizar": { "main": [[{ "node": "¿Cliente elegible?", "type": "main", "index": 0 }]] },
+    "¿Cliente elegible?": {
+      "main": [
+        [{ "node": "Lote individual", "type": "main", "index": 0 }],
+        [{ "node": "Registrar omitidos", "type": "main", "index": 0 }]
+      ]
+    },
+    "Lote individual": {
+      "main": [
+        [{ "node": "Enviar plantilla oficial", "type": "main", "index": 0 }],
+        [{ "node": "Finalizar campaña", "type": "main", "index": 0 }]
+      ]
+    },
+    "Enviar plantilla oficial": { "main": [[{ "node": "Auditar resultado", "type": "main", "index": 0 }]] },
+    "Auditar resultado": { "main": [[{ "node": "Control de velocidad", "type": "main", "index": 0 }]] },
+    "Control de velocidad": { "main": [[{ "node": "Lote individual", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "timezone": "America/Santo_Domingo"
+  },
+  "active": false,
+  "versionId": "bb05ef4f-ddb0-471f-8958-598d053361ba",
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}

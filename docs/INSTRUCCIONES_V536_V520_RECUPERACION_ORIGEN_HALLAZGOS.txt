@@ -1,0 +1,20 @@
+V536 - V520 + RECUPERACION DE PREGUNTA Y RESPUESTA EN HALLAZGOS HISTORICOS
+============================================================================
+
+CORRECCION PRINCIPAL
+- Si el servidor no entrega sourceQuestion, sourceAnswer o triggerReason, la interfaz los reconstruye.
+- Usa findingKey y, para registros históricos, reconoce el título y la descripción del hallazgo.
+- “Falla de conectividad” se muestra con la pregunta de averías, respuesta “Sí - Conectividad” y su motivo.
+- La recuperación funciona tanto en la tarjeta de pantalla como en el PDF descargado.
+- Se conservan los logos, diseño institucional, base V520 y corrección de notificaciones.
+
+INSTALACION
+1. Reemplace completamente la versión anterior por el contenido de este ZIP.
+2. Si MonsterASP publica desde wwwroot, utilice la copia completa incluida en wwwroot.
+3. No elimine App_Data, uploads, logs, appsettings ni variables privadas.
+4. Reinicie el sitio y abra con Ctrl+F5.
+
+VERIFICACION
+- Confirme la versión V536-WEB-20261116-2120.
+- Descargue nuevamente el PDF; no reutilice el archivo anterior.
+- Los tres campos de origen ya no deben aparecer como “No registrado” en hallazgos reconocidos.

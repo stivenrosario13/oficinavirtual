@@ -1,0 +1,33 @@
+ACTUALIZACION V458 - GPS DE LEVANTAMIENTOS - MONSTERASP
+
+CAMBIOS V458
+- Corrige la captura de fotografías georreferenciadas cuando Android devuelve un fallo GPS temporal aunque la ubicación esté encendida.
+- Si la lectura continua falla, se intenta una lectura puntual de alta precisión antes de mostrar un error.
+- Se acepta la precisión oficial configurada de hasta 100 metros; ya no existe un límite distinto de 50 metros solamente en el formulario.
+- Una lectura GPS reciente del mismo levantamiento puede reutilizarse durante dos minutos cuando el teléfono pierde momentáneamente la señal.
+- Si el permiso fue denegado, la captura continúa bloqueada y explica cómo habilitarlo desde el candado del navegador.
+- Se conservan HTTPS, coordenadas válidas, antigüedad máxima, distancia entre fotografías, acceso por supervisor y validación del servidor contra la ubicación de la banca.
+- Se verificó la cuenta robert.medina: activa, inicio normal, rol de supervisor de grupo, dos grupos de Hondo Valle y 40 agencias activas.
+- Se conservan completos los cambios de V457 y anteriores.
+
+INSTALACION
+1. Guarda una copia de los archivos actuales y del web.config ACTIVO.
+2. Detén el sitio desde MonsterASP.
+3. Extrae el contenido del ZIP en la carpeta del web.config ACTIVO y reemplaza los archivos. No crees otra carpeta con el nombre del ZIP.
+4. Conserva App_Data, uploads, appsettings y todas las variables propias del servidor.
+5. El web.config ACTIVO debe apuntar a .\RegistroAgencias.SqlServer.V458.exe.
+6. Inicia el sitio y consulta /api/version y /version-web.json. Ambos deben indicar V458 y auditPhotoGps debe indicar transient-recovery-official-accuracy-same-audit-fallback-v458.
+7. En cada teléfono, recarga la página. Si el navegador conserva la versión anterior, usa una pestaña privada o borra los datos del sitio.
+
+PRUEBA RECOMENDADA EN EL TELEFONO
+1. Inicia sesión con el supervisor y abre una agencia que le corresponda.
+2. Confirma que el sitio usa HTTPS y que el navegador tiene permiso de Cámara y Ubicación.
+3. Mantén Ubicación y Wi-Fi activos y toma las tres fotografías desde la banca.
+4. Verifica que cada fotografía muestre coordenadas y precisión GPS antes de enviar.
+
+CONFIGURACION Y PRIVACIDAD
+Este ZIP contiene la clave privada de almacenamiento en web.config. Es un paquete para tu servidor: no lo publiques ni lo compartas.
+No incluye .env, appsettings, App_Data, uploads, logs ni bases de datos.
+
+RECUPERACION
+Si necesitas volver a la versión anterior, detén el sitio y restaura los archivos y web.config respaldados. Conserva App_Data y los datos actuales.

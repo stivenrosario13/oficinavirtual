@@ -1,0 +1,11 @@
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import WarehouseRequestComposer from '../src/components/vite/WarehouseRequestComposer';
+import AdministrativeRequestComposer from '../src/components/vite/AdministrativeRequestComposer';
+import AdministrativePortal from '../src/components/vite/AdministrativePortal';
+import WorkshopFiscalizedImport from '../src/components/vite/WorkshopFiscalizedImport';
+import type {PortalSession} from '../src/lib/session';
+const department=new URLSearchParams(location.search).get('department')||'TECHNOLOGY';
+const login=new URLSearchParams(location.search).get('login')||'qa';
+const session={role:department==='SUPERVISION'?'GroupAdministrator':['ADMINISTRATIVE','ADMIN_FORMS','ADMIN_PORTAL'].includes(department)?'Administrative':'Administrator',displayName:'QA',email:login+'@grupotejeda.local'} as PortalSession;
+createRoot(document.getElementById('root')!).render(department==='ADMIN_FORMS'?<AdministrativeRequestComposer session={session} department="Administración" onClose={()=>{}} onSaved={async()=>{document.title='Saved';}}/>:department==='ADMIN_PORTAL'?<AdministrativePortal session={session}/>:department==='IMPORT'?<WorkshopFiscalizedImport onImported={()=>{document.title='Imported';}}/>:<WarehouseRequestComposer session={session} department={department} agencies={[]} onClose={()=>{}} onSaved={()=>{}}/>);

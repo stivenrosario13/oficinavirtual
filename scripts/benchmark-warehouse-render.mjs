@@ -1,0 +1,15 @@
+import {readFileSync,writeFileSync} from 'node:fs';
+import ts from 'typescript';
+import {performance} from 'node:perf_hooks';
+const code=ts.transpileModule(readFileSync('src/lib/warehouse-render-index.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+const {indexWarehouseMovements,warehouseProductKey}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+const movements=Array.from({length:1000},(_,i)=>({id:i,operationalArea:'WAREHOUSE',equipmentType:`Equipo ${i}`,movementType:i%3?'ENTRY':'EXIT',quantity:1}));
+const catalog=Array.from({length:10000},(_,i)=>({name:`Equipo ${i}`}));
+const a=performance.now();
+const before=catalog.map(product=>movements.find(item=>item.operationalArea==='WAREHOUSE'&&warehouseProductKey(item.equipmentType)===warehouseProductKey(product.name))?.id??null);
+const b=performance.now();const index=indexWarehouseMovements(movements);
+const after=catalog.map(product=>index.firstByProduct.get(warehouseProductKey(product.name))?.id??null);
+const c=performance.now();
+if(JSON.stringify(before)!==JSON.stringify(after))throw new Error('Different results');
+const result={catalog:catalog.length,movements:movements.length,previousMs:+(b-a).toFixed(2),indexedMs:+(c-b).toFixed(2),equal:true,scope:'Synthetic product-to-movement lookup only; not browser rendering or production latency'};
+writeFileSync('outputs/warehouse-index-benchmark.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));

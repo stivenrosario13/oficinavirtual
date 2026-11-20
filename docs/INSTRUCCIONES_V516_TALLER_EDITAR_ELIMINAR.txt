@@ -1,0 +1,25 @@
+ACTUALIZACION V516 - TALLER: EDITAR Y ELIMINAR SIN ERROR 404
+
+CORRECCIONES
+- Se agregó al ejecutable real la ruta DELETE /api/workshop/{id}; ya no debe responder 404.
+- El equipo eliminado deja de aparecer en Taller y la corrección conserva usuario, fecha, motivo y datos originales.
+- Se agregó el botón Editar junto a Eliminar.
+- Editar permite corregir equipo, serial, falla/motivo y notas.
+- Cada edición conserva los valores anteriores y nuevos en la auditoría.
+- Solo el administrador principal y Rosmarlin Vittini pueden editar o eliminar.
+- La pantalla se actualiza inmediatamente después de guardar o eliminar.
+- Un bloqueo de escritura del estado de migración ya no apaga todo el portal ni provoca 503 generales.
+
+SOBRE LOS ERRORES 503
+Los 503 simultáneos de presencia, errores y notificaciones indican que el proceso de IIS/MonsterASP no estaba disponible. Esta entrega incluye ejecutable, DLL, web.config y archivos web sincronizados para evitar una mezcla de versiones.
+
+INSTALACION COMPLETA
+1. Respalde el sitio y la base de datos.
+2. Detenga el sitio o coloque app_offline.htm durante la sustitución.
+3. Sustituya TODOS los archivos de la versión anterior con este ZIP; no mezcle V515 y V516.
+4. Confirme que web.config apunta a RegistroAgencias.SqlServer.V516.exe.
+5. Retire app_offline.htm e inicie el sitio.
+6. Compruebe /api/version: V516-WEB-20261113-1645 y assembly RegistroAgencias.SqlServer.V516.
+7. Presione Ctrl+F5 e intente Editar y Eliminar desde Taller.
+
+Si /api/version también responde 503, reinicie el sitio/app pool desde MonsterASP y revise el log de arranque; en ese estado ninguna ruta de la aplicación puede responder.

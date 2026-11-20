@@ -1,0 +1,33 @@
+ACTUALIZACIÓN V518 · INFORMES DE INCIDENTES Y REPORTES
+======================================================
+
+1. Realice una copia de seguridad del sitio y de la base de datos.
+2. En MonsterASP, detenga temporalmente la aplicación.
+3. Extraiga el ZIP y cargue TODO su contenido en la raíz del sitio.
+   El paquete contiene también una segunda copia bajo wwwroot/ para instalaciones
+   que usan esa ruta como raíz de publicación.
+4. No elimine App_Data, archivos cargados, logs ni configuraciones privadas del servidor.
+5. Inicie la aplicación y confirme /api/version: V518-WEB-20261114-1008.
+6. Cierre sesión, actualice con Ctrl+F5 y vuelva a iniciar sesión.
+
+CAMBIOS PRINCIPALES
+- “Monto a pagar” ahora se presenta como “Monto de compensación”.
+- Cada ticket de un informe de incidentes tiene su propia fecha obligatoria.
+- Los PDF del informe muestran fecha y monto de compensación por ticket.
+- Estadísticas de Call Center y Reporte ejecutivo global incluyen tickets por grupo.
+- Períodos rápidos: Diario, 7 días, 15 días y 30 días.
+- Exportación del reporte de incidentes en Excel y PDF.
+- El reporte de tickets de incidentes está protegido para Yessica Mercedes y el
+  Administrador principal. La API también rechaza cualquier otra cuenta.
+- Informes antiguos sin fecha individual usan su fecha de elaboración en estadísticas.
+
+PRUEBA RÁPIDA
+- Cree un informe con dos tickets y fechas distintas.
+- Recíbalo, apruebe uno, indique su monto de compensación y rechace el otro.
+- Entre como yessica.mercedes o Administrador principal, abra Estadísticas de Call
+  Center o Reporte ejecutivo global y pruebe Diario/7/15/30, Excel y PDF.
+- Confirme que otra cuenta no puede consultar /api/incident-ticket-report.
+
+EJECUTABLE
+- RegistroAgencias.SqlServer.V518.exe
+

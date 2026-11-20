@@ -1,0 +1,18 @@
+ACTUALIZACION V488 - RECARGA FORZADA DE INTERFAZ
+
+CORRECCION PRINCIPAL
+- Sincroniza V488 en API, index.html, release-guard.js, cabeceras y version-web.json.
+- El navegador detecta la nueva interfaz, elimina caches anteriores y recarga automaticamente.
+- Conserva el acceso de Eddi Bono, Jordaniel Ortega y Yessica Mercedes a ventas de Darwin.
+- Conserva los calendarios Desde y Hasta en Reportes y estadisticas.
+- Conserva los tres reportes de Taller y Taller en Totales por area.
+
+INSTALACION
+1. Detiene el sitio y el Application Pool.
+2. Extrae el ZIP reemplazando todos los archivos de la publicacion.
+3. Conserva App_Data, uploads, logs, .env y la base de datos.
+4. Sube web.config al final; debe apuntar a .\RegistroAgencias.SqlServer.V488.exe.
+5. Inicia el sitio y confirma V488 en /api/version.
+6. Abre la pagina principal. El protector limpiara el cache y agregara _release=V488 a la URL.
+
+No requiere SQL manual. El paquete contiene configuracion privada; no lo compartas publicamente.

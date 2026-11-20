@@ -151,7 +151,7 @@ select option{background:#071f38;color:#fff}
 .ticket-report-controls{width:min(1050px,100%);display:grid!important;grid-template-columns:1fr!important;gap:12px!important;align-items:stretch!important}
 .ticket-report-filters{display:grid;grid-template-columns:minmax(160px,.75fr) minmax(250px,1.25fr) minmax(170px,.8fr);gap:10px;align-items:end}
 .ticket-report-filters label{min-width:0}
-.ticket-report-filters select{width:100%;min-width:0!important;height:43px}
+.ticket-report-filters select,.ticket-report-filters input[type="date"]{width:100%;min-width:0!important;height:43px}
 .ticket-report-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;width:100%}
 .ticket-report-actions .report-action-button{width:100%;min-width:0;min-height:58px!important;justify-content:flex-start;margin:0!important}
 .ticket-report-actions .report-action-button>span{min-width:0}

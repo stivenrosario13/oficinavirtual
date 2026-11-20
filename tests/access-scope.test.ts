@@ -41,20 +41,17 @@ describe("aislamiento de administradores de grupo", () => {
 
   it("recupera las agencias asignadas si falla el resumen del panel", () => {
     expect(adminPanelSource).toContain("loadDashboardFallback");
-    expect(adminPanelSource).toContain('fetch("/api/groups")');
-    expect(adminPanelSource).toContain(
-      "`/api/agencies?grupo=${encodeURIComponent(group.grupo)}`",
-    );
+    expect(adminPanelSource).toContain('fetch("/api/panel/catalog")');
+    expect(databaseSource).toContain('WHERE (@group IS NULL OR a.grupo=@group)');
     expect(adminPanelSource).toContain(
       "Se cargaron tus ${agencies.length} agencias asignadas",
     );
   });
 
-  it("hidrata siempre el avance de agencias del supervisor", () => {
-    expect(adminPanelSource).toContain('fetch("/api/panel/groups")');
-    expect(adminPanelSource).toContain("`/api/panel/agencies?grupo=");
+  it("completa el catálogo del supervisor solo si el resumen viene limitado", () => {
+    expect(adminPanelSource).toContain('fetch("/api/panel/catalog")');
     expect(adminPanelSource).toContain(
-      'if (session.role === "GroupAdministrator")',
+      'session.role === "GroupAdministrator" && hydrated.agencies.length < hydrated.total',
     );
   });
 });

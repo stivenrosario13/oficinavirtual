@@ -1,0 +1,21 @@
+ACTUALIZACION V506 - INCIDENTES DEL SUPERVISOR
+==============================================
+
+- La sección Incidentes del supervisor utiliza el mismo azul institucional,
+  superficies, bordes, textos y acentos de la página principal.
+- Se conservan todos los informes de incidentes accesibles para el supervisor y
+  todas las correcciones de alcance y carga rápida de V505.
+- El listado ya no tiene un desplazamiento interno de altura limitada: ahora la
+  página completa baja de forma natural y no corta tarjetas ni botones.
+- En móvil las tarjetas y sus acciones se organizan en una sola columna.
+- El formulario Nuevo informe permite desplazarse por todos los campos; encabezado
+  y acciones permanecen disponibles y ninguna sección queda oculta.
+- Conserva todas las correcciones V501 a V505.
+
+INSTALACION
+1. Conserva App_Data, uploads, logs y la configuración privada existente.
+2. Extrae el ZIP en la raíz del sitio y permite reemplazar archivos.
+3. Reinicia la aplicación desde MonsterASP.
+4. Abre una ventana privada y confirma V506-WEB-20261112-2010.
+
+No requiere migración SQL.

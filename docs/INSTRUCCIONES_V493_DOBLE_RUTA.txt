@@ -1,0 +1,14 @@
+ACTUALIZACION V493 - DIRECTORIO GLOBAL DEL ADMINISTRADOR
+
+1. Deten el sitio en MonsterASP.
+2. Extrae el ZIP y sube todos los archivos conservando las carpetas.
+3. Sube el contenido tanto a la raiz publica como a wwwroot cuando el hosting use doble ruta.
+4. Sube web.config al final; debe apuntar a .\RegistroAgencias.SqlServer.V493.exe.
+5. Inicia el sitio y confirma "release":"V493" en /api/version.
+6. Cierra sesion e inicia nuevamente para renovar la sesion y los permisos.
+
+VISIBILIDAD
+- Administrador Principal: todos los usuarios activos de todos los departamentos y equipos.
+- Yessica Mercedes: solamente Call Center.
+- Rosmarlin Vittini: Averia Tecnica y Tecnicos.
+- Los demas encargados: solamente el departamento que administran.

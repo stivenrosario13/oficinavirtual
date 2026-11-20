@@ -1,6 +1,10 @@
-import { useState } from "react";
+import { apiFetch as fetch } from "@/lib/api-fetch";
+import { lazy, Suspense, useState } from "react";
 import { ArrowRight, Building2, CheckCircle2, Eye, EyeOff, KeyRound, LoaderCircle, LockKeyhole, MapPinned, ShieldCheck, UserRound } from "lucide-react";
 import type { PortalSession } from "@/lib/session";
+
+const PasswordRecovery=lazy(()=>import('./PasswordRecovery'));
+const RecoveryCodeStart=lazy(()=>import('./PasswordRecovery').then(module=>({default:module.RecoveryCodeStart})));
 
 export default function PortalLogin({ onSuccess }: { onSuccess: (session: PortalSession) => void }) {
   const [email, setEmail] = useState("");
@@ -8,6 +12,9 @@ export default function PortalLogin({ onSuccess }: { onSuccess: (session: Portal
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [recovering,setRecovering]=useState(false);
+  const [generatingCode,setGeneratingCode]=useState(false);
+  const [recoveryNotice,setRecoveryNotice]=useState('');
 
   async function submit(event: React.FormEvent) {
     event.preventDefault(); setLoading(true); setError("");
@@ -49,7 +56,9 @@ export default function PortalLogin({ onSuccess }: { onSuccess: (session: Portal
     <section className="portal-login-card">
       <div className="portal-login-card-inner">
         <div className="portal-login-card-head"><div className="portal-login-icon"><LockKeyhole /></div><span><small>OFICINA VIRTUAL SEGURA</small><em>GRUPO TEJEDA</em></span></div>
+        {generatingCode?<Suspense fallback={<p className="loading" role="status">Abriendo recuperación…</p>}><RecoveryCodeStart initialUser={email} onBack={()=>setGeneratingCode(false)}/></Suspense>:recovering?<Suspense fallback={<p className="loading" role="status">Abriendo recuperación…</p>}><PasswordRecovery initialUser={email} onBack={()=>setRecovering(false)} onRecovered={user=>{setEmail(user);setPassword('');setError('');setRecovering(false);setRecoveryNotice('Contraseña restablecida. Inicia sesión con tu nueva contraseña y genera otro código desde Código de recuperación en este inicio de sesión.');}}/></Suspense>:<>
         <h2>Bienvenido de nuevo</h2><p>Accede con tu usuario corporativo y contraseña personal.</p>
+        {recoveryNotice&&<p className="portal-recovery-success" role="status">{recoveryNotice}</p>}
         <div className="login-access-badge"><ShieldCheck/><span><strong>Acceso por usuario</strong><small>Formato: nombre.apellido</small></span></div>
         <form onSubmit={submit}>
           <div className="portal-login-field"><label htmlFor="portal-username">Usuario corporativo</label><div><UserRound/><input id="portal-username" name="username" type="text" value={email} onChange={event => setEmail(event.target.value.replace(/\s/g, "").toLowerCase())} required autoComplete="username" spellCheck={false} placeholder="nombre.apellido" /></div></div>
@@ -57,6 +66,9 @@ export default function PortalLogin({ onSuccess }: { onSuccess: (session: Portal
           {error && <div className="alert portal-login-error"><ShieldCheck/><span><strong>No fue posible iniciar sesión</strong><small>{error}</small><em>Si es tu primer acceso, prueba la contraseña temporal 123456.</em></span></div>}
           <button className="primary" disabled={loading}>{loading ? <LoaderCircle className="spin"/> : <ShieldCheck/>}{loading ? "Verificando acceso..." : "Entrar al sistema"}<ArrowRight/></button>
         </form>
+        <button type="button" className="portal-recovery-link" disabled={loading} onClick={()=>{setPassword('');setError('');setRecoveryNotice('');setRecovering(true);}}>Olvidé mi contraseña</button>
+        <button type="button" className="portal-recovery-link" disabled={loading} onClick={()=>{setPassword('');setError('');setRecoveryNotice('');setGeneratingCode(true);}}>Código de recuperación</button>
+        </>}
         <div className="login-trust-row"><span><CheckCircle2/> Conexión protegida</span><span><CheckCircle2/> Permisos por rol</span></div>
         <span className="portal-login-security"><i/> Sesión privada · permisos validados por el servidor</span>
       </div>

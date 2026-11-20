@@ -1,0 +1,48 @@
+ACTUALIZACION V450 - OPTIMIZACION Y MEMORIA - 27/10/2026
+
+Incluye la interfaz y la API completas. Las mejoras necesitan ambas partes.
+Mantiene el formato de doble ruta de las entregas anteriores de este proyecto:
+archivos de la aplicacion en la raiz del ZIP y otra copia en wwwroot.
+
+INSTALACION EN EL SITIO EXISTENTE
+1. Guarda una copia de seguridad de los archivos actuales del sitio.
+2. Deten temporalmente el sitio desde el panel de MonsterASP.
+3. En el administrador de archivos, abre la carpeta que contiene el web.config
+   ACTIVO de la aplicacion. Extrae aqui el ZIP y acepta reemplazar archivos.
+   No crees una carpeta adicional con el nombre del ZIP.
+4. No borres App_Data, uploads, appsettings, claves ni variables del servidor.
+   Este paquete no los incluye y no requiere ejecutar un script SQL manual.
+5. Comprueba que el web.config activo apunte a:
+   .\RegistroAgencias.SqlServer.V450.exe
+6. Inicia de nuevo el sitio. Si el panel indica archivos bloqueados, confirma
+   que el sitio este detenido y repite la extraccion antes de iniciarlo.
+7. Abre /api/version: release debe ser V450 y performance debe mostrar
+   bounded-reads-lazy-sections-pdf-memory-20261027.
+8. Abre /version-web.json: release y apiRelease deben ser V450.
+9. Recarga la pagina (Ctrl+F5 en computadora), inicia sesion y verifica una
+   fotografia, Tickets, Almacen y la navegacion de documentos PDF.
+
+SI NECESITAS VOLVER A LA VERSION ANTERIOR
+Deten el sitio, restaura la copia de los archivos y web.config anteriores,
+y vuelve a iniciarlo. Conserva siempre los datos y la configuracion existentes.
+
+CONTENIDO Y VALIDACION
+- API .NET 8 para Windows, dependencias, interfaz y visores PDF locales.
+- Peticiones limitadas, secciones bajo demanda, reduccion de memoria en fotos
+  y PDF, y catalogo de agencias con alcance por supervisor.
+- Actualizar agencias acepta coordenadas con mas de seis decimales sin
+  modificar los demas campos. Se conservan los rangos geograficos validos.
+- No contiene credenciales, appsettings, App_Data, uploads ni app_offline.htm.
+- El ZIP verifica los hashes de ambas copias de cada archivo.
+- Las pruebas locales no sustituyen la verificacion con datos reales en el
+  servidor. Se conservan 74 fallos previos en la suite general; los cambios de
+  rendimiento pasaron sus pruebas focalizadas y de navegador.
+
+CAMBIOS V450
+- Contraseña editable para la cuenta principal y cierre de las sesiones anteriores.
+  La sesion del dispositivo actual se renueva. En otros dispositivos se detecta
+  al consultar la API, cada 15 segundos o al volver a la pestaña con conexion.
+- Regiones antes de las tarjetas de soporte; acceso separado para casos sin region.
+- Cola de Almacen solo dentro de Almacen, con consulta ligera y reintento.
+- Mantiene las mejoras de carga, fotos, PDF y coordenadas de V449.
+- Tras instalar, verifica estas tres funciones y los permisos con tus cuentas.

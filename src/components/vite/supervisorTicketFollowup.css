@@ -1,0 +1,30 @@
+.ticket-center .ticket-modal .supervisor-ticket-escalation-evidence {
+  background: linear-gradient(145deg, #0c2940, #103c54) !important;
+  border: 1px solid #347393;
+  color: #fff;
+  box-shadow: 0 12px 30px #00152240;
+}
+.ticket-center .ticket-modal .supervisor-ticket-escalation-evidence :is(label, strong, small, span, p) { color: #fff !important; }
+.ticket-center .ticket-modal .supervisor-ticket-escalation-evidence > header > span { background: #164d6a; color: #fff; }
+.ticket-center .ticket-modal .supervisor-ticket-escalation-evidence textarea {
+  background: #071f31 !important; color: #fff !important; border: 1px solid #4383a2; caret-color: #fff;
+}
+.ticket-center .ticket-modal .supervisor-ticket-escalation-evidence textarea::placeholder { color: #d5e6ee; opacity: 1; }
+.ticket-center .ticket-modal .supervisor-evidence-upload > label { background: #0e354c !important; border-color: #71d9fb; color: #fff; }
+.ticket-center .ticket-modal .supervisor-evidence-upload > label:hover { background: #174d68 !important; box-shadow: 0 8px 20px #00152240; }
+.ticket-center .ticket-modal .supervisor-evidence-files article { background: #09283b !important; border-color: #367491; }
+.ticket-center .ticket-modal .supervisor-evidence-files article > svg { color: #8ae5ff; }
+.ticket-center .ticket-modal .supervisor-evidence-files article button { color: #fff; background: #67334a; }
+.ticket-create-confirmation {
+  position: sticky; top: 8px; z-index: 20; display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
+  padding: 16px 18px; margin-bottom: 18px; border: 1px solid #4dc9af; border-radius: 15px;
+  background: #103d43; color: #fff; box-shadow: 0 10px 25px #00152250;
+}
+.ticket-create-confirmation strong { flex: 1; color: #fff; }
+.ticket-create-confirmation button { padding: 9px 12px; border: 1px solid #61c9df; border-radius: 10px; background: #15516b; color: #fff; }
+.ticket-create-confirmation svg { width: 22px; height: 22px; flex-shrink: 0; }
+.ticket-center .ticket-report-evidence { padding: 16px; border: 1px solid #347393; border-radius: 14px; background: #0c2940; color: #fff; }
+.ticket-center .ticket-report-evidence h3 { color: #fff; margin-top: 0; }
+.ticket-center .ticket-report-evidence a { color: #fff; overflow-wrap: anywhere; }
+.ticket-center .ticket-report-evidence img { width: 100%; max-height: 230px; object-fit: contain; background: #061c2d; border-radius: 10px; }
+.ticket-center .technician-personal-home .supervisor-created-resolved-entry { background: linear-gradient(145deg, #09322e, #105147) !important; }

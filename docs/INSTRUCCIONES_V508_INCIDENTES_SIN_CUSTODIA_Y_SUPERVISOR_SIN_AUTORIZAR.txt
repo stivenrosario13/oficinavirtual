@@ -1,0 +1,21 @@
+ACTUALIZACION V508 - INFORMES DE INCIDENTES
+
+Contenido de esta version:
+- El informe de incidentes ya no muestra los recuadros SELLO DE ENTREGA ni SELLO DE RECIBIDO.
+- Se conserva unicamente el espacio de recepcion/autorizacion en la primera hoja.
+- Las hojas siguientes contienen solamente los detalles de los tickets.
+- Los supervisores pueden crear y consultar sus informes, pero no pueden aprobar ni rechazar tickets.
+- La decision individual queda reservada al administrador principal y a Yessica Mercedes con perfil Administrativo.
+- La restriccion se valida tanto en la interfaz como en el servidor.
+
+INSTALACION EN MONSTERASP
+1. Realice una copia de seguridad del sitio y de la base de datos.
+2. Detenga temporalmente el sitio o use app_offline.htm durante la sustitucion.
+3. Extraiga el ZIP completo en la raiz del sitio, permitiendo reemplazar todos los archivos.
+4. El paquete incluye dos rutas equivalentes: raiz y wwwroot. Use la que corresponda a su panel.
+5. Confirme que web.config apunta a RegistroAgencias.SqlServer.V508.exe.
+6. Inicie el sitio y verifique /api/version: debe indicar V508-WEB-20261112-2055.
+7. Pruebe con un supervisor: no deben aparecer opciones de aprobar o rechazar.
+8. Descargue un informe de incidentes: no deben aparecer los espacios de entrega ni recibido.
+
+No copie archivos .env, appsettings privados, App_Data, uploads ni logs desde otra instalacion.

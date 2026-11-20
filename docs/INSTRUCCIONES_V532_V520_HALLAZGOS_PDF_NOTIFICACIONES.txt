@@ -1,0 +1,27 @@
+V532 - V520 + PDF INSTITUCIONAL + ORIGEN DE HALLAZGOS + NOTIFICACIONES RESISTENTES
+=================================================================================
+
+Esta actualización conserva como base exacta los archivos web publicados de V520.
+No incorpora los rediseños posteriores que fueron descartados.
+
+CAMBIOS PUNTUALES
+- El detalle de hallazgos automáticos mantiene el diseño oscuro institucional.
+- El botón descarga un archivo PDF real; ya no abre la página blanca de impresión.
+- Cada hallazgo indica la pregunta de auditoría que lo originó.
+- Cada hallazgo explica por qué la respuesta registrada activó la regla automática.
+- El endpoint de notificaciones responde aunque una fuente secundaria presente un error SQL.
+- Se conservan el buscador del header y la compatibilidad con esquemas históricos del reporte.
+
+INSTALACION
+1. Realice copia de seguridad del sitio y de la base de datos.
+2. Extraiga todo el ZIP en la raíz publicada, reemplazando los archivos existentes.
+3. Si MonsterASP apunta directamente a wwwroot, use la copia completa incluida en la carpeta wwwroot del ZIP.
+4. No elimine App_Data, uploads, logs, appsettings ni variables privadas del servidor.
+5. Reinicie el sitio y abra con Ctrl+F5.
+
+VERIFICACION
+- El diseño general debe permanecer igual a V520.
+- El header debe mostrar “Buscar en la Oficina Virtual...”.
+- El reporte debe mostrar “Pregunta de auditoría” y “Por qué se creó automáticamente”.
+- “Descargar PDF detallado” debe descargar directamente un archivo .pdf con diseño institucional.
+- /api/tickets/notifications debe responder 200 aun si una fuente opcional no está disponible.

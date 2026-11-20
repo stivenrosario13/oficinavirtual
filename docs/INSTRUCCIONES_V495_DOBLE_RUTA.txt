@@ -1,0 +1,14 @@
+ACTUALIZACION V495 - TODOS LOS DEPARTAMENTOS Y USUARIOS POR TARJETA
+
+1. Deten el sitio en MonsterASP.
+2. Extrae el ZIP y sube todos los archivos conservando las carpetas.
+3. Sube el contenido a la raiz publica y a wwwroot cuando el hosting use doble ruta.
+4. Sube web.config al final; debe apuntar a .\RegistroAgencias.SqlServer.V495.exe.
+5. Inicia el sitio y confirma "release":"V495" en /api/version.
+6. Cierra sesion e inicia nuevamente.
+
+CAMBIOS
+- La cola en vivo del administrador muestra tarjetas para todos los departamentos, incluso con cero tickets.
+- Cada tarjeta incluye el boton Ver usuarios.
+- El boton abre exclusivamente los usuarios activos del departamento seleccionado.
+- La lista extensa ya no ocupa la parte superior de la cola.

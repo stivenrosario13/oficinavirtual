@@ -1,0 +1,64 @@
+/* V539: acabado institucional para controles que no tenían estilo propio. */
+:where(button:not([class])) {
+  appearance: none;
+  border: 1px solid #2c8fbd;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #0c5f91 0%, #139bc9 100%);
+  color: #f5fcff;
+  box-shadow: 0 7px 18px rgba(0, 19, 34, 0.3);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 140ms ease, filter 140ms ease, box-shadow 140ms ease;
+}
+
+:where(button:not([class])):hover {
+  filter: brightness(1.1);
+  box-shadow: 0 9px 22px rgba(0, 19, 34, 0.38);
+  transform: translateY(-1px);
+}
+
+:where(button:not([class])):focus-visible {
+  outline: 3px solid rgba(76, 211, 255, 0.45);
+  outline-offset: 2px;
+}
+
+:where(button:not([class])):disabled {
+  border-color: #1d5474;
+  background: #0b304a;
+  color: #79aac6;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.78;
+  transform: none;
+}
+
+.ticket-section-navigation {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.ticket-section-navigation > button {
+  appearance: none;
+  min-height: 40px;
+  padding: 9px 14px;
+  border: 1px solid #2c8fbd;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #0c5f91 0%, #128fbc 100%);
+  color: #f5fcff;
+  box-shadow: 0 6px 16px rgba(0, 19, 34, 0.28);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ticket-section-navigation > button:hover {
+  filter: brightness(1.1);
+}
+
+/* La navegación interna ya incluye su propio botón de regreso. */
+.ticket-center:has(.ticket-section-navigation) > .support-view-back {
+  display: none !important;
+}

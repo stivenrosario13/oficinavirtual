@@ -1,0 +1,42 @@
+{
+  "name": "Bloom | Manejador global de errores",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "8479dce2-ecb2-497e-ad91-acde5c296dcc",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [-320, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const e = $input.first().json; return [{ json: { severity: 'ERROR', workflow_name: e.workflow?.name ?? 'unknown', workflow_id: e.workflow?.id ?? '', execution_id: e.execution?.id ?? '', execution_url: e.execution?.url ?? '', error_message: e.execution?.error?.message ?? e.error?.message ?? 'Unknown error', failed_node: e.execution?.lastNodeExecuted ?? '', captured_at: new Date().toISOString(), action: 'Revisar la ejecución. Los errores por cliente del flujo principal continúan y se registran sin activar este workflow.' } }];"
+      },
+      "id": "fa483fe5-158c-44f6-a821-75924a5588ee",
+      "name": "Normalizar incidente",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-70, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all();"
+      },
+      "id": "a1a99319-c7c6-4ad2-be9f-12a1ea4006a6",
+      "name": "Conectar alerta aquí",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [180, 0]
+    }
+  ],
+  "connections": {
+    "Error Trigger": { "main": [[{ "node": "Normalizar incidente", "type": "main", "index": 0 }]] },
+    "Normalizar incidente": { "main": [[{ "node": "Conectar alerta aquí", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": { "executionOrder": "v1", "saveDataErrorExecution": "all", "saveDataSuccessExecution": "all", "timezone": "America/Santo_Domingo" },
+  "active": false,
+  "versionId": "db5ddb82-a203-4892-a6e4-adf4250b8bb7",
+  "tags": []
+}

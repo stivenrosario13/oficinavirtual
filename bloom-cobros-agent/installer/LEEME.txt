@@ -1,0 +1,26 @@
+BLOOM COBROS AGENT - INSTALACION DESDE CMD
+===========================================
+
+1. Extrae completamente el archivo ZIP.
+2. Abre la carpeta extraida.
+3. Haz doble clic en INSTALAR.cmd.
+
+Tambien puedes instalar desde una ventana CMD:
+
+  cd ruta-de-la-carpeta
+  INSTALAR.cmd
+
+No requiere permisos de administrador. Se instala en:
+
+  %LOCALAPPDATA%\BloomCobrosAgent\App
+
+Comandos incluidos:
+
+  INSTALAR.cmd     Instala y abre la aplicacion.
+  ABRIR.cmd        Abre la aplicacion ya instalada.
+  DESINSTALAR.cmd  Elimina la aplicacion y sus datos locales.
+
+Consulta CONFIGURAR-WHATSAPP.txt para conectar la API oficial y usar el modo
+temporal con confirmacion humana.
+
+Los casos marcados como Legal se bloquean y no se generan mensajes automaticos.

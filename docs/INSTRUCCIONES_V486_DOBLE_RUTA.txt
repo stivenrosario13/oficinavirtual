@@ -1,0 +1,23 @@
+ACTUALIZACION V486 - ACCESO REAL A CARPETAS COMPARTIDAS
+
+CORRECCION PRINCIPAL
+- Corrige la comparacion de identificadores de usuario entre mayusculas y minusculas.
+- Eddi Bono y Jordaniel Ortega pueden ver la carpeta ventas compartida por Darwin Dionel.
+- Conserva el acceso compartido entre departamentos, perfiles y administradores.
+- Permite seleccionar hasta 20 cuentas activas por carpeta.
+- Mantiene los tres reportes de Taller y Taller en Totales por area.
+
+INSTALACION EN MONSTER ASP
+1. Detiene el sitio y el Application Pool.
+2. Extrae el ZIP sobre la publicacion actual y acepta reemplazar los archivos.
+3. Conserva App_Data, uploads, logs, .env y la base de datos.
+4. Sube web.config al final y confirma que apunte a .\RegistroAgencias.SqlServer.V486.exe.
+5. Inicia el sitio y comprueba V486 en /api/version.
+6. Eddi Bono y Jordaniel Ortega deben cerrar sesion, volver a entrar y recargar con Ctrl+F5.
+
+COMPROBACION
+- Abrir Archivos y comunicaciones.
+- Entrar en Carpetas compartidas.
+- Debe aparecer la carpeta ventas de Darwin Dionel.
+
+No requiere ejecutar SQL manualmente. El paquete contiene configuracion privada de almacenamiento; no lo compartas publicamente.

@@ -2,10 +2,10 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import AppErrorBoundary from "./components/vite/AppErrorBoundary";
+import { reportOperationalError } from "./lib/operational-error-report";
 import "./vite.css";
 import "./modern-2026.css";
 import "./enterprise-2026.css";
-import "./geo-atlas-2026.css";
 import "./notification-links.css";
 import "./license.css";
 import "./theme-system.css";
@@ -22,12 +22,10 @@ import "./ticket-area-agency-directory-v190.css";
 import "./transition-evidence-filter-v193.css";
 import "./ticket-mobile-list-v194.css";
 import "./institutional-ultra-v195.css";
-import "./chat-professional-v196.css";
 import "./transition-current-section-v203.css";
 import "./transition-history-responsive-v205.css";
 import "./ticket-action-focus-v206.css";
 import "./mobile-system-audit-v207.css";
-import "./chat-mobile-v193-restored-v208.css";
 import "./mobile-ticket-header-polish-v209.css";
 import "./helpdesk-mobile-professional-v210.css";
 import "./ticket-filters-mobile-full-v211.css";
@@ -52,7 +50,6 @@ import "./supervisor-ticket-inbox-v237.css";
 import "./supervisor-ticket-separation-v238.css";
 import "./maintenance-scanner-v246.css";
 import "./maintenance-operations-v247.css";
-import "./operations-center-v250.css";
 import "./supervisor-agency-gps-v253.css";
 import "./professional-sidebar-v254.css";
 import "./design-system-v256.css";
@@ -66,6 +63,28 @@ import "./supervisor-ticket-evidence-v269.css";
 import "./pwa-push-v295.css";
 import "./release-v300-responsive.css";
 import "./typography-scale-v315.css";
+import "./mobile-section-navigation-v423.css";
+import "./form-theme-v501.css";
+import "./portal-card-navigation-v525.css";
+import "./v520-integral-restoration-v528.css";
+
+// Completa el registro para módulos heredados que todavía manejan sus propias
+// solicitudes y para errores asíncronos que no llegan a un ErrorBoundary.
+window.addEventListener("error", (event) => {
+  reportOperationalError({
+    action: "INTERFACE_ERROR",
+    reference: event.filename ? event.filename.split("/").pop() : "Interfaz",
+    detail: event.error instanceof Error ? event.error.message : event.message || "Error no controlado en la interfaz.",
+  });
+});
+window.addEventListener("unhandledrejection", (event) => {
+  const reason = event.reason;
+  reportOperationalError({
+    action: "ASYNC_ERROR",
+    reference: "Operación asíncrona",
+    detail: reason instanceof Error ? reason.message : String(reason || "Promesa rechazada sin detalle."),
+  });
+});
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

@@ -1,0 +1,21 @@
+ACTUALIZACION V464 - EXPLORADOR COMPACTO - MONSTERASP
+
+CAMBIOS V464
+1. Los archivos se muestran compactos, como en un explorador de archivos, con icono y nombre.
+2. El doble clic abre el archivo y Enter también permite abrirlo desde el teclado.
+3. Abrir, descargar, compartir, mover, renombrar y eliminar están en el menú de clic derecho.
+4. Restaurar y eliminar definitivamente también están en el clic derecho de Papelera.
+5. Administrar acceso, renombrar, mover y eliminar carpetas están en el clic derecho del árbol.
+6. Se eliminaron los botones de acciones visibles en las tarjetas y debajo de las carpetas.
+7. Se conservan todos los cambios acumulados hasta V463.
+
+INSTALACION
+1. Detén el sitio y el Application Pool en MonsterASP.
+2. Extrae el ZIP conservando su estructura.
+3. Copia el contenido en la raíz publicada. El paquete incluye también wwwroot para instalaciones de doble ruta.
+4. No borres App_Data, uploads ni la base de datos del servidor.
+5. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V464.exe.
+6. Inicia el sitio y confirma V464 en /api/version y /version-web.json.
+
+SEGURIDAD
+Este paquete contiene configuración privada de almacenamiento. No lo compartas públicamente.

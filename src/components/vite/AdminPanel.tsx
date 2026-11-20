@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from "@/lib/api-fetch";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -19,6 +20,7 @@ import {
   MapPin,
   Maximize2,
   Navigation,
+  PackageSearch,
   Printer,
   Save,
   Search,
@@ -33,11 +35,19 @@ import {
 import type { PortalSession } from "@/lib/session";
 import { roleLabel } from "@/lib/session";
 import {deviceDate} from "@/lib/display";
+import './usersPermissionsPage.css';
+import {accessProfiles,userAccessProfile} from '@/lib/user-access-profiles';
+import {allPermissionCatalog} from '@/lib/permission-catalog';
+import UsersPermissionsWorkspace from './UsersPermissionsWorkspace';
+import {userDepartments,departmentAssignment,assignedUserDepartment,type UserDepartment} from '@/lib/user-departments';
 
 type Group = {
   grupo: string;
   total: number;
   completed: number;
+  auditCount: number;
+  completedRounds: number;
+  roundsTotal: number;
   pending: number;
   percent: number;
   lastUpdated: string | null;
@@ -49,6 +59,7 @@ type AgencyProgress = {
   status: "PENDING" | "COMPLETED" | "REVIEW_REQUIRED";
   percent: number;
   lastUpdated: string | null;
+  auditCount?: number;
 };
 type AdministratorProgress = {
   id: string;
@@ -72,6 +83,7 @@ type Answers = {
   printerMaintained?: string;
   inverterPresent?: string;
   batteryPresent?: string;
+  cashBoxType?: string;
 };
 type AuditPhoto = {
   photoType: string;
@@ -110,6 +122,7 @@ type Stats = {
   percent: number;
   groupsTotal: number;
   groupsReady: number;
+  auditsTotal: number;
   groups: Group[];
   agencies: AgencyProgress[];
   administrators: AdministratorProgress[];
@@ -121,12 +134,15 @@ type AdminUser = {
   displayName: string;
   role:
     | "ADMINISTRATOR"
+    | "ADMINISTRATIVE"
+    | "DEPARTMENT"
     | "VIEWER"
     | "GROUP_ADMIN"
     | "FISCALIZADOR"
     | "TECHNOLOGY"
     | "GENERAL_SERVICES"
-    | "HUMAN_RESOURCES";
+    | "HUMAN_RESOURCES"
+    | "WAREHOUSE";
   isActive: boolean;
   lastLoginAt: string | null;
   createdAt: string;
@@ -138,118 +154,9 @@ type AdminUser = {
   groups: string[];
   agencyCount: number;
   permissions: Record<string, boolean>;
-  supportTeam?: TechnologyTeam | null;
+  supportTeam?: TechnologyTeam | UserDepartment | null;
 };
-type UserPermissionKey = keyof PortalSession["permissions"];
-const permissionCatalog: Array<{
-  key: UserPermissionKey;
-  title: string;
-  description: string;
-}> = [
-  {
-    key: "canViewDashboard",
-    title: "Panel y evidencias",
-    description: "Consulta estadísticas, grupos, agencias y auditorías.",
-  },
-  {
-    key: "canAudit",
-    title: "Realizar auditorías",
-    description: "Registra formularios y evidencia georreferenciada.",
-  },
-  {
-    key: "canExportAudits",
-    title: "Descargar auditorías PDF",
-    description: "Exporta expedientes y reportes de campo.",
-  },
-  {
-    key: "canCreateTickets",
-    title: "Crear tickets",
-    description: "Reporta incidencias a los departamentos.",
-  },
-  {
-    key: "canAssignTickets",
-    title: "Asignar y compartir tickets",
-    description:
-      "Enruta casos a técnicos, equipos u otros departamentos de soporte.",
-  },
-  {
-    key: "canViewSupportDashboard",
-    title: "Tablero de soporte",
-    description: "Entra a departamentos y consulta sus tickets.",
-  },
-  {
-    key: "canResolveTickets",
-    title: "Trabajar y resolver tickets",
-    description: "Actualiza estado, prioridad, diagnóstico y solución.",
-  },
-  {
-    key: "canViewSupportFindings",
-    title: "Hallazgos automáticos",
-    description: "Consulta y resuelve hallazgos de auditoría.",
-  },
-  {
-    key: "canUseSupportChat",
-    title: "Chat de soporte",
-    description: "Accede a conversaciones y al asistente interno.",
-  },
-  {
-    key: "canManageSupportChat",
-    title: "Atender conversaciones CRM",
-    description: "Toma, responde, resuelve y cierra conversaciones.",
-  },
-  {
-    key: "canModerateSupportChat",
-    title: "Moderar conversaciones",
-    description:
-      "Permite bloquear, restringir y silenciar conversaciones del CRM.",
-  },
-  {
-    key: "canDeleteSupportConversations",
-    title: "Eliminar conversaciones",
-    description:
-      "Oculta conversaciones con eliminación segura y trazabilidad administrativa.",
-  },
-  {
-    key: "canShareSupportConversations",
-    title: "Compartir conversaciones",
-    description: "Comparte o copia un resumen autorizado de la conversación.",
-  },
-  {
-    key: "canViewTicketNotifications",
-    title: "Centro de notificaciones",
-    description: "Recibe avisos y sonido de novedades de tickets.",
-  },
-  {
-    key: "canConfigureSupport",
-    title: "Configuración de soporte",
-    description: "Edita departamentos, servicios y prioridades.",
-  },
-  {
-    key: "canViewAllSupportDepartments",
-    title: "Todos los departamentos",
-    description: "Consulta procesos de todas las áreas de soporte.",
-  },
-  {
-    key: "canDeleteSupportTickets",
-    title: "Eliminar tickets",
-    description: "Elimina tickets incorrectos con registro de auditoría.",
-  },
-  {
-    key: "canManageUsers",
-    title: "Usuarios y permisos",
-    description: "Crea cuentas y asigna permisos individuales.",
-  },
-  {
-    key: "canManageAudits",
-    title: "Corregir y eliminar auditorías",
-    description: "Modifica expedientes y reabre agencias auditadas.",
-  },
-  {
-    key: "canConfigureProfile",
-    title: "Perfil y contraseña",
-    description: "Administra foto de perfil y credenciales propias.",
-  },
-];
+// Shared with the dedicated users workspace.
 const defaultUserPermissions = (
   role: AdminUser["role"],
 ): Record<string, boolean> => {
@@ -261,6 +168,8 @@ const defaultUserPermissions = (
     "HUMAN_RESOURCES",
   ].includes(role);
   return {
+    canViewFieldAudits: admin,
+    canManageDepartment: admin,
     canView: true,
     canManage: admin,
     canManageUsers: admin,
@@ -281,6 +190,10 @@ const defaultUserPermissions = (
     canViewAllSupportDepartments: admin,
     canConfigureSupport: admin,
     canViewSupportFindings: admin || support,
+    canCancelFindingWithEvidence: admin || support,
+    canCancelFindingWithoutEvidence: false,
+    canCancelFindingWithReason: admin || support,
+    canCancelFindingWithoutReason: false,
     canUseSupportChat: admin || supervisor || support,
     canManageSupportChat: admin || support,
     canModerateSupportChat: admin || support,
@@ -288,19 +201,27 @@ const defaultUserPermissions = (
     canShareSupportConversations: admin || supervisor || support,
     canDeleteSupportTickets: admin,
     canViewTicketNotifications: admin || supervisor || support,
+    canAuthorizeWarehouseRequests: admin,
+    canLoadWarehouseInventory: admin,
+    canCreateWarehouseArticles: admin,
   };
 };
-type UserAccessProfile = "ADMINISTRATOR" | "SUPERVISOR" | "DEPARTMENT_MANAGER" | "SUPPORT" | "TECHNICIAN";
-type SupportDepartmentRole = "TECHNOLOGY" | "GENERAL_SERVICES" | "HUMAN_RESOURCES";
+type UserAccessProfile = import('@/lib/user-access-profiles').AccessProfile;
+type SupportDepartmentRole = UserDepartment;
 type TechnologyTeam = "CALL_CENTER" | "TECHNICAL_FAILURE" | "TECHNICIANS" | "WAREHOUSE" | "WORKSHOP";
 const accessProfilePermissions = (
   profile: UserAccessProfile,
   department: SupportDepartmentRole,
 ) => {
+  if (profile === "WAREHOUSE_REQUESTER") return userAccessProfile(profile,department).permissions;
+  if (profile === "ADMINISTRATIVE") return defaultUserPermissions("ADMINISTRATIVE");
   if (profile === "ADMINISTRATOR")
     return defaultUserPermissions("ADMINISTRATOR");
   if (profile === "SUPERVISOR") return defaultUserPermissions("GROUP_ADMIN");
-  const permissions = defaultUserPermissions(department);
+  const permissions = defaultUserPermissions(departmentAssignment(department).role as AdminUser['role']);
+  if(departmentAssignment(department).role === "DEPARTMENT")Object.assign(permissions,userAccessProfile(profile,department).permissions);
+  permissions.canManageDepartment = profile === "DEPARTMENT_MANAGER";
+  if(profile === "DEPARTMENT_MANAGER")Object.assign(permissions,{canViewFieldAudits:true,canViewDashboard:true,canViewSupportDashboard:true,canManageUsers:false,canManageAudits:false,canViewAllSupportDepartments:false});
   if (profile === "TECHNICIAN") {
     permissions.canAssignTickets = false;
     permissions.canModerateSupportChat = false;
@@ -320,8 +241,8 @@ const technologyTeamPermissions=(team:TechnologyTeam):Record<string,boolean>=>{
   else Object.assign(permissions,{canCreateTickets:true,canAssignTickets:true,canResolveTickets:true,canViewSupportDashboard:true,canViewSupportFindings:true,canUseSupportChat:true,canManageSupportChat:true,canModerateSupportChat:false,canShareSupportConversations:true,canViewTicketNotifications:true});
   return permissions;
 };
-type AssignedGroup = { grupo: string; pending?: number };
-type AssignedAgency = {
+type _AssignedGroup = { grupo: string; pending?: number };
+type _AssignedAgency = {
   codigo: string;
   terminal: string;
   grupo?: string;
@@ -339,6 +260,7 @@ const answerLabels: Array<[keyof Answers, string]> = [
   ["printerMaintained", "¿Le dieron mantenimiento a la impresora?"],
   ["inverterPresent", "¿Tiene inversor?"],
   ["batteryPresent", "¿Tiene batería?"],
+  ["cashBoxType", "¿La agencia tiene caja registradora o caja de madera?"],
 ];
 const equipmentAnswerKeys = new Set<keyof Answers>([
   "inverterPresent",
@@ -360,6 +282,7 @@ const emptyStats: Stats = {
   percent: 0,
   groupsTotal: 0,
   groupsReady: 0,
+  auditsTotal: 0,
   groups: [],
   agencies: [],
   administrators: [],
@@ -367,6 +290,21 @@ const emptyStats: Stats = {
 };
 const usernameValue = (email: string) =>
   email.replace(/@grupotejeda\.local$/i, "");
+const auditOrdinal = (index: number) => {
+  const names = [
+    "Primer levantamiento",
+    "Segundo levantamiento",
+    "Tercer levantamiento",
+    "Cuarto levantamiento",
+    "Quinto levantamiento",
+    "Sexto levantamiento",
+    "Séptimo levantamiento",
+    "Octavo levantamiento",
+    "Noveno levantamiento",
+    "Décimo levantamiento",
+  ];
+  return names[index] || `${index + 1}.º levantamiento`;
+};
 const usernameEmail = (username: string) =>
   `${username
     .toLowerCase()
@@ -467,9 +405,15 @@ const safeFileName = (value: string) =>
 export default function AdminPanel({
   session,
   onSessionExpired,
+  initialSection = "groups",
+  usersOnly = false,
+  onCloseUsers,
 }: {
   session: PortalSession;
   onSessionExpired: () => void;
+  initialSection?: "groups" | "agencies" | "administrators" | "audits";
+  usersOnly?: boolean;
+  onCloseUsers?: () => void;
 }) {
   const onSessionExpiredRef = useRef(onSessionExpired);
   useEffect(() => {
@@ -483,7 +427,7 @@ export default function AdminPanel({
   const [filter, setFilter] = useState("all");
   const [sectionTab, setSectionTab] = useState<
     "groups" | "agencies" | "administrators" | "audits"
-  >("groups");
+  >(initialSection);
   const [agencyPage, setAgencyPage] = useState(1);
   const [selectedAudit, setSelectedAudit] = useState<Audit | null>(null);
   const [editDraft, setEditDraft] = useState<Audit | null>(null);
@@ -506,24 +450,24 @@ export default function AdminPanel({
   const [exportingUsers, setExportingUsers] = useState(false);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [userQuery, setUserQuery] = useState("");
-  const [userDepartmentFilter,setUserDepartmentFilter]=useState<"ADMINISTRATION"|"SUPERVISORS"|SupportDepartmentRole|null>(null);
+  const [userDepartmentFilter,setUserDepartmentFilter]=useState<"ADMINISTRATION"|"SUPERVISORS"|"WAREHOUSE"|SupportDepartmentRole|null>(null);
   const [selectedUserId,setSelectedUserId]=useState<string|null>(null);
   const [userDetailSection,setUserDetailSection]=useState<"information"|"permissions"|"groups">("information");
   const [groupCatalog, setGroupCatalog] = useState<string[]>([]);
   const [newUserAccessProfile, setNewUserAccessProfile] =
-    useState<UserAccessProfile>("SUPERVISOR");
+    useState<UserAccessProfile>("SUPPORT");
   const [newUserDepartment, setNewUserDepartment] =
     useState<SupportDepartmentRole>("GENERAL_SERVICES");
   const [newUser, setNewUser] = useState({
     email: "",
     displayName: "",
-    role: "GROUP_ADMIN" as AdminUser["role"],
+    role: "GENERAL_SERVICES" as AdminUser["role"],
     password: "123456",
     region: "",
     contact: "",
-    supportTeam: null as TechnologyTeam | null,
+    supportTeam: null as TechnologyTeam | UserDepartment | null,
     groups: [] as string[],
-    permissions: defaultUserPermissions("GROUP_ADMIN"),
+    permissions: userAccessProfile("SUPPORT","GENERAL_SERVICES").permissions,
   });
 
   const prepareEvidence = (url: string) => {
@@ -538,70 +482,29 @@ export default function AdminPanel({
     return pending;
   };
 
-  useEffect(() => {
-    if (sectionTab === "audits" && session.permissions.canExportAudits)
-      void import("jspdf");
-  }, [sectionTab, session.permissions.canExportAudits]);
+  // PDF libraries load when an export is requested.
 
   const loadVisibleCatalog = useCallback(async () => {
-    let groupsResponse = await fetch("/api/panel/groups");
-    if (groupsResponse.status === 404)
-      groupsResponse = await fetch("/api/groups");
-    const groupsData = await groupsResponse.json().catch(() => ({}));
-    if (groupsResponse.status === 401) {
-      onSessionExpiredRef.current();
-      throw new Error("La sesión expiró.");
+    const response = await fetch("/api/panel/catalog");
+    if (response.status === 401) { onSessionExpiredRef.current(); throw new Error("La sesión expiró."); }
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || "No fue posible consultar las agencias asignadas.");
+    const agencies = (body.agencies || []) as AgencyProgress[];
+    const grouped = new globalThis.Map<string, AgencyProgress[]>();
+    for (const agency of agencies) {
+      const rows = grouped.get(agency.grupo) || [];
+      rows.push(agency); grouped.set(agency.grupo, rows);
     }
-    if (!groupsResponse.ok)
-      throw new Error(
-        groupsData.error || "No fue posible consultar tus grupos asignados.",
-      );
-    const assignedGroups = (groupsData.groups || []) as AssignedGroup[];
-    const agencyResults = await Promise.all(
-      assignedGroups.map(async (group) => {
-        let response = await fetch(
-          `/api/panel/agencies?grupo=${encodeURIComponent(group.grupo)}`,
-        );
-        if (response.status === 404)
-          response = await fetch(
-            `/api/agencies?grupo=${encodeURIComponent(group.grupo)}`,
-          );
-        const body = await response.json().catch(() => ({}));
-        if (!response.ok)
-          throw new Error(
-            body.error ||
-              `No fue posible consultar las agencias de ${group.grupo}.`,
-          );
-        return {
-          group: group.grupo,
-          agencies: (body.agencies || []) as AssignedAgency[],
-        };
-      }),
-    );
-    const agencies: AgencyProgress[] = agencyResults.flatMap(
-      ({ group, agencies: assignedAgencies }) =>
-        assignedAgencies.map((agency) => ({
-          codigo: agency.codigo,
-          terminal: agency.terminal,
-          grupo: agency.grupo || group,
-          status: agency.status || "PENDING",
-          percent: agency.percent ?? 0,
-          lastUpdated: agency.lastUpdated ?? null,
-        })),
-    );
-    const groups: Group[] = agencyResults.map(
-      ({ group, agencies: assignedAgencies }) => ({
-        grupo: group,
-        total: assignedAgencies.length,
-        completed: 0,
-        pending: assignedAgencies.length,
-        percent: 0,
-        lastUpdated: null,
-      }),
-    );
+    const groups: Group[] = [...grouped].map(([grupo, rows]) => ({
+      grupo, total: rows.length, completed: rows.filter(row => row.status === 'COMPLETED').length,
+      auditCount: rows.reduce((total, row) => total + (row.auditCount || 0), 0),
+      completedRounds: rows.length ? Math.min(...rows.map(row => row.auditCount || 0)) : 0,
+      roundsTotal: Math.max(1, ...rows.map(row => row.auditCount || 0)),
+      pending: rows.filter(row => row.status === 'PENDING').length,
+      percent: Math.round(rows.filter(row => row.status === 'COMPLETED').length * 100 / rows.length), lastUpdated: null,
+    }));
     return { agencies, groups };
   }, []);
-
   const load = useCallback(async () => {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 12_000);
@@ -618,7 +521,7 @@ export default function AdminPanel({
         data.error || `No se pudo cargar el panel (HTTP ${response.status}).`,
       );
     let hydrated = { ...emptyStats, ...data } as Stats;
-    if (session.role === "GroupAdministrator") {
+    if (session.role === "GroupAdministrator" && hydrated.agencies.length < hydrated.total) {
       const catalog = await loadVisibleCatalog();
       const progress = new globalThis.Map<string, AgencyProgress>(
         (hydrated.agencies || []).map((agency) => [
@@ -667,7 +570,11 @@ export default function AdminPanel({
       setStats({
         ...emptyStats,
         total: agencies.length,
-        pending: agencies.length,
+        pending: agencies.filter(agency => agency.status === 'PENDING').length,
+        completed: agencies.filter(agency => agency.status === 'COMPLETED').length,
+        review: agencies.filter(agency => agency.status === 'REVIEW_REQUIRED').length,
+        percent: agencies.length ? Math.round(100 * agencies.filter(agency => agency.status === 'COMPLETED').length / agencies.length) : 0,
+        groupsReady: groups.filter(group => group.completed === group.total).length,
         groupsTotal: groups.length,
         groups,
         agencies,
@@ -698,7 +605,10 @@ export default function AdminPanel({
     };
   }, [load, loadVisibleCatalog, session.id, session.role]);
   useEffect(() => {
+    let lastRefresh = Date.now();
     const refreshAgencyCatalog = () => {
+      if (document.hidden || Date.now() - lastRefresh < 60000) return;
+      lastRefresh = Date.now();
       void load().catch(() => undefined);
     };
     window.addEventListener("support-live-refresh", refreshAgencyCatalog);
@@ -763,7 +673,7 @@ export default function AdminPanel({
       !stats ||
       !session?.permissions.canManageAudits ||
       !window.confirm(
-        `¿Eliminar la auditoría ${selectedAudit.codigo}? La agencia volverá a Pendiente.`,
+        `¿Eliminar esta auditoría de ${selectedAudit.codigo}? Las demás auditorías de la agencia se conservarán.`,
       )
     )
       return;
@@ -780,7 +690,7 @@ export default function AdminPanel({
       await load();
       setSelectedAudit(null);
       setEditDraft(null);
-      setNotice("La auditoría fue eliminada y la agencia volvió a Pendiente.");
+      setNotice("La auditoría fue eliminada. El estado de la agencia se recalculó según su historial restante.");
     } catch (deleteError) {
       setError((deleteError as Error).message);
     } finally {
@@ -788,7 +698,7 @@ export default function AdminPanel({
     }
   };
 
-  const openUsers = async () => {
+  const _openUsers = async () => {
     if (!session?.permissions.canManageUsers) return;
     setUserManagerOpen(true);
     setError("");
@@ -813,6 +723,7 @@ export default function AdminPanel({
       setError((usersError as Error).message);
     }
   };
+  const closeUsers=()=>{if(usersOnly)onCloseUsers?.();else setUserManagerOpen(false)};
   const createUser = async (event: React.FormEvent) => {
     event.preventDefault();
     if (creatingUserRef.current) return;
@@ -838,23 +749,27 @@ export default function AdminPanel({
     setNewUser({
       email: "",
       displayName: "",
-      role: "GROUP_ADMIN",
+      role: "GENERAL_SERVICES",
       password: "123456",
       region: "",
       contact: "",
       supportTeam: null,
       groups: [],
-      permissions: defaultUserPermissions("GROUP_ADMIN"),
+      permissions: userAccessProfile("SUPPORT","GENERAL_SERVICES").permissions,
     });
-    setNewUserAccessProfile("SUPERVISOR");
+    setNewUserAccessProfile("SUPPORT");
     setNewUserDepartment("GENERAL_SERVICES");
     setNewUserOpen(false);
-    setUserManagerOpen(false);
+    if(!usersOnly)setUserManagerOpen(false);
     creatingUserRef.current = false;
     setCreatingUser(false);
     setNotice("Usuario creado correctamente.");
   };
+  const savingUserRef=useRef(false);
+  const [savingUserId,setSavingUserId]=useState<string|null>(null);
   const saveUser = async (user: AdminUser) => {
+    if(savingUserRef.current)return;
+    savingUserRef.current=true;setSavingUserId(user.id);
     setError("");
     try {
       const response = await fetch(`/api/admin/users/${user.id}`, {
@@ -871,10 +786,10 @@ export default function AdminPanel({
     } catch (updateError) {
       setError((updateError as Error).message);
       return;
-    }
+    }finally{savingUserRef.current=false;setSavingUserId(null);}
     setNotice("Permisos y contraseña actualizados.");
     setNewUserOpen(false);
-    setUserManagerOpen(false);
+    if(!usersOnly)setUserManagerOpen(false);
   };
   const deleteUser = async (user: AdminUser) => {
     if (user.id === session.id || deletingUserRef.current) return;
@@ -1012,13 +927,15 @@ export default function AdminPanel({
         .replaceAll("'", "&#039;");
     const printableRole = (role: AdminUser["role"]) =>
       ({
-        VIEWER: "Consulta general",
+        DEPARTMENT: "Usuario de departamento", VIEWER: "Consulta general",
         FISCALIZADOR: "Fiscalizador",
         TECHNOLOGY: "Tecnología",
         GENERAL_SERVICES: "Servicios Generales",
         HUMAN_RESOURCES: "Recursos Humanos",
+        WAREHOUSE: "Almacén",
         GROUP_ADMIN: "Supervisor",
         ADMINISTRATOR: "Administrador principal",
+        ADMINISTRATIVE: "Administrativo",
       })[role];
     const rows = (items: AdminUser[]) =>
       items.length
@@ -1056,13 +973,15 @@ export default function AdminPanel({
       } = userDirectoryGroups();
       const roleName = (role: AdminUser["role"]) =>
         ({
-          VIEWER: "Consulta general",
+          DEPARTMENT: "Usuario de departamento", VIEWER: "Consulta general",
           FISCALIZADOR: "Fiscalizador",
           TECHNOLOGY: "Tecnologia",
           GENERAL_SERVICES: "Servicios Generales",
           HUMAN_RESOURCES: "Recursos Humanos",
+          WAREHOUSE: "Almacen",
           GROUP_ADMIN: "Supervisor",
           ADMINISTRATOR: "Administrador principal",
+        ADMINISTRATIVE: "Administrativo",
         })[role];
       const { jsPDF } = await import("jspdf");
       const pdf = new jsPDF({
@@ -1410,15 +1329,17 @@ export default function AdminPanel({
       .toLowerCase()
       .includes(normalizedUserQuery),
   );
-  const userDepartmentKey=(user:AdminUser):"ADMINISTRATION"|"SUPERVISORS"|SupportDepartmentRole=>user.role==="GROUP_ADMIN"?"SUPERVISORS":user.role==="TECHNOLOGY"||user.role==="GENERAL_SERVICES"||user.role==="HUMAN_RESOURCES"?user.role:"ADMINISTRATION";
-  const adminUserRoleLabel=(role:AdminUser["role"])=>({ADMINISTRATOR:"Administración",VIEWER:"Consulta general",GROUP_ADMIN:"Supervisión de grupos",FISCALIZADOR:"Fiscalización",TECHNOLOGY:"Tecnología",GENERAL_SERVICES:"Servicios Generales",HUMAN_RESOURCES:"Recursos Humanos"})[role];
-  const departmentVisibleUsers=visibleUsers.filter(user=>!userDepartmentFilter||userDepartmentKey(user)===userDepartmentFilter);
+  const userDepartmentKey=(user:AdminUser):string=>user.role==="GROUP_ADMIN"?"SUPERVISORS":user.role==="ADMINISTRATIVE"?"ADMINISTRATIVE":user.role==="ADMINISTRATOR"||user.role==="VIEWER"||user.role==="FISCALIZADOR"?"ADMINISTRATION":assignedUserDepartment(user);
+  const adminUserRoleLabel=(role:AdminUser["role"])=>({DEPARTMENT:"Usuario de departamento",ADMINISTRATIVE:"Administrativo",ADMINISTRATOR:"Administración",VIEWER:"Consulta general",GROUP_ADMIN:"Supervisión de grupos",FISCALIZADOR:"Fiscalización",TECHNOLOGY:"Tecnología",GENERAL_SERVICES:"Servicios Generales",HUMAN_RESOURCES:"Recursos Humanos",WAREHOUSE:"Almacén"})[role];
+  const departmentVisibleUsers=visibleUsers.filter(user=>user.id===selectedUserId||!userDepartmentFilter||userDepartmentKey(user)===userDepartmentFilter);
   const userDepartmentCards=([
     ["ADMINISTRATION","Administración","Administradores, fiscalizadores y consulta",UserCog],
     ["SUPERVISORS","Supervisores","Responsables de grupos y agencias",UsersRound],
     ["TECHNOLOGY","Tecnología","Soporte y técnicos de Tecnología",LifeBuoy],
     ["GENERAL_SERVICES","Servicios Generales","Soporte y técnicos operativos",Building2],
     ["HUMAN_RESOURCES","Recursos Humanos","Equipo de gestión humana",UserRound],
+    ["WAREHOUSE","Almacén","Inventario, solicitudes y despacho",PackageSearch],
+    ...userDepartments.filter(([code])=>!['TECHNOLOGY','GENERAL_SERVICES','HUMAN_RESOURCES','WAREHOUSE'].includes(code)).map(([code,name])=>[code,name,'Usuarios del departamento',Building2] as const),
   ] as const).map(([key,title,description,Icon])=>({key,title,description,Icon,total:visibleUsers.filter(user=>userDepartmentKey(user)===key).length}));
   const normalizedQuery = query.trim().toLowerCase();
   const visibleGroups = stats.groups.filter(
@@ -1473,6 +1394,45 @@ export default function AdminPanel({
   const displayedAudits = selectedExportGroup
     ? visibleAudits.filter((audit) => audit.grupo === selectedExportGroup)
     : visibleAudits;
+  const auditAgencyCards = Array.from(
+    displayedAudits.reduce((groups, audit) => {
+      const key = `${audit.grupo}\u0000${audit.codigo}`;
+      const current = groups.get(key) || [];
+      current.push(audit);
+      groups.set(key, current);
+      return groups;
+    }, new globalThis.Map<string, Audit[]>()),
+  )
+    .map(([, audits]) => ({
+      codigo: audits[0].codigo,
+      terminal: audits[0].terminal,
+      grupo: audits[0].grupo,
+      audits: [...audits].sort(
+        (left, right) =>
+          deviceDate(left.submittedAt).getTime() -
+          deviceDate(right.submittedAt).getTime(),
+      ),
+    }))
+    .sort((left, right) =>
+      `${left.grupo} ${left.terminal}`.localeCompare(
+        `${right.grupo} ${right.terminal}`,
+        "es",
+      ),
+    );
+  const selectedAuditSequence = selectedAudit
+    ? [...(stats.audits || [])]
+        .filter(
+          (audit) =>
+            audit.codigo === selectedAudit.codigo &&
+            audit.grupo === selectedAudit.grupo,
+        )
+        .sort(
+          (left, right) =>
+            deviceDate(left.submittedAt).getTime() -
+            deviceDate(right.submittedAt).getTime(),
+        )
+        .findIndex((audit) => audit.profileId === selectedAudit.profileId)
+    : -1;
 
   const openEvidencePhoto = async (photo: { url: string; label: string }) => {
     setLightboxPhoto({ url: "", label: photo.label });
@@ -1528,6 +1488,12 @@ export default function AdminPanel({
             ? "No"
             : value === "not_applicable"
               ? "No aplica"
+              : value === "cash_register"
+                ? "Caja registradora"
+                : value === "wooden_box"
+                  ? "Caja de madera"
+                  : value === "none"
+                    ? "Ninguna"
               : "Sin respuesta";
       const { jsPDF } = await import("jspdf");
       let pdfLogo: string | null = null;
@@ -1733,7 +1699,7 @@ export default function AdminPanel({
     : "";
 
   return (
-    <div className="atlas-admin">
+    usersOnly ? <UsersPermissionsWorkspace session={session} onClose={onCloseUsers}/> : <div className="atlas-admin">
       <header className="atlas-admin-hero">
         <div>
           <span>GRUPO TEJEDA · CENTRO DE CONTROL</span>
@@ -1744,14 +1710,6 @@ export default function AdminPanel({
           </p>
         </div>
         <div className="admin-hero-actions">
-          {canManage && (
-            <button
-              className="manage-users-button"
-              onClick={() => void openUsers()}
-            >
-              <UserCog /> Administradores y permisos
-            </button>
-          )}
           <div
             className={`role-chip ${canManage ? "role-admin" : "role-viewer"}`}
           >
@@ -1961,7 +1919,7 @@ export default function AdminPanel({
           >
             <ClipboardCheck />{" "}
             {isGroupAdministrator ? "Evidencias" : "Auditorías completadas"}{" "}
-            <strong>{stats.audits.length}</strong>
+            <strong>{stats.auditsTotal}</strong>
           </button>
         </div>
         {sectionTab === "groups" && (
@@ -1982,11 +1940,12 @@ export default function AdminPanel({
                 </button>
               ))}
             </div>
-            <div className="admin-table">
+            <div className="admin-table group-progress-table">
               <div className="admin-tr admin-th">
                 <span>Grupo económico</span>
                 <span>Esperadas</span>
                 <span>Completadas</span>
+                <span>Levantamientos</span>
                 <span>Pendientes</span>
                 <span>% Avance</span>
                 <span>Última actualización</span>
@@ -1996,6 +1955,9 @@ export default function AdminPanel({
                   <strong>{group.grupo}</strong>
                   <span>{group.total}</span>
                   <span>{group.completed}</span>
+                  <span className="group-audit-count" title={`${group.auditCount || 0} auditorías individuales registradas`}>
+                    {group.completedRounds || 0}/{group.roundsTotal || 1}
+                  </span>
                   <span>{group.pending}</span>
                   <div className="percent-cell">
                     <i>
@@ -2058,7 +2020,7 @@ export default function AdminPanel({
                   </span>
                   <span>
                     {agency.status === "COMPLETED"
-                      ? "8/8 respuestas"
+                      ? `${agency.auditCount || 1} ${agency.auditCount === 1 ? "auditoría realizada" : "auditorías realizadas"}`
                       : "Sin completar"}
                   </span>
                   <div className="percent-cell">
@@ -2175,7 +2137,7 @@ export default function AdminPanel({
           <div className="audit-results">
             <div className="audit-export-bar">
               <span>
-                <strong>{displayedAudits.length}</strong> auditorías mostradas
+                <strong>{displayedAudits.length}</strong> auditorías autorizadas
               </span>
               <label>
                 <span>Filtrar y exportar grupo</span>
@@ -2214,53 +2176,60 @@ export default function AdminPanel({
                 </small>
               )}
             </div>
-            <div className="audit-table">
-              <div className="audit-tr audit-th">
-                <span>Código / Terminal</span>
-                <span>Grupo</span>
-                <span>Ubicación</span>
-                <span>Empleado</span>
-                <span>Login auditor</span>
-                <span>Fecha y hora</span>
-                <span>Coordenadas</span>
-                <span>Precisión</span>
-                <span>Expediente</span>
-              </div>
-              {displayedAudits.map((audit) => (
-                <div
-                  className="audit-tr"
-                  key={`${audit.profileId}-${audit.codigo}`}
+            <div className="audit-agency-grid">
+              {auditAgencyCards.map((agency) => (
+                <article
+                  className="audit-agency-card"
+                  key={`${agency.grupo}-${agency.codigo}`}
                 >
-                  <span>
-                    <strong>{audit.codigo}</strong>
-                    <small>{audit.terminal}</small>
-                  </span>
-                  <span>{audit.grupo}</span>
-                  <span>
-                    {audit.municipio}
-                    <small>{audit.provincia}</small>
-                  </span>
-                  <span>{audit.employeeName || "Ver expediente"}</span>
-                  <span className="audit-login-cell">
-                    <UserRound />
-                    <strong>{audit.submittedByLogin ? `@${usernameValue(audit.submittedByLogin)}` : "No registrado"}</strong>
-                  </span>
-                  <time className="audit-time-cell" dateTime={audit.submittedAt}>
-                    <strong>{deviceDate(audit.submittedAt).toLocaleDateString("es-DO")}</strong>
-                    <small>{deviceDate(audit.submittedAt).toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" })}</small>
-                  </time>
-                  <span>
-                    {audit.latitude.toFixed(5)}, {audit.longitude.toFixed(5)}
-                  </span>
-                  <span>±{Math.round(audit.accuracy)} m</span>
-                  <button
-                    onClick={() => void openAudit(audit)}
-                    disabled={auditLoading}
-                  >
-                    <Eye /> Ver auditoría
-                  </button>
-                </div>
+                  <header>
+                    <span className="audit-agency-icon"><Building2 /></span>
+                    <div>
+                      <small>{agency.grupo}</small>
+                      <strong>{agency.terminal}</strong>
+                      <span>Código {agency.codigo}</span>
+                    </div>
+                    <em>
+                      {agency.audits.length}{" "}
+                      {agency.audits.length === 1
+                        ? "auditoría realizada"
+                        : "auditorías realizadas"}
+                    </em>
+                  </header>
+                  <div className="audit-lift-list">
+                    {agency.audits.map((audit, index) => (
+                      <button
+                        type="button"
+                        key={audit.profileId}
+                        onClick={() => void openAudit(audit)}
+                        disabled={auditLoading}
+                      >
+                        <span className="audit-lift-number">{index + 1}</span>
+                        <span>
+                          <strong>{auditOrdinal(index)}</strong>
+                          <small>
+                            {deviceDate(audit.submittedAt).toLocaleString("es-DO")}
+                          </small>
+                          <small className="audit-authorized-status"><CheckCircle2 /> Autorizada</small>
+                          <small>
+                            {audit.employeeName || "Empleado no registrado"} ·{" "}
+                            {audit.submittedByLogin
+                              ? `@${usernameValue(audit.submittedByLogin)}`
+                              : "Auditor no registrado"}
+                          </small>
+                        </span>
+                        <Eye />
+                      </button>
+                    ))}
+                  </div>
+                </article>
               ))}
+              {!auditAgencyCards.length && (
+                <div className="audit-cards-empty">
+                  <ClipboardCheck />
+                  <strong>No hay levantamientos con este filtro.</strong>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -2285,7 +2254,7 @@ export default function AdminPanel({
           >
             <header>
               <div>
-                <span>EXPEDIENTE DIGITAL COMPLETO</span>
+                <span>{selectedAuditSequence >= 0 ? auditOrdinal(selectedAuditSequence).toUpperCase() : "LEVANTAMIENTO"} · EXPEDIENTE DIGITAL COMPLETO</span>
                 <h2>{selectedAudit.terminal}</h2>
                 <p>
                   {selectedAudit.codigo} · {selectedAudit.grupo}
@@ -2378,30 +2347,32 @@ export default function AdminPanel({
           className="audit-modal-backdrop"
           role="presentation"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setUserManagerOpen(false);
+            if (event.target === event.currentTarget&&!usersOnly) closeUsers();
           }}
         >
           <section
             className={`user-manager-modal scoped-users-modal ${userDepartmentFilter ? "mobile-department-open" : ""} ${selectedUserId ? "mobile-user-open" : ""}`}
             role="dialog"
             aria-modal="true"
-            aria-label="Administradores y permisos"
+            aria-label="Usuarios y permisos"
           >
             <header>
               <div>
                 <span>SEGURIDAD, REGIONES Y ALCANCE</span>
-                <h2>Usuarios por departamento</h2>
+                <h2>Usuarios y permisos</h2>
                 <p>
                   Selecciona un departamento, abre un usuario y administra su información, permisos y grupos visibles.
                 </p>
               </div>
               <button
-                onClick={() => setUserManagerOpen(false)}
+                onClick={closeUsers}
                 aria-label="Cerrar"
               >
                 <X />
               </button>
             </header>
+            {usersOnly&&error&&<p role="alert">{error}</p>}
+            {usersOnly&&notice&&<p role="status">{notice}</p>}
             <div className="admin-search-topbar">
               <div className="admin-search-copy">
                 <Search />
@@ -2639,84 +2610,14 @@ export default function AdminPanel({
                         </span>
                       </header>
                       <div className="new-role-options">
-                        {(
-                          [
-                            [
-                              "ADMINISTRATOR",
-                              "Administrador",
-                              "Control total, usuarios y configuración.",
-                              UserCog,
-                            ],
-                            [
-                              "SUPERVISOR",
-                              "Supervisor",
-                              "Agencias, auditorías y creación de tickets.",
-                              Camera,
-                            ],
-                            [
-                              "DEPARTMENT_MANAGER",
-                              "Administrador de departamento",
-                              "Ve y administra todos los equipos, reportes y estadísticas de su departamento.",
-                              ShieldCheck,
-                            ],
-                            [
-                              "SUPPORT",
-                              "Soporte",
-                              "Encargado del departamento y su tarjeta de soporte.",
-                              LifeBuoy,
-                            ],
-                            [
-                              "TECHNICIAN",
-                              "Técnico",
-                              "Atiende y resuelve los casos asignados.",
-                              Building2,
-                            ],
-                          ] as const
-                        ).map(([profile, title, description, Icon]) => (
-                          <button
-                            type="button"
-                            key={profile}
-                            className={
-                              newUserAccessProfile === profile ? "active" : ""
-                            }
-                            onClick={() => {
-                              const role: AdminUser["role"] =
-                                profile === "ADMINISTRATOR"
-                                  ? "ADMINISTRATOR"
-                                  : profile === "SUPERVISOR"
-                                    ? "GROUP_ADMIN"
-                                    : newUserDepartment;
-                              setNewUserAccessProfile(profile);
-                              setNewUser({
-                                ...newUser,
-                                role,
-                                supportTeam:
-                                  role === "TECHNOLOGY"
-                                    ? profile === "DEPARTMENT_MANAGER" ? null : profile === "TECHNICIAN" ? "TECHNICIANS" : newUser.supportTeam || "CALL_CENTER"
-                                    : null,
-                                groups:
-                                  profile === "SUPERVISOR"
-                                    ? newUser.groups
-                                    : [],
-                                permissions: role==="TECHNOLOGY"&&profile!=="DEPARTMENT_MANAGER"?technologyTeamPermissions(profile==="TECHNICIAN"?"TECHNICIANS":newUser.supportTeam||"CALL_CENTER"):accessProfilePermissions(profile,newUserDepartment),
-                              });
-                            }}
-                          >
-                            <i>
-                              {newUserAccessProfile === profile && (
-                                <CheckCircle2 />
-                              )}
-                            </i>
-                            <Icon />
-                            <span>
-                              <strong>{title}</strong>
-                              <small>{description}</small>
-                            </span>
-                          </button>
-                        ))}
+                        {accessProfiles.map(([profile,title])=><button type="button" key={profile} className={newUserAccessProfile===profile?'active':''} onClick={()=>{
+                          const preset=userAccessProfile(profile,newUserDepartment);
+                          setNewUserAccessProfile(profile);setNewUser({...newUser,...preset,role:preset.role as AdminUser['role'],supportTeam:preset.supportTeam as TechnologyTeam|UserDepartment|null,groups:profile==='SUPERVISOR'?newUser.groups:[]});
+                        }}><ShieldCheck/><span><strong>{title}</strong><small>{profile==='ADMINISTRATOR'?'Acceso global del administrador principal':profile==='SUPPORT'?'Acceso inicial al departamento, sin gerencia ni permisos globales':profile==='ADMINISTRATIVE'?'Mismas funciones administrativas dentro del departamento seleccionado':'Aplicar permisos de este perfil'}</small></span></button>)}
                       </div>
                       {(newUserAccessProfile === "DEPARTMENT_MANAGER" || newUserAccessProfile === "SUPPORT" ||
-                        newUserAccessProfile === "TECHNICIAN") && (
+                        newUserAccessProfile === "TECHNICIAN" || newUserAccessProfile === "WAREHOUSE_REQUESTER" ||
+                        newUserAccessProfile === "ADMINISTRATIVE") && (
                         <label className="new-user-department-select">
                           Departamento asignado
                           <select
@@ -2725,25 +2626,17 @@ export default function AdminPanel({
                               const department = event.target
                                 .value as SupportDepartmentRole;
                               setNewUserDepartment(department);
+                              const preset=userAccessProfile(newUserAccessProfile,department);
                               setNewUser({
                                 ...newUser,
-                                role: department,
-                                supportTeam:
-                                  department === "TECHNOLOGY"
-                                    ? newUserAccessProfile === "DEPARTMENT_MANAGER" ? null : newUserAccessProfile === "TECHNICIAN" ? "TECHNICIANS" : newUser.supportTeam || "CALL_CENTER"
-                                    : null,
+                                role: preset.role as AdminUser['role'],
+                                supportTeam:preset.supportTeam as TechnologyTeam | UserDepartment | null,
                                 groups: [],
-                                permissions: department==="TECHNOLOGY"&&newUserAccessProfile!=="DEPARTMENT_MANAGER"?technologyTeamPermissions(newUserAccessProfile==="TECHNICIAN"?"TECHNICIANS":newUser.supportTeam||"CALL_CENTER"):accessProfilePermissions(newUserAccessProfile,department),
+                                permissions:preset.permissions,
                               });
                             }}
                           >
-                            <option value="GENERAL_SERVICES">
-                              Servicios Generales
-                            </option>
-                            <option value="TECHNOLOGY">Tecnología</option>
-                            <option value="HUMAN_RESOURCES">
-                              Recursos Humanos
-                            </option>
+                            {userDepartments.map(([code,name])=><option key={code} value={code}>{name}</option>)}
                           </select>
                           <small>
                             Solo verá y administrará la tarjeta, tickets,
@@ -2757,9 +2650,10 @@ export default function AdminPanel({
                           <label className="new-user-department-select">
                             Equipo de Tecnología
                             <select
-                              value={newUser.supportTeam || "CALL_CENTER"}
-                              onChange={(event) =>{const team=event.target.value as TechnologyTeam;setNewUser({...newUser,supportTeam:team,permissions:technologyTeamPermissions(team)});setNewUserAccessProfile(team==="TECHNICIANS"?"TECHNICIAN":"SUPPORT");}}
+                              value={newUser.supportTeam || ""}
+                              onChange={(event) =>{const team=(event.target.value||null) as TechnologyTeam|null;setNewUser({...newUser,supportTeam:team,permissions:team?{...technologyTeamPermissions(team),usesExplicitPermissions:true}:userAccessProfile('SUPPORT','TECHNOLOGY').permissions});setNewUserAccessProfile(team==="TECHNICIANS"?"TECHNICIAN":"SUPPORT");}}
                             >
+                              <option value="">Soporte de Tecnología</option>
                               <option value="CALL_CENTER">Call Center</option>
                               <option value="TECHNICAL_FAILURE">
                                 Avería Técnica
@@ -2773,10 +2667,11 @@ export default function AdminPanel({
                             </small>
                           </label>
                         )}
+                      {newUserDepartment==="TECHNOLOGY"&&newUserAccessProfile==="DEPARTMENT_MANAGER"&&<label>Área del gerente<select value={newUser.supportTeam||''} onChange={event=>setNewUser({...newUser,supportTeam:(event.target.value||null) as TechnologyTeam|null})}><option value="">Tecnología completa (incluye Avería y Call Center)</option><option value="TECHNICAL_FAILURE">Solo Avería Técnica</option><option value="CALL_CENTER">Solo Call Center</option></select></label>}
                       {newUserDepartment==="TECHNOLOGY"&&(newUserAccessProfile==="SUPPORT"||newUserAccessProfile==="TECHNICIAN")&&<div className="technology-quick-permissions"><strong>Permisos rápidos de Tecnología</strong><small>Aplica automáticamente el acceso correcto para soporte, campo, Almacén o Taller.</small><div>{(["CALL_CENTER","TECHNICAL_FAILURE","TECHNICIANS","WAREHOUSE","WORKSHOP"] as TechnologyTeam[]).map(team=><button type="button" key={team} className={newUser.supportTeam===team?"active":""} onClick={()=>{setNewUser({...newUser,role:"TECHNOLOGY",supportTeam:team,permissions:technologyTeamPermissions(team)});setNewUserAccessProfile(team==="TECHNICIANS"?"TECHNICIAN":"SUPPORT");}}>{team==="CALL_CENTER"?"Call Center":team==="TECHNICAL_FAILURE"?"Avería Técnica":team==="TECHNICIANS"?"Técnico de campo":team==="WAREHOUSE"?"Almacén":"Taller"}</button>)}</div></div>}
                       {newUserDepartment==="GENERAL_SERVICES"&&(newUserAccessProfile==="SUPPORT"||newUserAccessProfile==="TECHNICIAN")&&<div className="technology-quick-permissions"><strong>Área especializada de Servicios Generales</strong><small>El perfil Taller solo verá el control de entradas, reparaciones y entregas de su departamento.</small><div><button type="button" className={newUser.supportTeam==="WORKSHOP"?"active":""} onClick={()=>{setNewUser({...newUser,role:"GENERAL_SERVICES",supportTeam:"WORKSHOP",permissions:technologyTeamPermissions("WORKSHOP")});setNewUserAccessProfile("SUPPORT");}}>Taller de Servicios Generales</button><button type="button" className={!newUser.supportTeam?"active":""} onClick={()=>setNewUser({...newUser,role:"GENERAL_SERVICES",supportTeam:null,permissions:accessProfilePermissions(newUserAccessProfile,"GENERAL_SERVICES")})}>Soporte / técnico normal</button></div></div>}
                       <div className="granular-permission-grid new-user-granular-permissions">
-                        {permissionCatalog.map((permission) => (
+                        {allPermissionCatalog.map((permission) => (
                           <label key={permission.key}>
                             <input
                               type="checkbox"
@@ -2893,6 +2788,7 @@ export default function AdminPanel({
                     <button type="button" className={userDetailSection==="groups"?"active":""} onClick={()=>setUserDetailSection("groups")}><Layers3/><span><strong>Grupos que puede ver</strong><small>{user.groups.length} grupos · {user.agencyCount} agencias</small></span></button>
                   </nav>}
                   {selectedUserId===user.id&&userDetailSection==="information"&&<>
+                    <form id={`user-edit-${user.id}`} onSubmit={event=>{event.preventDefault();void saveUser(user);}} />
                   <div className="user-edit-grid">
                     <label>
                       Nombre
@@ -2963,19 +2859,24 @@ export default function AdminPanel({
                     <label>
                       Rol
                       <select
-                        value={user.role}
+                        value={user.role!=="ADMINISTRATOR"&&user.permissions.canManageDepartment?"DEPARTMENT_MANAGER":user.role}
                         onChange={(event) =>
                           setUsers((current) =>
                             current.map((item) =>
                               item.id === user.id
-                                ? {
+                                ? event.target.value === "DEPARTMENT_MANAGER" ? {
+                                    ...item,
+                                    role: item.role==="DEPARTMENT"||item.role==="TECHNOLOGY"||item.role==="GENERAL_SERVICES"||item.role==="HUMAN_RESOURCES"||item.role==="WAREHOUSE"?item.role:"WAREHOUSE",
+                                    supportTeam: item.role==="DEPARTMENT"||item.role==="TECHNOLOGY"||item.role==="GENERAL_SERVICES"||item.role==="HUMAN_RESOURCES"?item.supportTeam:"WAREHOUSE",
+                                    permissions:{...item.permissions,canManageDepartment:true,canViewFieldAudits:true,canViewDashboard:true,canViewSupportDashboard:true,canViewAllSupportDepartments:false,canManageUsers:false,canManageAudits:false,canManage:false,canManageAgencies:false,canConfigureSupport:false,canDeleteSupportTickets:false,canDeleteSupportConversations:false,canAudit:false,canExportAudits:false},
+                                  } : {
                                     ...item,
                                      role: event.target
                                       .value as AdminUser["role"],
                                     supportTeam:
                                       event.target.value === "TECHNOLOGY"
                                         ? item.supportTeam || "TECHNICAL_FAILURE"
-                                        : null,
+                                        : event.target.value === "WAREHOUSE" ? "WAREHOUSE" : null,
                                     permissions: defaultUserPermissions(
                                       event.target.value as AdminUser["role"],
                                     ),
@@ -2985,6 +2886,8 @@ export default function AdminPanel({
                           )
                         }
                       >
+                        <option value="ADMINISTRATIVE">Administrativo</option>
+                        <option value="DEPARTMENT" disabled>Usuario de departamento</option>
                         <option value="ADMINISTRATOR">
                           Administrador principal
                         </option>
@@ -2999,9 +2902,12 @@ export default function AdminPanel({
                         <option value="HUMAN_RESOURCES">
                           Recursos Humanos
                         </option>
+                        <option value="WAREHOUSE">Almacén</option>
+                        <option value="DEPARTMENT_MANAGER">Gerente</option>
                         <option value="VIEWER">Consulta general</option>
                       </select>
                     </label>
+                    {user.role!=="ADMINISTRATOR"&&<label>Departamento asignado<select value={assignedUserDepartment(user)} onChange={event=>{const department=event.target.value as UserDepartment;const assignment=departmentAssignment(department);setUsers(current=>current.map(item=>item.id===user.id?{...item,role:assignment.role as AdminUser['role'],supportTeam:assignment.supportTeam as TechnologyTeam | UserDepartment | null,permissions:item.permissions.canManageDepartment?{...item.permissions,...accessProfilePermissions('DEPARTMENT_MANAGER',department)}:item.permissions}:item));}}><option value="" disabled>Seleccionar departamento</option>{userDepartments.map(([code,name])=><option key={code} value={code}>{name}</option>)}</select><small>Un departamento por usuario. La gerencia consulta únicamente su área.</small></label>}
                     {user.role === "TECHNOLOGY" && (
                       <label>
                         Equipo de Tecnología
@@ -3015,7 +2921,7 @@ export default function AdminPanel({
                                   ? {
                                       ...item,
                                       supportTeam: team || null,
-                                      permissions: team ? technologyTeamPermissions(team) : accessProfilePermissions("DEPARTMENT_MANAGER","TECHNOLOGY"),
+                                      permissions: item.permissions.canManageDepartment ? {...item.permissions,canManageDepartment:true} : team ? technologyTeamPermissions(team) : accessProfilePermissions("DEPARTMENT_MANAGER","TECHNOLOGY"),
                                     }
                                   : item,
                               ),
@@ -3039,7 +2945,10 @@ export default function AdminPanel({
                         <KeyRound />
                         <input
                           type="password"
-                          minLength={8}
+                          form={`user-edit-${user.id}`}
+                          autoComplete="new-password"
+                          minLength={6}
+                          pattern="123456|.{8,128}"
                           placeholder="Dejar igual"
                           value={user.password || ""}
                           onChange={(event) =>
@@ -3057,6 +2966,13 @@ export default function AdminPanel({
                   </div>
                   </>}
                   {selectedUserId===user.id&&userDetailSection==="permissions"&&<section className="user-permissions-editor">
+                    <div className="technology-quick-permissions"><strong>Permisos rápidos por rol</strong><small>Solo modifica esta cuenta al pulsar Guardar cambios. Superadministrador equivale al administrador principal.</small><div>{accessProfiles.map(([profile,title])=><button type="button" key={profile} onClick={()=>{
+                      if(profile==='ADMINISTRATOR'&&!window.confirm('¿Asignar acceso global de administrador principal a esta cuenta?'))return;
+                      const department=(userDepartments.some(([code])=>code===assignedUserDepartment(user))?assignedUserDepartment(user):'GENERAL_SERVICES') as UserDepartment;
+                      const preset=userAccessProfile(profile,department);
+                      setUsers(current=>current.map(item=>item.id===user.id?{...item,...preset,role:preset.role as AdminUser['role'],supportTeam:preset.supportTeam as TechnologyTeam|UserDepartment|null,groups:profile==='SUPERVISOR'?item.groups:[]}:item));
+                    }}>{title}</button>)}</div></div>
+                    {user.role!=="ADMINISTRATOR"&&<label>Departamento asignado<select value={assignedUserDepartment(user)} onChange={event=>{const department=event.target.value as UserDepartment;const assignment=departmentAssignment(department);setUsers(current=>current.map(item=>item.id===user.id?{...item,role:assignment.role as AdminUser['role'],supportTeam:assignment.supportTeam as TechnologyTeam | UserDepartment | null,permissions:item.permissions.canManageDepartment?{...item.permissions,...accessProfilePermissions('DEPARTMENT_MANAGER',department)}:item.permissions}:item));}}><option value="" disabled>Seleccionar departamento</option>{userDepartments.map(([code,name])=><option key={code} value={code}>{name}</option>)}</select><small>Un departamento por usuario. La gerencia consulta únicamente su área.</small></label>}
                     <header>
                       <div>
                         <ShieldCheck />
@@ -3077,8 +2993,12 @@ export default function AdminPanel({
                               ? "Fiscalizador"
                               : user.role === "TECHNOLOGY"
                                 ? "Tecnología"
+                                : user.role === "WAREHOUSE"
+                                  ? "Almacén"
                                 : user.role === "GENERAL_SERVICES"
                                   ? "Servicios Generales"
+                                  : user.role === "DEPARTMENT"
+                                    ? `${user.permissions.canManageDepartment ? 'Gerente' : user.permissions.canAssignTickets ? 'Soporte' : user.permissions.canResolveTickets ? 'Técnico' : 'Usuario'} · ${userDepartments.find(([code])=>code===user.supportTeam)?.[1] || 'Departamento'}`
                                   : "Solo consulta"}
                       </em>
                     </header>
@@ -3184,7 +3104,7 @@ export default function AdminPanel({
                       </label>
                     </div>
                     <div className="granular-permission-grid">
-                      {permissionCatalog.map((permission) => {
+                      {allPermissionCatalog.map((permission) => {
                         const checked =
                           user.permissions?.[permission.key] ??
                           defaultUserPermissions(user.role)[permission.key] ??
@@ -3269,7 +3189,7 @@ export default function AdminPanel({
                       />
                       <span>{user.isActive ? "Activo" : "Bloqueado"}</span>
                     </label>
-                    <button onClick={() => void saveUser(user)} disabled={deletingUserId===user.id}>
+                    <button type="button" onClick={() => void saveUser(user)} disabled={deletingUserId===user.id||savingUserId!==null}>
                       <Save /> Guardar cambios
                     </button>
                     <button
@@ -3362,6 +3282,12 @@ function AuditViewer({
         ? "No"
         : value === "not_applicable"
           ? "No aplica"
+          : value === "cash_register"
+            ? "Caja registradora"
+            : value === "wooden_box"
+              ? "Caja de madera"
+              : value === "none"
+                ? "Ninguna"
           : "Sin respuesta";
   return (
     <>
@@ -3628,9 +3554,15 @@ function AuditEditor({
               }
             >
               <option value="">Elegir...</option>
-              <option value="yes">Sí</option>
-              <option value="no">No</option>
-              {equipmentAnswerKeys.has(key) && (
+              {key === "cashBoxType" ? <>
+                <option value="cash_register">Caja registradora</option>
+                <option value="wooden_box">Caja de madera</option>
+                <option value="none">Ninguna</option>
+              </> : <>
+                <option value="yes">Sí</option>
+                <option value="no">No</option>
+              </>}
+              {key !== "cashBoxType" && equipmentAnswerKeys.has(key) && (
                 <option value="not_applicable">No aplica</option>
               )}
             </select>

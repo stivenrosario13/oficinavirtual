@@ -1,0 +1,21 @@
+ACTUALIZACION V515 - LUCIANNY Y YESSICA COMO ADMINISTRADORAS DE INCIDENTES
+
+Correccion definitiva en el codigo que realmente compila el servidor:
+- Lucianny Gonzalez/Gonzales y Yessica/Yesica Mercedes son administradoras de la seccion Informes de incidentes.
+- El reconocimiento funciona por correo o por nombre del perfil.
+- Dentro de incidentes tienen el mismo acceso de respuesta que el administrador principal.
+- La validacion de destinatario no las bloquea en informes de incidentes.
+- Pueden ver todos los informes de supervisores, recibir y sellar, firmar, aprobar o rechazar cada ticket y registrar montos.
+- Al completar los tickets el informe queda autorizado o rechazado.
+- Los supervisores permanecen bloqueados para autorizar.
+
+IMPORTANTE
+Las versiones anteriores no contenian esta correccion en la fuente que genera el ejecutable. Instale V515 completa.
+
+INSTALACION
+1. Respalde sitio y base de datos.
+2. Detenga el sitio.
+3. Elimine o sustituya completamente los binarios de la version anterior usando este ZIP.
+4. Confirme que web.config apunta a RegistroAgencias.SqlServer.V515.exe.
+5. Inicie el sitio y confirme /api/version: V515-WEB-20261113-1505 y assembly RegistroAgencias.SqlServer.V515.
+6. Lucianny y Yessica deben cerrar sesion, volver a entrar y presionar Ctrl+F5.

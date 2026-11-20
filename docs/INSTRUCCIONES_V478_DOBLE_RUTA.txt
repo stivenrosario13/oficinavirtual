@@ -1,0 +1,21 @@
+ACTUALIZACION V478 - PERFIL ADMINISTRATIVO DEPARTAMENTAL - MONSTERASP
+
+CAMBIOS V478
+1. Se agregó el perfil "Administrativo departamental" en Usuarios y permisos.
+2. El perfil puede asignarse al crear una cuenta o al editar una cuenta existente.
+3. El administrador selecciona cualquiera de los departamentos registrados en el sistema.
+4. La cuenta conserva el alcance del departamento seleccionado y no recibe permisos de superadministrador.
+5. Incluye documentos, comunicaciones, solicitudes a Almacén y creación de tickets del departamento.
+6. El perfil "Administrativo" original continúa siendo exclusivo del departamento de Administración.
+7. Los perfiles personalizados del nuevo rol pueden guardarse por departamento.
+
+INSTALACION
+1. Detén el sitio y el Application Pool en MonsterASP.
+2. Extrae el ZIP conservando su estructura y reemplaza la publicación anterior.
+3. No borres App_Data, uploads ni la base de datos del servidor.
+4. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V478.exe.
+5. Inicia el sitio y confirma V478 en /api/version y /version-web.json.
+6. Recarga el navegador con Ctrl+F5.
+
+SEGURIDAD
+Este paquete contiene configuración privada de almacenamiento. No lo compartas públicamente.

@@ -1,0 +1,6 @@
+import React from 'react';import {createRoot} from 'react-dom/client';import OperationsCenter from '../src/components/vite/OperationsCenter';import WarehouseSupport from '../src/components/vite/WarehouseSupport';import type {PortalSession} from '../src/lib/session';
+import '../src/operations-center-v250.css';
+const params=new URLSearchParams(location.search),scope=params.get('scope')||'TECHNOLOGY';
+const session={authenticated:true,id:'qa',email:'qa@example.invalid',displayName:'Almacén QA',role:'Warehouse',supportTeam:'WAREHOUSE',supportDepartment:null,scope:'all',permissions:{canView:true,canCreateTickets:true,canViewSupportDashboard:true,canManageDepartment:true,canViewDashboard:true}} as PortalSession;
+const expired=()=>{throw Error('Session expired');},open=()=>{};
+createRoot(document.getElementById('root')!).render(params.has('support')?<WarehouseSupport session={session}/>:<OperationsCenter mode="audit" departmentAuditScope={scope==='ADMIN'?null:scope} departmentScope={scope==='ADMIN'?null:scope==='CALL_CENTER'||scope==='TECHNICAL_FAILURE'?'TECHNOLOGY':scope} teamScope={scope==='CALL_CENTER'||scope==='TECHNICAL_FAILURE'?scope:null} onSessionExpired={expired} onOpenTicket={open}/>);

@@ -1,7 +1,9 @@
+import { apiFetch as fetch } from "@/lib/api-fetch";
 import { useEffect, useState } from "react";
 import { Camera, CheckCircle2, KeyRound, LoaderCircle, Save, ShieldAlert, UserRound, X } from "lucide-react";
 import type { PortalSession } from "@/lib/session";
 import { sessionRoleLabel } from "@/lib/session";
+import {passwordChangeEvent} from '@/lib/session-validation';
 
 export default function ProfileSettings({ session, forced = false, onClose, onSession }: { session: PortalSession; forced?: boolean; onClose: () => void; onSession: (session: PortalSession) => void }) {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -28,16 +30,17 @@ export default function ProfileSettings({ session, forced = false, onClose, onSe
   }
 
   async function changePassword(event: React.FormEvent) {
-    event.preventDefault(); setError(""); setNotice("");
+    event.preventDefault(); if(saving)return; setError(""); setNotice("");
     if (newPassword !== confirmPassword) { setError("La confirmación no coincide con la nueva contraseña."); return; }
+    window.dispatchEvent(new CustomEvent(passwordChangeEvent,{detail:true}));
     setSaving(true);
     try {
       const response = await fetch("/api/account/password", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currentPassword, newPassword }) });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "No se pudo cambiar la contraseña.");
-      onSession(body as PortalSession); setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); setNotice("Contraseña actualizada correctamente.");
+      onSession(body as PortalSession); setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); setNotice("Contraseña actualizada. Se cerraron las sesiones de los demás dispositivos.");
     } catch (passwordError) { setError((passwordError as Error).message); }
-    finally { setSaving(false); }
+    finally { setSaving(false); window.dispatchEvent(new CustomEvent(passwordChangeEvent,{detail:false})); }
   }
 
   return <div className={`profile-settings-backdrop ${forced ? "forced" : ""}`} role="presentation">

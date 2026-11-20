@@ -3,14 +3,16 @@ import {describe,it,expect} from "vitest";
 import MaintenanceOverview from "../src/components/vite/MaintenanceOverview";
 import type {MaintenanceDocumentMovement} from "../src/components/vite/maintenanceDocumentPdf";
 const base={id:"one",serialNumber:"S1",operationalArea:"WAREHOUSE",department:"TECHNOLOGY",movementType:"TRANSFER_TO_WORKSHOP",equipmentType:"Impresora",createdAt:"2026-09-04T12:00:00Z",documentNumber:"DOC-1"} as MaintenanceDocumentMovement;
-const props={loading:false,error:"",onRefresh:()=>{},onDepartment:()=>{},onPanel:()=>{},onDocument:()=>{},pendingOrders:0};
+const props={loading:false,error:"",onRefresh:()=>{},onDepartment:()=>{},onPanel:()=>{},onDocument:()=>{}};
 describe("portada de Almacén y Taller",()=>{
- it("muestra ambos departamentos operativos con sus accesos propios",()=>{
+ it("muestra los departamentos operativos con sus accesos propios",()=>{
    const warehouse=renderToStaticMarkup(<MaintenanceOverview {...props} area="WAREHOUSE" movements={[]}/>);
    const workshop=renderToStaticMarkup(<MaintenanceOverview {...props} area="WORKSHOP" movements={[]}/>);
- expect(warehouse).toContain("Comunicaciones de departamentos");expect(workshop).not.toContain("Comunicaciones de departamentos");
-   for(const html of [warehouse,workshop]){expect(html).toContain("Abrir Tecnología");expect(html).toContain("Abrir Servicios Generales");expect(html).toContain("Mis plantillas");}
-   expect(warehouse).not.toContain("Abrir Recursos Humanos");expect(workshop).not.toContain("Abrir Recursos Humanos");expect(workshop).toContain("Exclusivo para inversores");
+ expect(warehouse).toContain("Solicitudes PDF");expect(warehouse).not.toContain("Comunicaciones de departamentos");
+   expect(warehouse).toContain("Solicitudes registradas");expect(warehouse).not.toContain("Órdenes abiertas");expect(warehouse).not.toContain("gestiona compras");
+   for(const html of [warehouse,workshop]){expect(html).toContain("Abrir Tecnología");expect(html).toContain("Abrir Servicios Generales");}
+   expect(warehouse).not.toContain("Mis plantillas");expect(warehouse).not.toContain("Archivos");
+    expect(warehouse).toContain("Abrir Recursos Humanos");expect(workshop).not.toContain("Abrir Recursos Humanos");expect(workshop).toContain("Exclusivo para inversores");
  });
  it("incluye transferencias en Taller y conserva solo el último estado de cada serial",()=>{
    const html=renderToStaticMarkup(<MaintenanceOverview {...props} area="WORKSHOP" movements={[base,{...base,id:"two",operationalArea:"WORKSHOP",movementType:"REPAIR",createdAt:"2026-09-04T15:00:00Z"}]}/>);

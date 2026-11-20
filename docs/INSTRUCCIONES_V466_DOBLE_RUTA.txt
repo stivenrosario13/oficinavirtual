@@ -1,0 +1,23 @@
+ACTUALIZACION V466 - OFICINA VIRTUAL POR VOZ - MONSTERASP
+
+CAMBIOS V466
+1. El asistente de voz aparece en el header, inmediatamente junto a la campanita.
+2. Solo el perfil Administrador principal puede ver y utilizar el asistente.
+3. La frase “Oficina Virtual” abre el panel cuando la escucha está autorizada.
+4. El botón del robot permite activar o recuperar el micrófono si el navegador detiene la escucha.
+5. Los comandos pueden preparar tickets internos o solicitudes a Almacén en sus formularios reales.
+6. Agencia, categoría, artículos y cantidades reconocidos se cargan para revisión antes de enviar.
+7. Se retiró el control de voz de los formularios visibles para otros usuarios.
+8. Se conservan todos los cambios acumulados hasta V465.
+
+INSTALACION
+1. Detén el sitio y el Application Pool en MonsterASP.
+2. Extrae el ZIP conservando su estructura.
+3. Copia el contenido en la raíz publicada. El paquete incluye también wwwroot para instalaciones de doble ruta.
+4. No borres App_Data, uploads ni la base de datos del servidor.
+5. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V466.exe.
+6. Inicia el sitio y confirma V466 en /api/version y /version-web.json.
+7. Abre por HTTPS y permite el micrófono al Administrador principal.
+
+SEGURIDAD
+Este paquete contiene configuración privada de almacenamiento. No lo compartas públicamente.

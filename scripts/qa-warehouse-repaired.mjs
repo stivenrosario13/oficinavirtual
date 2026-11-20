@@ -1,0 +1,4 @@
+import {createRequire} from 'node:module';const require=createRequire('C:/Users/pc/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/loader.cjs');const {chromium}=require('playwright');
+const browser=await chromium.launch({headless:true,channel:'msedge'}),page=await browser.newPage({viewport:{width:1366,height:1000}});
+await page.route('**/api/**',route=>route.fulfill({json:[{id:'1',sourceId:'2',department:'TECHNOLOGY',equipment:'Monitor Dell',serial:'REPARADO-QA',receivedBy:'Diorly Abreu',available:1,documentNumber:'ALM-REPARADO-QA'}]}));
+try{await page.goto('http://127.0.0.1:5174/scripts/qa-workshop-receipt.html?repaired');await page.getByRole('heading',{name:'Equipos reparados'}).waitFor();await page.getByText('REPARADO-QA',{exact:true}).waitFor();await page.screenshot({path:'tmp/pdfs/almacen-inventario-reparados.png',fullPage:true});console.log('PASS inventario separado de equipos reparados');}finally{await browser.close()}

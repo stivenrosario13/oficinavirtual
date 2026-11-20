@@ -1,0 +1,76 @@
+ACTUALIZACION V456 - FORMULARIOS ADMINISTRATIVOS - MONSTERASP
+
+CAMBIOS V456
+- El administrador principal ve el botón "Solicitar cambio de módem" en tickets internos abiertos de Tecnología.
+- La solicitud conserva la agencia del ticket y pasa la validación del servidor para Administrador y Avería Técnica.
+- Se verificó que waskar.sepulveda está activo como supervisor de 146-WASCAR SP, puede iniciar sesión normal, realizar levantamientos y cargar evidencias.
+
+CONTENIDO
+- Interfaz y API actualizadas juntas.
+- Importacion masiva desde Excel .xlsx para los 14 formularios administrativos
+  y el formulario de equipo de internet de Averia Tecnica.
+- Plantilla descargable por tipo, revision y correccion antes de importar.
+- Agrupacion de vehiculos, lineas o consumos en un mismo formulario.
+- Edicion de formularios guardados, regeneracion del PDF, folio conservado,
+  historial de cambios y control de ediciones simultaneas.
+- Gasolina diaria de Sandra sin estados, recepcion, autorizacion ni entrega.
+  Se eliminan presupuesto/tickets, tickets fisicos y credito disponible de su
+  formulario, plantilla Excel y PDF. Los registros historicos se muestran con
+  el nuevo formato. Se mantiene el original almacenado para trazabilidad.
+- GAS de Sulay conserva recepcion y autorizacion por otra persona.
+- Filtros por fecha de consumo y tipo de combustible.
+- Solicitar cambio de modem desde los tickets internos abiertos de Tecnologia,
+  para Averia Tecnica; agencia bloqueada y ticket vinculado al comprobante.
+- Solo diorly.abreu y ana.rodriguez pueden editar articulos y cantidades de
+  solicitudes de Almacen aun no preparadas ni entregadas. Se exige inventario
+  disponible; se conserva el historial y se reinicia la revision/autorizacion.
+- Vittini encuentra Prestamos de fin de semana en Solicitudes a Almacen.
+  Puede solicitar equipos desde viernes/sabado hasta domingo, con fecha de
+  devolucion durante la semana siguiente. Se usa la autorizacion y despacho
+  habitual; conviene preparar los equipos antes del cierre de Almacen.
+  Tras la entrega, declara lo utilizado por agencia. Almacen confirma la
+  recepcion fisica de los sobrantes para reingresarlos una sola vez y cerrar.
+- Se conservan los cambios anteriores de V454.
+
+INSTALACION
+1. Guarda una copia de los archivos actuales y del web.config ACTIVO.
+2. Deten el sitio desde MonsterASP.
+3. Extrae el contenido del ZIP en la carpeta del web.config ACTIVO y reemplaza
+   los archivos. No crees una carpeta adicional con el nombre del ZIP.
+   Se conserva la doble ruta de los paquetes anteriores (raiz y wwwroot).
+4. Conserva App_Data, uploads, appsettings y las variables del servidor.
+   NO elimines estas carpetas ni los datos actuales para instalar el paquete.
+   El web.config incluido conserva la clave privada local de almacenamiento.
+   Si el web.config activo contiene OTRAS variables personalizadas, copia esas
+   entradas a environmentVariables del archivo actualizado.
+5. El web.config ACTIVO debe apuntar a .\RegistroAgencias.SqlServer.V456.exe.
+6. Inicia el sitio y consulta /api/version y /version-web.json.
+   Ambos deben indicar V456 y administrativeForms debe indicar:
+   excel-bulk-import-edit-revision-audit-v454
+7. Recarga con Ctrl+F5 e inicia sesion.
+
+USO
+Formularios administrativos > Nueva solicitud > selecciona el formulario >
+Importar masivo desde Excel > Descargar plantilla Excel.
+Completa la hoja Formularios, carga el archivo y revisa los datos antes de enviar.
+Repite el identificador de Formulario para reunir varias filas en una solicitud.
+Maximo 10 MB, 1,000 filas y 100 formularios por archivo; 100 detalles por formulario.
+Usa .xlsx; guarda los archivos .xls en ese formato. Pega las formulas como valores.
+Si se interrumpe la importacion, continua desde el mismo panel: conserva los folios
+y no repite los formularios cuyo guardado ya se confirmo.
+
+En el listado, Editar formulario aparece segun los permisos de la cuenta.
+Los pendientes, recibidos, rechazados o con correccion solicitada pueden editarse.
+Al guardar vuelven a pendiente para una nueva recepcion y revision.
+Los autorizados o entregados quedan cerrados para proteger su comprobante.
+Los registros de gasolina de Sandra se editan sin volver a autorizacion.
+
+CONFIGURACION Y PRIVACIDAD
+Este ZIP contiene la clave privada de almacenamiento en web.config.
+Es un paquete para tu servidor: no lo publiques ni lo compartas.
+No incluye .env, appsettings, App_Data, uploads, logs ni bases de datos.
+No requiere ejecutar manualmente un script SQL para estas funciones.
+
+RECUPERACION
+Si necesitas volver a la version anterior, deten el sitio y restaura los archivos
+y web.config respaldados. Conserva App_Data y los datos actuales.

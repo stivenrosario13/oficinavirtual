@@ -1,0 +1,29 @@
+ACTUALIZACION V477 - CATALOGO COMPLETO DE AGENCIAS PARA OFICINA VIRTUAL - MONSTERASP
+
+VERIFICACION Y CAMBIOS V477
+1. La consulta de agencias no usa paginación, TOP ni límite de resultados.
+2. El Administrador principal recibe todas las agencias activas; no se le aplica filtro por grupo.
+3. El servidor informa el total de agencias activas y verifica que coincida con las agencias entregadas al robot.
+4. Los identificadores inválidos ya no se ocultan: el catálogo se marca incompleto y el robot solicita actualizar los datos.
+5. Las agencias duplicadas por uniones de datos se eliminan por su identificador antes de entregarlas al robot.
+6. El robot muestra cuántas agencias activas fueron cargadas y verificadas.
+7. Cuando existe ambigüedad ya no se limita la lista a ocho agencias.
+8. Se agregó un buscador sobre todas las agencias disponibles por código, nombre o grupo.
+9. Pulsar una agencia envía directamente su código, nombre y grupo para confirmar la selección.
+10. Las solicitudes y tickets continúan usando solamente agencias activas con identificadores válidos.
+
+COMPROBACION EN PANTALLA
+- En el estado del robot aparecerá “Catálogos verificados: X agencias activas cargadas”.
+- En “Datos del sistema conectados” se mostrará el mismo total.
+- Si la API entrega menos agencias que el total activo, el robot no continuará silenciosamente y mostrará el error.
+
+INSTALACION
+1. Detén el sitio y el Application Pool en MonsterASP.
+2. Extrae el ZIP conservando su estructura y reemplaza la publicación anterior.
+3. No borres App_Data, uploads ni la base de datos del servidor.
+4. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V477.exe.
+5. Inicia el sitio y confirma V477 en /api/version y /version-web.json.
+6. Recarga el navegador con Ctrl+F5.
+
+SEGURIDAD
+Este paquete contiene configuración privada de almacenamiento. No lo compartas públicamente.

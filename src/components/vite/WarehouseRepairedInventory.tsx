@@ -1,0 +1,13 @@
+import {useCallback,useEffect,useState} from 'react';
+import {Boxes,QrCode,RefreshCw,Search} from 'lucide-react';
+import {maintenanceApi} from './maintenanceApi';
+import {EquipmentTracking} from './WorkshopBoard';
+import './workshopWarehouseRequests.css';
+type Repaired={id:string;sourceId:string;department:string;equipment:string;serial:string;receivedBy:string;receivedAt:string;available:number;documentNumber:string};
+export default function WarehouseRepairedInventory({department=''}:{department?:string}){
+ const [items,setItems]=useState<Repaired[]>([]),[error,setError]=useState(''),[query,setQuery]=useState(''),[trace,setTrace]=useState<string|null>(null),[busy,setBusy]=useState(false);
+ const load=useCallback(async()=>{setBusy(true);try{setItems((await maintenanceApi<Repaired[]>('/api/warehouse/repaired-inventory')).filter(i=>i.available>0&&(!department||i.department===department)));setError('')}catch(e){setError((e as Error).message)}finally{setBusy(false)}},[department]);
+ useEffect(()=>{void load();const refresh=()=>void load();window.addEventListener('support-live-refresh',refresh);return()=>window.removeEventListener('support-live-refresh',refresh)},[load]);
+ const visible=items.filter(i=>[i.equipment,i.serial,i.receivedBy,i.documentNumber].join(' ').toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+ return <section className="workshop-warehouse-requests"><header><div><small>ALMACÉN · INVENTARIO INDEPENDIENTE</small><h2>Equipos reparados</h2><p>Solo equipos cuya recepción desde Taller fue confirmada. No se mezclan con los nuevos.</p></div><strong><Boxes/> {items.reduce((n,i)=>n+i.available,0)} disponibles</strong><button disabled={busy} onClick={()=>void load()}><RefreshCw/>Actualizar</button></header><label className="wwr-search"><Search/><input aria-label="Buscar equipo reparado" placeholder="Buscar equipo, serial o formulario…" value={query} onChange={e=>setQuery(e.target.value)}/></label>{error&&<p role="alert">{error}</p>}<div className="wwr-cards">{visible.map(i=><article key={i.id}><span className="wwr-status">Reparado · recibido en Almacén</span><h3>{i.equipment}</h3><p>{i.documentNumber}</p><dl><div><dt>Serial</dt><dd>{i.serial}</dd></div><div><dt>Disponible</dt><dd>{i.available}</dd></div></dl><p>Recibido por: {i.receivedBy}</p><button onClick={()=>setTrace(i.sourceId)}><QrCode/>Consultar etapa y formulario</button></article>)}</div>{!busy&&!visible.length&&<p className="wwr-empty">No hay equipos reparados disponibles con estos filtros.</p>}{trace!==null&&<EquipmentTracking initialCode={trace} onClose={()=>setTrace(null)}/>}</section>;
+}

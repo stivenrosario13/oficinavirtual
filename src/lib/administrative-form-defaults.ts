@@ -1,0 +1,11 @@
+import type {AdministrativeDraft} from './administrative-form-excel';
+export function administrativeDefaults(kind:string,session:{displayName:string;email?:string}):AdministrativeDraft{
+ const values:Record<string,string>={responsible:'WHILMALY SULAY LORA NOESI',carrier:'CLARO',company:'CONSORCIO DE BANCAS LA SOÑADORA',accountCharge:'Sí',action:'Reposición y activación',accountType:'Cuenta corriente en pesos (RD$)',period:'2025-2026',penalty:'RD$ 5,000.00',assetType:'OTRO',targetType:'AGENCIA',supervisorName:session.displayName,paymentFrequency:'Mensual',increasePercent:'10',receiverRole:'Propietario del local',increaseYear:String(new Date().getFullYear()),place:'Santo Domingo',fuelPeriod:new Date().toISOString().slice(0,7),reportDate:new Date().toISOString().slice(0,10),preparedBy:session.displayName,gameMode:'Juegos tradicionales',incidentType:'',reviewStatus:'Pendiente'};
+ const login=(session.email||'').trim().toLowerCase().replace('@grupotejeda.local','');
+ values.responsible=kind==='incident_report'?(['lucianny.gonzalez','lucianny.gonzales'].includes(login)?'LUCIANNY GONZÁLEZ':'YESICA MERCEDES'):kind==='fuel_log'?'SANDRA LUCIA RAMIREZ ORTIZ':kind==='modem'?'DERIHAN ALISHA ECHAVARRIA RIVAS':['sim','marbete','device','payment','fleet'].includes(kind)?'EMMA MERCEDES MENDOZA REYNOSO':'WHILMALY SULAY LORA NOESI';
+ if(kind==='internet')Object.assign(values,{company:'CLARO',serviceKind:'BANDA_ANCHA',itemKind:'EQUIPO',modemQuantity:'1'});
+ if(kind==='labor_benefits_request')Object.assign(values,{requestDate:new Date().toISOString().slice(0,10),reference:'Prestaciones laborales',notes:'Solicitamos gestionar el pago de las prestaciones laborales mediante cheque.'});
+ if(kind==='blank_checks_delivery')Object.assign(values,{deliveryDate:new Date().toISOString().slice(0,10),deliveryNumber:'',relatedRequestNumber:'',deliveredBy:session.displayName,notes:'Cheques en blanco entregados a Contabilidad para preparar los pagos correspondientes.'});
+ if(kind==='signed_benefits_checks_delivery')Object.assign(values,{deliveryDate:new Date().toISOString().slice(0,10),deliveryNumber:'',relatedRequestNumber:'',deliveredBy:session.displayName,notes:'Cheques firmados de prestaciones laborales entregados al área de Caja.'});
+ return {values,rows:[],phones:[]};
+}

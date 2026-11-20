@@ -1,0 +1,24 @@
+ACTUALIZACION V525 - MENU MODERNO CON TARJETAS
+
+Esta entrega incluye todo lo disponible en V524 y agrega:
+
+1. Nuevo inicio "¿Qué deseas hacer?" con tarjetas de módulos según los permisos reales de cada usuario.
+2. Barra lateral compacta de iconos en escritorio y menú completo desplegable en móvil.
+3. Encabezado reorganizado sin la fila de botones desbordados.
+4. Búsqueda rápida de módulos desde el encabezado.
+5. Notificaciones, mensajes, perfil, asistente y cierre de sesión organizados en controles compactos.
+6. Navegación inferior móvil y tarjetas de dos columnas adaptables.
+7. Conservación de todas las rutas, permisos y funciones administrativas existentes.
+
+INSTALACION EN MONSTERASP
+
+- Extraiga el ZIP.
+- Copie primero el contenido de la raíz al sitio.
+- Si MonsterASP usa wwwroot como raíz pública, copie también el contenido de la carpeta wwwroot incluida.
+- No reemplace archivos privados del servidor como appsettings, .env, App_Data, uploads o logs.
+- Reinicie el sitio o el Application Pool después de copiar.
+- Abra el sistema y confirme que aparece la versión V525.
+
+ARCHIVO PRINCIPAL DEL SERVIDOR
+
+RegistroAgencias.SqlServer.V525.dll

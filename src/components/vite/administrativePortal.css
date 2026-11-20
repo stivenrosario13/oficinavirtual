@@ -1,0 +1,24 @@
+.administrative-portal{--adw-ink:#e6f4fb;--adw-muted:#aac3d4;--adw-line:#2d4b63;font-family:Inter,"Segoe UI",sans-serif;color:#e6f4fb;background:#0b1d30;gap:22px}
+.administrative-portal>.mc-page-heading{padding:20px;border:1px solid #31556e;border-radius:14px;background:linear-gradient(120deg,#162b43,#19384c)}
+.administrative-portal>.mc-page-heading small{color:#70d8ed;font-weight:800;letter-spacing:.12em}.administrative-portal>.mc-page-heading h2{color:#edf5ff;margin:8px 0;font-size:26px}
+.administrative-portal .mw-toolbar{display:flex;flex-wrap:wrap;gap:10px}.administrative-portal .mw-toolbar>.primary{background:#176483;border-color:#65cce7;color:#fff}
+.administrative-portal .mc-page-heading>div:last-child{display:flex;gap:10px;flex-wrap:wrap}.administrative-portal>.mc-page-heading>div:last-child{display:block}
+.administrative-portal .mc-searchbar input{min-width:0;width:100%;font:inherit}.administrative-portal .mc-searchbar>label{min-width:0}
+.administrative-portal{width:100%;box-sizing:border-box;min-width:0}
+.administrative-portal button{font:inherit;cursor:pointer;min-height:42px;padding:10px 14px;border:1px solid #39728d;border-radius:10px;background:#173c51;color:#e8f8ff;display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:normal}
+.administrative-portal button.primary{background:#147b9b;border-color:#54c6e8;color:#fff;font-weight:700}
+.administrative-portal button:hover:not(:disabled){background:#205873;border-color:#71d5eb}
+.administrative-portal button:focus-visible{outline:3px solid #71d5eb;outline-offset:3px}
+.administrative-portal button:disabled{opacity:.55;cursor:not-allowed}
+.administrative-portal .mc-card{min-width:0;overflow-wrap:anywhere}
+.administrative-portal .mc-card footer{display:flex;flex-wrap:wrap;gap:8px}
+.administrative-portal .mc-card footer button{flex:1 1 140px}
+.administrative-portal svg{flex-shrink:0}
+.administrative-portal .mc-request-collection>article{min-width:0;overflow-wrap:anywhere;padding:20px;border:1px solid #365c75;border-radius:16px;background:linear-gradient(145deg,#16314b,#0c2033);display:flex;flex-direction:column;gap:16px;box-sizing:border-box}
+.administrative-portal .mc-request-title{display:grid;gap:10px}.administrative-portal .mc-request-title h3,.administrative-portal .mc-request-title p{margin:0}.administrative-portal .mc-request-title h3{font-size:19px;line-height:1.4}.administrative-portal .mc-request-title .mw-status{justify-self:start;padding:6px 10px;border-radius:8px;background:#25455d;color:#e1f5ff;font-size:12px;font-weight:700}.administrative-portal .mc-excerpt{margin:0;line-height:1.55;color:#b8d1e1}.administrative-portal .mc-request-collection>article>footer{display:flex;flex-wrap:wrap;gap:8px;padding-top:12px;border-top:1px solid #365c75}
+.administrative-portal .mc-row-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.administrative-portal .mc-row-actions>button{min-width:0;width:100%}
+@media(max-width:700px){.requester-mobile-nav{display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;max-width:100%;gap:8px;scroll-snap-type:x proximity}.requester-mobile-nav>button{flex:0 0 108px!important;min-width:108px;white-space:normal;scroll-snap-align:start}.requester-mobile-nav>button span{white-space:normal;overflow-wrap:anywhere}.administrative-portal .warehouse-support header>div{min-width:0}.administrative-portal .warehouse-support{padding:0}}
+@media(max-width:700px){.administrative-portal .mc-request-collection.cards{display:grid!important;grid-template-columns:minmax(0,1fr)!important}.administrative-portal .mc-side-panel{width:100%;min-width:0}.administrative-portal .mc-summary{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(max-width:700px){.administrative-portal .mw-toolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.administrative-portal .mw-toolbar>button{min-width:0;width:100%}.administrative-portal .mc-catalog-layout,.administrative-portal .mc-grid,.administrative-portal .warehouse-support-grid{display:grid;grid-template-columns:minmax(0,1fr)!important}.administrative-portal .mc-page-heading{flex-wrap:wrap;gap:12px}.administrative-portal .mc-card footer{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.administrative-portal .mc-card footer button{width:100%;min-width:0}.administrative-portal input,.administrative-portal select,.administrative-portal textarea{max-width:100%;box-sizing:border-box}.administrative-portal .mc-sidebar{min-width:0;width:100%}}
+@media(max-width:700px){.administrative-portal{padding:14px;margin:10px 0}.administrative-portal .mc-catalog-layout{grid-template-columns:1fr}.administrative-portal .mc-summary{grid-template-columns:1fr}.administrative-portal>.mc-page-heading h2{font-size:22px}}

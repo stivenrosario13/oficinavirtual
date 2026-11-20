@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import "../../geo-atlas-2026.css";
 import {
   AlertTriangle,
   Building2,
   Camera,
   Check,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
@@ -17,14 +19,11 @@ import {
   Sparkles,
   UserRound,
 } from "lucide-react";
-import { GEO_SOURCE_BROWSER } from "@/lib/constants";
-
-async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs: number) {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
-  try { return await fetch(input, { ...init, signal: controller.signal }); }
-  finally { window.clearTimeout(timeout); }
-}
+import { GEO_SOURCE_BROWSER, MAX_GPS_ACCURACY_METERS } from "@/lib/constants";
+import {locatePhoto,photoDistance,photoLocationMatches,PRIMARY_AUDIT_PHOTO_MATCH_RADIUS_METERS,type PhotoGeo} from '@/lib/audit-photo-gps';
+export {locatePhoto,type PhotoGeo} from '@/lib/audit-photo-gps';
+import { optimizeCameraPhoto } from "@/lib/camera-photo";
+import { readJsonWithTimeout, fetchJsonWithTimeout } from "@/lib/read-json-timeout";
 
 type Agency = {
   id: string;
@@ -32,6 +31,8 @@ type Agency = {
   terminal: string;
   expectedLatitude?: number | null;
   expectedLongitude?: number | null;
+  auditCount?: number;
+  lastAuditedAt?: string | null;
 };
 
 type Geo = {
@@ -42,9 +43,9 @@ type Geo = {
   source: string;
 };
 
-type PhotoGeo = { latitude: number; longitude: number; accuracy: number; capturedAt: string };
+
 type PhotoItem = { file: File | null; geo: PhotoGeo | null; preview: string };
-type Answers = { painted: string; razaSticker: string; realSticker: string; lotekaRemoved: string; damageFound: string; printerMaintained: string; inverterPresent: string; batteryPresent: string };
+type Answers = { painted: string; razaSticker: string; realSticker: string; lotekaRemoved: string; damageFound: string; printerMaintained: string; inverterPresent: string; batteryPresent: string; cashBoxType: string };
 const damageOptions = [
   { value: "WIRING", label: "Fallas de cableado", priority: "Alta" },
   { value: "SCREENS", label: "Pantallas o monitores", priority: "Alta" },
@@ -74,10 +75,7 @@ type Result = {
   bestPhotoTitle?: string;
 };
 
-const PHOTO_MATCH_RADIUS_METERS = 75;
-const PHOTO_TARGET_ACCURACY_METERS = 12;
-const PHOTO_MAX_ACCURACY_METERS = 50;
-const PHOTO_MIN_SAMPLES = 3;
+
 
 const evidence = [
   { key: "frontal", action: "Acción 1", title: "Foto frontal de la banca", help: "Incluye toldo, mostrador y estructura física completa." },
@@ -92,7 +90,13 @@ const questions: Array<{ key: keyof Answers; title: string; help: string; allowN
   { key: "lotekaRemoved", title: "¿Fue retirada toda la publicidad de Loteka?", help: "Confirma que no exista material antiguo o no autorizado." },
   { key: "damageFound", title: "¿Hubo alguna avería durante el levantamiento?", help: "Reporta y clasifica fallas de Tecnología o Servicios Generales." },
   { key: "printerMaintained", title: "¿Le dieron mantenimiento a la impresora?", help: "Confirma si la impresora recibió limpieza, revisión y mantenimiento preventivo.", allowNotApplicable: true },
+  { key: "cashBoxType", title: "¿Qué tipo de caja tiene la agencia?", help: "Indica si utiliza caja registradora, caja de madera o si no tiene ninguna." },
 ];
+
+const levantamientoOrdinal = (number: number) => {
+  const names = ["primer", "segundo", "tercer", "cuarto", "quinto", "sexto", "séptimo", "octavo", "noveno", "décimo"];
+  return names[number - 1] || `${number}.º`;
+};
 
 const equipmentQuestions = [
   { key: "inverterPresent", photoKey: "inversor", title: "¿Tiene inversor?", photoTitle: "Fotografía del inversor", help: "Selecciona Sí para abrir la cámara y registrar el inversor con GPS, precisión y hora." },
@@ -108,98 +112,6 @@ function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
   return radius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function locatePhoto(): Promise<PhotoGeo> {
-  return new Promise((resolve, reject) => {
-    if (!window.isSecureContext || !navigator.geolocation) {
-      reject(new Error("La captura necesita HTTPS y un navegador con ubicación disponible."));
-      return;
-    }
-    let best: GeolocationPosition | null = null;
-    let watchId = 0;
-    let done = false;
-    let samples = 0;
-    const startedAt = Date.now();
-    let timer = 0;
-    const finish = (force = false) => {
-      if (done) return;
-      if (!force && (samples < PHOTO_MIN_SAMPLES || Date.now() - startedAt < 3_500)) return;
-      done = true;
-      navigator.geolocation.clearWatch(watchId);
-      window.clearTimeout(timer);
-      if (!best) return reject(new Error("No se obtuvo una coordenada para esta fotografía."));
-      if (best.coords.accuracy > PHOTO_MAX_ACCURACY_METERS) {
-        return reject(new Error(`La señal GPS todavía es imprecisa (±${Math.round(best.coords.accuracy)} m). Acércate a una ventana o sal al exterior y vuelve a tomar la foto.`));
-      }
-      resolve({
-        latitude: best.coords.latitude,
-        longitude: best.coords.longitude,
-        accuracy: best.coords.accuracy,
-        capturedAt: new Date(best.timestamp || Date.now()).toISOString(),
-      });
-    };
-    watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const isFresh = Date.now() - position.timestamp <= 15_000;
-        const isValid = Number.isFinite(position.coords.latitude) && Number.isFinite(position.coords.longitude)
-          && Number.isFinite(position.coords.accuracy) && position.coords.accuracy > 0
-          && !(position.coords.latitude === 0 && position.coords.longitude === 0);
-        if (!isFresh || !isValid) return;
-        samples += 1;
-        if (!best || position.coords.accuracy < best.coords.accuracy) best = position;
-        if (best.coords.accuracy <= PHOTO_TARGET_ACCURACY_METERS) finish();
-      },
-      (error) => {
-        navigator.geolocation.clearWatch(watchId);
-        window.clearTimeout(timer);
-        done = true;
-        reject(new Error(error.code === 1
-          ? "El sitio no tiene permiso de ubicación. Abre el candado del navegador, permite Ubicación y vuelve a tomar la foto."
-          : "No se obtuvo señal GPS. Activa Ubicación y Wi‑Fi y vuelve a intentarlo desde la banca."));
-      },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 20_000 },
-    );
-    timer = window.setTimeout(() => finish(true), 15_000);
-  });
-}
-
-async function optimizeCameraPhoto(original: File): Promise<{ file: File; optimized: boolean }> {
-  const extensionLooksLikeImage = /\.(jpe?g|png|webp|heic|heif)$/i.test(original.name);
-  if ((!original.type.startsWith("image/") && !extensionLooksLikeImage) || original.size > 25 * 1024 * 1024) {
-    throw new Error("Selecciona una fotografía válida de hasta 25 MB.");
-  }
-  const sourceUrl = URL.createObjectURL(original);
-  try {
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const element = new Image();
-      element.onload = () => resolve(element);
-      element.onerror = () => reject(new Error("Este formato no puede reducirse en el navegador."));
-      element.src = sourceUrl;
-    });
-    const maxSide = 1920;
-    const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("No se pudo preparar la fotografía.");
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    let quality = .84;
-    let blob: Blob | null = null;
-    do {
-      blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
-      quality -= .1;
-    } while (blob && blob.size > 4 * 1024 * 1024 && quality >= .54);
-    if (!blob) throw new Error("No se pudo convertir la fotografía.");
-    const baseName = original.name.replace(/\.[^.]+$/, "") || `foto-${Date.now()}`;
-    return { file: new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: Date.now() }), optimized: true };
-  } catch {
-    if (original.size <= 20 * 1024 * 1024) return { file: original, optimized: false };
-    throw new Error("La foto es demasiado grande y el teléfono no permitió reducirla. Cambia la cámara a formato compatible o usa una imagen menor de 20 MB.");
-  } finally {
-    URL.revokeObjectURL(sourceUrl);
-  }
-}
-
 export default function EmployeeAuditForm({ agency, group, onBack, onComplete }: {
   agency: Agency;
   group: string;
@@ -207,15 +119,30 @@ export default function EmployeeAuditForm({ agency, group, onBack, onComplete }:
   onComplete: (result: Result) => void;
 }) {
   const pendingSubmission = useRef<{ profileId: string; uploadToken: string } | null>(null);
+  const captureInFlight = useRef(false);
+  const active = useRef(true);
+  const previews = useRef(new Set<string>());
+  const editedFields = useRef(new Set<string>());
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+      previews.current.forEach(url => URL.revokeObjectURL(url));
+      previews.current.clear();
+    };
+  }, []);
+  function releasePreview(url: string) {
+    if (url) { URL.revokeObjectURL(url); previews.current.delete(url); }
+  }
   const [tab, setTab] = useState<"photos" | "employee" | "check">("photos");
   const [busy, setBusy] = useState(false);
   const [locating, setLocating] = useState("");
   const [geocoding, setGeocoding] = useState(false);
   const [error, setError] = useState("");
-  const [status, setStatus] = useState("Toma la primera fotografía para activar el atlas y completar la dirección.");
+  const [status, setStatus] = useState("Toma las fotografías con GPS. La dirección se completará al continuar a los datos del empleado.");
   const [observation, setObservation] = useState("");
   const [form, setForm] = useState({ employeeName: "", employeeCode: "", direccion: "", sector: "", municipio: "", provincia: "", website: "" });
-  const [answers, setAnswers] = useState<Answers>({ painted: "", razaSticker: "", realSticker: "", lotekaRemoved: "", damageFound: "", printerMaintained: "", inverterPresent: "", batteryPresent: "" });
+  const [answers, setAnswers] = useState<Answers>({ painted: "", razaSticker: "", realSticker: "", lotekaRemoved: "", damageFound: "", printerMaintained: "", inverterPresent: "", batteryPresent: "", cashBoxType: "" });
   const [damageTypes, setDamageTypes] = useState<string[]>([]);
   useEffect(() => { if (answers.damageFound !== "yes" && damageTypes.length) setDamageTypes([]); }, [answers.damageFound, damageTypes.length]);
   const [items, setItems] = useState<Record<string, PhotoItem>>({
@@ -231,24 +158,27 @@ export default function EmployeeAuditForm({ agency, group, onBack, onComplete }:
   const bestReading = photoReadings.reduce<(typeof photoReadings)[number] | null>((best, current) => !best || current.geo.accuracy < best.geo.accuracy ? current : best, null);
   const bestGeo = bestReading?.geo ?? null;
   const locationSpreadMeters = bestGeo ? Math.max(0, ...photoReadings.map((reading) => haversine(bestGeo.latitude, bestGeo.longitude, reading.geo.latitude, reading.geo.longitude))) : 0;
-  const locationVerified = readyPhotos === 3 && locationSpreadMeters <= PHOTO_MATCH_RADIUS_METERS;
+  const locationVerified = readyPhotos === 3 && !!bestGeo && photoReadings.every(reading=>photoLocationMatches(bestGeo,reading.geo,PRIMARY_AUDIT_PHOTO_MATCH_RADIUS_METERS));
+  const approximateLocation = Object.values(items).some(item=>item.geo&&item.geo.accuracy>MAX_GPS_ACCURACY_METERS);
   const answerCount = Object.values(answers).filter(Boolean).length;
-  const equipmentEvidenceReady = equipmentQuestions.every((question) => answers[question.key] !== "yes" || Boolean(items[question.photoKey].file && items[question.photoKey].geo));
+  const equipmentEvidenceReady = equipmentQuestions.every((question) => answers[question.key] !== "yes" || Boolean(items[question.photoKey].file && items[question.photoKey].geo && bestGeo && photoLocationMatches(bestGeo,items[question.photoKey].geo!)));
   const damageClassificationReady = answers.damageFound !== "yes" || damageTypes.length > 0;
-  const verificationReady = answerCount === 8 && equipmentEvidenceReady && damageClassificationReady;
+  const verificationReady = answerCount === 9 && equipmentEvidenceReady && damageClassificationReady;
   const addressOk = Boolean(form.direccion.trim() && form.sector.trim() && form.municipio.trim() && form.provincia.trim());
   const employeeOk = Boolean(form.employeeName.trim() && addressOk);
   const distanceMeters = useMemo(() => bestGeo && agency.expectedLatitude != null && agency.expectedLongitude != null
     ? haversine(bestGeo.latitude, bestGeo.longitude, agency.expectedLatitude, agency.expectedLongitude)
     : null, [bestGeo, agency]);
-  const percent = Math.round(((readyPhotos / 3) + (employeeOk ? 1 : 0) + ((answerCount / 7) * (equipmentEvidenceReady ? 1 : .85))) / 3 * 100);
+  const percent = Math.round(((readyPhotos / 3) + (employeeOk ? 1 : 0) + ((answerCount / 9) * (equipmentEvidenceReady ? 1 : .85))) / 3 * 100);
+  const completedAudits = agency.auditCount || 0;
+  const currentAuditNumber = completedAudits + 1;
 
   const formatTime = (value: string) => new Intl.DateTimeFormat("es-DO", { dateStyle: "medium", timeStyle: "medium" }).format(new Date(value));
   const mapUrl = bestGeo ? `https://www.openstreetmap.org/export/embed.html?bbox=${bestGeo.longitude - .0018}%2C${bestGeo.latitude - .0012}%2C${bestGeo.longitude + .0018}%2C${bestGeo.latitude + .0012}&layer=mapnik&marker=${bestGeo.latitude}%2C${bestGeo.longitude}` : "";
   const mapLink = bestGeo ? `https://www.openstreetmap.org/?mlat=${bestGeo.latitude}&mlon=${bestGeo.longitude}#map=20/${bestGeo.latitude}/${bestGeo.longitude}` : "#";
 
   const field = (label: string, key: keyof typeof form, placeholder = "") => (
-    <label className="atlas-field"><span>{label}</span><input value={form[key]} placeholder={placeholder} onChange={(event) => setForm({ ...form, [key]: event.target.value })} /></label>
+    <label className="atlas-field"><span>{label}</span><input value={form[key]} placeholder={placeholder} onChange={(event) => { editedFields.current.add(key); setForm({ ...form, [key]: event.target.value }); }} /></label>
   );
 
   async function reverseGeocode(geo: PhotoGeo) {
@@ -264,15 +194,13 @@ export default function EmployeeAuditForm({ agency, group, onBack, onComplete }:
     const isComplete = () => Boolean(address.direccion && address.sector && address.municipio && address.provincia);
     try {
       try {
-        const response = await fetch(`/api/geocode/reverse?lat=${geo.latitude}&lng=${geo.longitude}`, { cache: "no-store" });
-        const data = await response.json().catch(() => ({}));
-        if (response.ok) merge(data);
+        const data = await readJsonWithTimeout<AddressResponse>(`/api/geocode/reverse?lat=${geo.latitude}&lng=${geo.longitude}`);
+        merge(data);
       } catch { /* El navegador probará los proveedores directos. */ }
 
       if (!isComplete()) try {
         const location = encodeURIComponent(`${geo.longitude},${geo.latitude}`);
-        const response = await fetch(`https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?location=${location}&f=json&langCode=es&featureTypes=PointAddress%2CStreetAddress%2CStreetName`);
-        const data = await response.json();
+        const data = await readJsonWithTimeout<{address?: Record<string, string>}>(`https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?location=${location}&f=json&langCode=es&featureTypes=PointAddress%2CStreetAddress%2CStreetName`);
         const item = data?.address || {};
         merge({
           direccion: item.Address || item.ShortLabel || item.Match_addr,
@@ -284,26 +212,24 @@ export default function EmployeeAuditForm({ agency, group, onBack, onComplete }:
       } catch { /* Continúa con el siguiente respaldo. */ }
 
       if (!address.sector) try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${geo.latitude}&lon=${geo.longitude}&zoom=15&addressdetails=1&accept-language=es`);
-        const data = await response.json();
+        const data = await readJsonWithTimeout<{address?: Record<string, string>; display_name?: string}>(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${geo.latitude}&lon=${geo.longitude}&zoom=15&addressdetails=1&accept-language=es`);
         const item = data?.address || {};
         const mappedArea = item.suburb || item.neighbourhood || item.quarter || item.city_district || item.village || item.hamlet || item.town || item.municipality;
         merge({ sector: mappedArea, municipio: item.city || item.town || item.municipality || item.county, provincia: item.state || item.region, displayName: data.display_name });
       } catch { /* El backend y ArcGIS conservan los demás campos encontrados. */ }
 
       if (!address.municipio || !address.provincia) try {
-        const response = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${geo.latitude}&longitude=${geo.longitude}&localityLanguage=es`);
-        const data = await response.json();
+        const data = await readJsonWithTimeout<Record<string, string>>(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${geo.latitude}&longitude=${geo.longitude}&localityLanguage=es`);
         merge({ municipio: data.city || data.locality, provincia: data.principalSubdivision });
       } catch { /* Se mostrará un error verificable debajo. */ }
 
       if (!address.direccion && address.displayName) address.direccion = address.displayName.split(",")[0]?.trim();
       setForm((current) => ({
         ...current,
-        direccion: address.direccion || current.direccion,
-        sector: address.sector || current.sector,
-        municipio: address.municipio || current.municipio,
-        provincia: address.provincia || current.provincia,
+        direccion: editedFields.current.has("direccion") ? current.direccion : address.direccion || current.direccion,
+        sector: editedFields.current.has("sector") ? current.sector : address.sector || current.sector,
+        municipio: editedFields.current.has("municipio") ? current.municipio : address.municipio || current.municipio,
+        provincia: editedFields.current.has("provincia") ? current.provincia : address.provincia || current.provincia,
       }));
       if (!isComplete()) {
         const missing = [["dirección", address.direccion], ["sector", address.sector], ["municipio", address.municipio], ["provincia", address.provincia]].filter(([, value]) => !value).map(([label]) => label);
@@ -332,39 +258,58 @@ export default function EmployeeAuditForm({ agency, group, onBack, onComplete }:
 
   async function openEmployeeData() {
     if (!locationVerified || !bestGeo) return;
-    await refreshAddress(bestGeo);
     setTab("employee");
+    if (!addressOk) await refreshAddress(bestGeo);
   }
 
   function setEquipmentAnswer(key: "inverterPresent" | "batteryPresent", photoKey: "inversor" | "bateria", value: "yes" | "no" | "not_applicable") {
     setAnswers((current) => ({ ...current, [key]: value }));
     if (value === "yes") return;
     setItems((current) => {
-      if (current[photoKey].preview) URL.revokeObjectURL(current[photoKey].preview);
+      releasePreview(current[photoKey].preview);
       return { ...current, [photoKey]: { file: null, geo: null, preview: "" } };
     });
   }
 
-  async function selected(key: string, file: File | null) {
-    if (!file) return;
+  async function selected(key: string, file: File | null, retryLocation=false) {
+    if (!file || captureInFlight.current) return;
+    captureInFlight.current = true;
     setError("");
     setLocating(key);
     setStatus("Preparando la fotografía de la cámara y capturando su ubicación...");
     try {
-      const prepared = await optimizeCameraPhoto(file);
-      const geo = await locatePhoto();
+      let prepared: { file: File; optimized: boolean };
+      try {
+        prepared = retryLocation ? {file,optimized:false} : await optimizeCameraPhoto(file);
+      } catch (preparationError) {
+        // Algunos navegadores móviles permiten capturar HEIC/HEIF pero no lo
+        // decodifican en canvas. El servidor valida esos formatos de forma
+        // nativa, así que se conserva la evidencia original cuando cabe en el
+        // límite de carga.
+        if (/^image\/(heic|heif|heic-sequence|heif-sequence)$/i.test(file.type) && file.size <= 20 * 1024 * 1024) {
+          prepared = { file, optimized: false };
+        } else {
+          throw preparationError;
+        }
+      }
+      if (!active.current) return;
+      const preview = /^image\/(jpeg|png|webp)$/i.test(prepared.file.type) ? URL.createObjectURL(prepared.file) : "";
+      if (preview) previews.current.add(preview);
+      setItems((current) => {
+        releasePreview(current[key].preview);
+        return { ...current, [key]: { file: prepared.file, geo: null, preview } };
+      });
+      setStatus("Foto preparada. Verificando la ubicación GPS...");
+      const geo = await locatePhoto(bestGeo);
+      if (!active.current) return;
       const equipment = equipmentQuestions.find((question) => question.photoKey === key);
       if (equipment && bestGeo) {
-        const distance = haversine(bestGeo.latitude, bestGeo.longitude, geo.latitude, geo.longitude);
-        if (distance > PHOTO_MATCH_RADIUS_METERS) throw new Error(`La foto de ${equipment.photoTitle.toLowerCase()} está a ${Math.round(distance)} m del punto verificado. Debes tomarla dentro de la misma banca.`);
+        const distance = photoDistance(bestGeo,geo);
+        if (!photoLocationMatches(bestGeo,geo)) throw new Error(`La foto de ${equipment.photoTitle.toLowerCase()} está a ${Math.round(distance)} m del punto del levantamiento, fuera del margen de precisión GPS. Debes tomarla dentro de la misma banca.`);
       }
-      const preview = /^image\/(jpeg|png|webp)$/i.test(prepared.file.type) ? URL.createObjectURL(prepared.file) : "";
-      setItems((current) => {
-        if (current[key].preview) URL.revokeObjectURL(current[key].preview);
-        return { ...current, [key]: { file: prepared.file, geo, preview } };
-      });
+      setItems((current) => ({...current,[key]:{...current[key],geo}}));
       if (equipment) {
-        setStatus(`${equipment.photoTitle} georreferenciada en ${geo.latitude.toFixed(6)}, ${geo.longitude.toFixed(6)} con precisión ±${Math.round(geo.accuracy)} m.`);
+        setStatus(`${equipment.photoTitle} georreferenciada${geo.reused?' con la lectura GPS reciente del mismo levantamiento':''} en ${geo.latitude.toFixed(6)}, ${geo.longitude.toFixed(6)} con precisión ±${Math.round(geo.accuracy)} m.`);
         return;
       }
       const nextReadings = evidence.flatMap((meta) => {
@@ -373,23 +318,20 @@ export default function EmployeeAuditForm({ agency, group, onBack, onComplete }:
       });
       const nextBest = nextReadings.reduce<(typeof nextReadings)[number] | null>((best, current) => !best || current.geo.accuracy < best.geo.accuracy ? current : best, null)!;
       const nextSpread = Math.max(0, ...nextReadings.map((reading) => haversine(nextBest.geo.latitude, nextBest.geo.longitude, reading.geo.latitude, reading.geo.longitude)));
-      setStatus(`${prepared.optimized ? "Foto optimizada y " : "Foto "}georreferenciada con precisión ±${Math.round(geo.accuracy)} m. La mejor lectura actual es ${nextBest.meta.action.toLowerCase()} con ±${Math.round(nextBest.geo.accuracy)} m.`);
-      try {
-        await reverseGeocode(nextBest.geo);
-        if (nextReadings.length === 3 && nextSpread > PHOTO_MATCH_RADIUS_METERS) {
-          setError(`Las tres fotos no coinciden: existe una separación de ${Math.round(nextSpread)} m. Vuelve a tomar la fotografía que esté fuera de la banca.`);
-          setStatus("Ubicación sin verificar. Las tres fotografías deben tomarse en la misma banca.");
-        } else if (nextReadings.length === 3) {
-          setStatus(`Ubicación verificada con 3 fotografías. Punto elegido: ${nextBest.geo.latitude.toFixed(6)}, ${nextBest.geo.longitude.toFixed(6)} · precisión ±${Math.round(nextBest.geo.accuracy)} m.`);
-        }
-      } catch (geocodeError) {
-        setStatus("La foto quedó georreferenciada. Completa o corrige manualmente la dirección antes de continuar.");
-        setError((geocodeError as Error).message);
+      setStatus(`${prepared.optimized ? "Foto optimizada y " : "Foto "}georreferenciada${geo.reused?' con la lectura GPS reciente del mismo levantamiento':''} con precisión ±${Math.round(geo.accuracy)} m. La mejor lectura actual es ${nextBest.meta.action.toLowerCase()} con ±${Math.round(nextBest.geo.accuracy)} m.`);
+      // Address lookup belongs to the employee step, not the camera operation.
+      // Slow map providers must never hold a captured photo or the next camera open.
+      if (nextReadings.length === 3 && !nextReadings.every(reading=>photoLocationMatches(nextBest.geo,reading.geo,PRIMARY_AUDIT_PHOTO_MATCH_RADIUS_METERS))) {
+        setError(`Las tres fotos no coinciden: existe una separación de ${Math.round(nextSpread)} m fuera del margen de precisión GPS. Revisa la fotografía que esté fuera de la banca.`);
+        setStatus("Ubicación sin verificar. Las tres fotografías deben tomarse en la misma banca.");
+      } else if (nextReadings.length === 3) {
+        setStatus(`Ubicación registrada en 3 fotografías. Punto elegido: ${nextBest.geo.latitude.toFixed(6)}, ${nextBest.geo.longitude.toFixed(6)} · precisión ±${Math.round(nextBest.geo.accuracy)} m.`);
       }
     } catch (captureError) {
       setError((captureError as Error).message);
-      setStatus("No se vinculó la fotografía. Revisa el permiso y vuelve a tomarla.");
+      setStatus("La fotografía permanece en pantalla. Revisa el permiso de ubicación y pulsa Reintentar GPS.");
     } finally {
+      captureInFlight.current = false;
       setLocating("");
     }
   }
@@ -411,8 +353,7 @@ export default function EmployeeAuditForm({ agency, group, onBack, onComplete }:
       data.append("photoLongitude", String(item.geo!.longitude));
       data.append("photoAccuracy", String(item.geo!.accuracy));
       data.append("photoCapturedAt", item.geo!.capturedAt);
-      const response = await fetchWithTimeout("/api/image", { method: "POST", body: data }, 90_000);
-      const body = await response.json().catch(() => ({}));
+      const { response, data: body } = await fetchJsonWithTimeout<{ error?: string }>("/api/image", { method: "POST", body: data }, 90_000);
       if (!response.ok) throw new Error(body.error || `No se guardó ${meta.title.toLowerCase()}.`);
     }
     return selectedEvidence.length;
@@ -429,7 +370,7 @@ export default function EmployeeAuditForm({ agency, group, onBack, onComplete }:
     try {
       let body = pendingSubmission.current;
       if (!body) {
-        const response = await fetchWithTimeout("/api/submit", {
+        const { response, data: responseBody } = await fetchJsonWithTimeout<{ error?: string; profileId: string; uploadToken: string }>("/api/submit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -442,8 +383,8 @@ export default function EmployeeAuditForm({ agency, group, onBack, onComplete }:
             observations: observation.trim(),
           }),
         }, 45_000);
-        const responseBody = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(responseBody.error || "No se pudo guardar la auditoría.");
+        if (!responseBody.profileId || !responseBody.uploadToken) throw new Error("El servidor no confirmó el registro de la auditoría.");
         body = { profileId: responseBody.profileId, uploadToken: responseBody.uploadToken };
         pendingSubmission.current = body;
       }
@@ -470,26 +411,35 @@ export default function EmployeeAuditForm({ agency, group, onBack, onComplete }:
         <button className="atlas-back" onClick={onBack}><ChevronLeft /> Volver</button>
         <div className="atlas-agency">
           <span className="atlas-agency-icon"><Building2 /></span>
-          <div><small>Levantamiento seleccionado</small><h2>{agency.terminal}</h2><p>{group} · {agency.codigo} · Banca de lotería</p></div>
+          <div className="atlas-agency-copy">
+            <small>Levantamiento seleccionado</small><h2>{agency.terminal}</h2><p>{group} · {agency.codigo} · Banca de lotería</p>
+            <div className={`audit-history-indicator ${completedAudits ? "completed" : "first"}`}>
+              <CheckCircle2 />
+              <span>
+                <strong>{completedAudits ? `${completedAudits} ${completedAudits === 1 ? "levantamiento realizado" : "levantamientos realizados"}` : "Sin levantamientos anteriores"}</strong>
+                <em>Ahora estás iniciando el {levantamientoOrdinal(currentAuditNumber)} levantamiento{agency.lastAuditedAt ? ` · Último: ${new Date(agency.lastAuditedAt).toLocaleDateString("es-DO")}` : ""}</em>
+              </span>
+            </div>
+          </div>
         </div>
         <div className="atlas-completion"><span style={{ "--atlas-progress": `${percent}%` } as React.CSSProperties}><strong>{percent}%</strong></span><small>Avance del formulario</small></div>
       </header>
 
       <nav className="atlas-tabs" aria-label="Etapas del levantamiento">
-        <button className={tab === "photos" ? "active" : ""} onClick={() => setTab("photos")}><em>01</em><Camera /><span><strong>Fotografías y ubicación</strong><small>{locationVerified ? "3 puntos verificados" : `${readyPhotos}/3 georreferenciadas`}</small></span>{locationVerified && <Check className="tab-check" />}</button>
+        <button className={tab === "photos" ? "active" : ""} onClick={() => setTab("photos")}><em>01</em><Camera /><span><strong>Fotografías y ubicación</strong><small>{locationVerified ? "3 fotos con ubicación" : `${readyPhotos}/3 georreferenciadas`}</small></span>{locationVerified && <Check className="tab-check" />}</button>
         <button className={tab === "employee" ? "active" : ""} onClick={() => setTab("employee")} disabled={!locationVerified}><em>02</em><UserRound /><span><strong>Datos del empleado</strong><small>Dirección autocompletada</small></span>{employeeOk && <Check className="tab-check" />}</button>
-        <button className={tab === "check" ? "active" : ""} onClick={() => setTab("check")} disabled={!employeeOk}><em>03</em><ClipboardCheck /><span><strong>Verificación</strong><small>7 preguntas y evidencias</small></span>{verificationReady && <Check className="tab-check" />}</button>
+        <button className={tab === "check" ? "active" : ""} onClick={() => setTab("check")} disabled={!employeeOk}><em>03</em><ClipboardCheck /><span><strong>Verificación</strong><small>9 preguntas y evidencias</small></span>{verificationReady && <Check className="tab-check" />}</button>
       </nav>
 
-      {error && <div className="alert atlas-alert" role="alert">{error}</div>}
+      {error && <div className="alert atlas-alert" role="alert">{error}</div>}{approximateLocation && <div className="alert atlas-alert" role="status">Ubicación aproximada: se guardarán las coordenadas del dispositivo con su margen de error real. Puedes continuar; revisa la dirección de la banca antes de guardar.</div>}
 
       {tab === "photos" && <div className="atlas-pane">
-        <div className="atlas-pane-title"><div><span><Sparkles /> Validación GPS de tres puntos</span><h3>La mejor coordenada entre las tres fotografías</h3><p>Comparamos las tres lecturas, elegimos la de menor margen de error y verificamos que todas hayan sido tomadas en la misma banca.</p></div><strong>{readyPhotos}/3</strong></div>
+        <div className="atlas-pane-title"><div><span><Sparkles /> Validación GPS de tres puntos</span><h3>La mejor coordenada entre las tres fotografías</h3><p>Comparamos las tres lecturas, elegimos la de menor margen de error y comparamos su separación considerando el margen de error del GPS.</p></div><strong>{readyPhotos}/3</strong></div>
         <div className="geo-atlas-layout">
           <section className={`atlas-map ${bestGeo ? "active" : ""}`}>
             <div className="atlas-map-top"><span><i /> SENSOR DE PRECISIÓN · {bestReading?.meta.action ?? "EN ESPERA"}</span><Satellite /></div>
             {bestGeo ? <iframe title="Punto más preciso de las fotografías" src={mapUrl} loading="lazy" /> : <div className="atlas-map-empty"><Navigation /><strong>Sensor en espera</strong><span>La primera fotografía marcará el punto en el mapa.</span></div>}
-            {bestGeo && <a href={mapLink} target="_blank" rel="noreferrer"><ExternalLink /> Abrir punto exacto</a>}
+            {bestGeo && <a href={mapLink} target="_blank" rel="noreferrer"><ExternalLink /> Abrir ubicación registrada</a>}
             <div className="atlas-coordinate-strip">
               <article><small>Latitud elegida</small><strong>{bestGeo ? bestGeo.latitude.toFixed(6) : "--.------"}</strong></article>
               <article><small>Longitud elegida</small><strong>{bestGeo ? bestGeo.longitude.toFixed(6) : "--.------"}</strong></article>
@@ -508,17 +458,17 @@ export default function EmployeeAuditForm({ agency, group, onBack, onComplete }:
               return <article className={`atlas-photo-card ${item.geo ? "ready" : ""} ${isBest ? "best-reading" : ""}`} key={meta.key}>
                 <label>
                   {item.preview ? <img src={item.preview} alt={meta.title} /> : <span className="atlas-photo-placeholder"><Camera /><small>{meta.action}</small></span>}
-                  <input data-photo={meta.key} type="file" accept="image/*,.heic,.heif" capture="environment" onChange={(event) => void selected(meta.key, event.target.files?.[0] || null)} />
+                  <input data-photo={meta.key} disabled={!!locating || busy} type="file" accept="image/*,.heic,.heif" capture="environment" onChange={(event) => { const file = event.target.files?.[0] || null; event.target.value = ""; void selected(meta.key, file); }} />
                   {locating === meta.key && <span className="atlas-photo-loading"><LoaderCircle className="spin" /> Vinculando GPS...</span>}
                 </label>
-                <div>{isBest && <span className="best-reading-badge"><Satellite/> Mayor precisión</span>}<small>{meta.action}</small><h4>{meta.title}</h4><p>{meta.help}</p>{item.geo ? <div className="atlas-photo-meta"><span><Check /> {item.geo.latitude.toFixed(6)}, {item.geo.longitude.toFixed(6)} · ±{Math.round(item.geo.accuracy)} m</span><a href={pointLink} target="_blank" rel="noreferrer"><MapPin/> Ver punto exacto</a></div> : <button onClick={() => (document.querySelector(`input[data-photo='${meta.key}']`) as HTMLInputElement)?.click()} style={{ display: "none" }}>Tomar foto</button>}</div>
+                <div>{isBest && <span className="best-reading-badge"><Satellite/> Mayor precisión</span>}<small>{meta.action}</small><h4>{meta.title}</h4><p>{meta.help}</p>{item.file&&!item.geo&&<button type="button" disabled={!!locating||busy} onClick={()=>void selected(meta.key,item.file,true)}>Reintentar GPS</button>}{item.geo ? <div className="atlas-photo-meta"><span><Check /> {item.geo.latitude.toFixed(6)}, {item.geo.longitude.toFixed(6)} · ±{Math.round(item.geo.accuracy)} m</span><a href={pointLink} target="_blank" rel="noreferrer"><MapPin/> Ver ubicación registrada</a></div> : <button onClick={() => (document.querySelector(`input[data-photo='${meta.key}']`) as HTMLInputElement)?.click()} style={{ display: "none" }}>Tomar foto</button>}</div>
               </article>;
             })}
           </div>
         </div>
-        <div className={`photo-location-verification ${locationVerified ? "verified" : readyPhotos === 3 ? "mismatch" : "pending"}`}><ShieldCheck/><div><strong>{locationVerified ? "Ubicación confirmada por tres fotografías" : readyPhotos === 3 ? "Las coordenadas no coinciden" : `Faltan ${3-readyPhotos} fotografías para verificar`}</strong><span>{locationVerified ? `Los tres puntos están dentro de ${Math.round(locationSpreadMeters)} m. Se usará la coordenada de ${bestReading?.meta.title}.` : readyPhotos === 3 ? `La separación máxima es ${Math.round(locationSpreadMeters)} m; debe ser de ${PHOTO_MATCH_RADIUS_METERS} m o menos.` : "Toma las tres fotos físicamente dentro de la misma banca."}</span></div></div>
+        <div className={`photo-location-verification ${locationVerified ? "verified" : readyPhotos === 3 ? "mismatch" : "pending"}`}><ShieldCheck/><div><strong>{locationVerified ? "Ubicaciones compatibles según la precisión GPS" : readyPhotos === 3 ? "Las coordenadas no coinciden" : `Faltan ${3-readyPhotos} fotografías para verificar`}</strong><span>{locationVerified ? `Separación de ${Math.round(locationSpreadMeters)} m dentro del margen GPS. Se usará la coordenada de ${bestReading?.meta.title}.` : readyPhotos === 3 ? `La separación máxima es ${Math.round(locationSpreadMeters)} m y supera la tolerancia calculada con la precisión de las lecturas.` : "Toma las tres fotos físicamente dentro de la misma banca."}</span></div></div>
         <div className="atlas-live-status"><span className={locating ? "pulse" : ""} /><p>{status}</p></div>
-        <div className="atlas-actions"><button className="primary" disabled={!locationVerified || geocoding} onClick={() => void openEmployeeData()}>{geocoding ? <LoaderCircle className="spin" /> : null} Continuar a datos del empleado <ChevronRight /></button></div>
+        <div className="atlas-actions"><button className="primary" disabled={!locationVerified || !!locating} onClick={() => void openEmployeeData()}>Continuar a datos del empleado <ChevronRight /></button></div>
       </div>}
 
       {tab === "employee" && <div className="atlas-pane">
@@ -537,10 +487,10 @@ export default function EmployeeAuditForm({ agency, group, onBack, onComplete }:
       </div>}
 
       {tab === "check" && <div className="atlas-pane">
-        <div className="atlas-pane-title"><div><span><ClipboardCheck /> Verificación estructural y energética</span><h3>Condiciones de la banca</h3><p>Responde las ocho validaciones. Inversor y batería solicitarán una foto georreferenciada cuando selecciones Sí.</p></div><strong>{answerCount}/8</strong></div>
-        <div className="atlas-question-progress"><i style={{ width: `${Math.round(answerCount * 100 / 8)}%` }} /><span>{Math.round(answerCount * 100 / 8)}% respondido</span></div>
+        <div className="atlas-pane-title"><div><span><ClipboardCheck /> Verificación estructural y energética</span><h3>Condiciones de la banca</h3><p>Responde las nueve validaciones. Inversor y batería solicitarán una foto georreferenciada cuando selecciones Sí.</p></div><strong>{answerCount}/9</strong></div>
+        <div className="atlas-question-progress"><i style={{ width: `${Math.round(answerCount * 100 / 9)}%` }} /><span>{Math.round(answerCount * 100 / 9)}% respondido</span></div>
         <div className="atlas-questions">{questions.map((question, index) => <article className={answers[question.key] ? "answered" : ""} key={question.key}>
-          <em>{String(index + 1).padStart(2, "0")}</em><div><strong>{question.title}</strong><small>{question.help}</small></div><div className="answer-segment"><button type="button" className={answers[question.key] === "yes" ? "active yes" : ""} onClick={() => setAnswers({ ...answers, [question.key]: "yes" })}>Sí</button><button type="button" className={answers[question.key] === "no" ? "active no" : ""} onClick={() => setAnswers({ ...answers, [question.key]: "no" })}>No</button>{question.allowNotApplicable && <button type="button" className={answers[question.key] === "not_applicable" ? "active na" : ""} onClick={() => setAnswers({ ...answers, [question.key]: "not_applicable" })}>No aplica</button>}</div>
+          <em>{String(index + 1).padStart(2, "0")}</em><div><strong>{question.title}</strong><small>{question.help}</small></div>{question.key === "cashBoxType" ? <div className="answer-segment"><button type="button" className={answers.cashBoxType === "cash_register" ? "active yes" : ""} onClick={() => setAnswers({ ...answers, cashBoxType: "cash_register" })}>Caja registradora</button><button type="button" className={answers.cashBoxType === "wooden_box" ? "active yes" : ""} onClick={() => setAnswers({ ...answers, cashBoxType: "wooden_box" })}>Caja de madera</button><button type="button" className={answers.cashBoxType === "none" ? "active na" : ""} onClick={() => setAnswers({ ...answers, cashBoxType: "none" })}>Ninguna</button></div> : <div className="answer-segment"><button type="button" className={answers[question.key] === "yes" ? "active yes" : ""} onClick={() => setAnswers({ ...answers, [question.key]: "yes" })}>Sí</button><button type="button" className={answers[question.key] === "no" ? "active no" : ""} onClick={() => setAnswers({ ...answers, [question.key]: "no" })}>No</button>{question.allowNotApplicable && <button type="button" className={answers[question.key] === "not_applicable" ? "active na" : ""} onClick={() => setAnswers({ ...answers, [question.key]: "not_applicable" })}>No aplica</button>}</div>}
         </article>)}
         {answers.damageFound === "yes" && <div className="damage-classification">
           <div><AlertTriangle/><span><strong>¿Qué tipo de avería encontraste?</strong><small>Selecciona una o varias. Esta clasificación determina la prioridad del hallazgo.</small></span></div>
@@ -554,20 +504,20 @@ export default function EmployeeAuditForm({ agency, group, onBack, onComplete }:
           const item = items[question.photoKey];
           const pointLink = item.geo ? `https://www.openstreetmap.org/?mlat=${item.geo.latitude}&mlon=${item.geo.longitude}#map=20/${item.geo.latitude}/${item.geo.longitude}` : "#";
           return <article className={`equipment-question ${answers[question.key] ? "answered" : ""} ${answers[question.key] === "yes" && item.geo ? "evidence-ready" : ""}`} key={question.key}>
-            <em>{String(index + 7).padStart(2, "0")}</em><div><strong>{question.title}</strong><small>{question.help}</small></div>
+            <em>{String(questions.length + index + 1).padStart(2, "0")}</em><div><strong>{question.title}</strong><small>{question.help}</small></div>
             <div className="answer-segment equipment-answers">
-              <label className={answers[question.key] === "yes" ? "active yes" : ""} onClick={() => setEquipmentAnswer(question.key, question.photoKey, "yes")}><Camera/> Sí<input type="file" accept="image/*,.heic,.heif" capture="environment" onChange={(event) => void selected(question.photoKey, event.target.files?.[0] || null)}/></label>
+              <label className={answers[question.key] === "yes" ? "active yes" : ""} onClick={() => setEquipmentAnswer(question.key, question.photoKey, "yes")}><Camera/> Sí<input disabled={!!locating || busy} type="file" accept="image/*,.heic,.heif" capture="environment" onChange={(event) => { const file = event.target.files?.[0] || null; event.target.value = ""; void selected(question.photoKey, file); }}/></label>
               <button type="button" className={answers[question.key] === "no" ? "active no" : ""} onClick={() => setEquipmentAnswer(question.key, question.photoKey, "no")}>No</button>
               <button type="button" className={answers[question.key] === "not_applicable" ? "active na" : ""} onClick={() => setEquipmentAnswer(question.key, question.photoKey, "not_applicable")}>No aplica</button>
             </div>
             {answers[question.key] === "yes" && <div className={`equipment-photo-capture ${item.geo ? "ready" : ""}`}>
-              <label>{item.preview ? <img src={item.preview} alt={question.photoTitle}/> : <span><Camera/><strong>{question.photoTitle}</strong><small>Toca para abrir la cámara</small></span>}<input type="file" accept="image/*,.heic,.heif" capture="environment" onChange={(event) => void selected(question.photoKey, event.target.files?.[0] || null)}/>{locating === question.photoKey && <em><LoaderCircle className="spin"/> Capturando GPS...</em>}</label>
-              <div>{item.geo ? <><span><MapPin/> {item.geo.latitude.toFixed(6)}, {item.geo.longitude.toFixed(6)}</span><small>Precisión ±{Math.round(item.geo.accuracy)} m · {formatTime(item.geo.capturedAt)}</small><a href={pointLink} target="_blank" rel="noreferrer"><ExternalLink/> Ver punto exacto</a></> : <><strong>Fotografía obligatoria</strong><small>La respuesta Sí necesita evidencia tomada dentro de esta banca.</small></>}</div>
+              <label>{item.preview ? <img src={item.preview} alt={question.photoTitle}/> : <span><Camera/><strong>{question.photoTitle}</strong><small>Toca para abrir la cámara</small></span>}<input disabled={!!locating || busy} type="file" accept="image/*,.heic,.heif" capture="environment" onChange={(event) => { const file = event.target.files?.[0] || null; event.target.value = ""; void selected(question.photoKey, file); }}/>{locating === question.photoKey && <em><LoaderCircle className="spin"/> Capturando GPS...</em>}</label>
+              <div>{item.file&&!item.geo&&<button type="button" disabled={!!locating||busy} onClick={()=>void selected(question.photoKey,item.file,true)}>Reintentar GPS</button>}{item.geo ? <><span><MapPin/> {item.geo.latitude.toFixed(6)}, {item.geo.longitude.toFixed(6)}</span><small>Precisión ±{Math.round(item.geo.accuracy)} m · {formatTime(item.geo.capturedAt)}</small><a href={pointLink} target="_blank" rel="noreferrer"><ExternalLink/> Ver ubicación registrada</a></> : <><strong>Fotografía obligatoria</strong><small>La respuesta Sí necesita evidencia tomada dentro de esta banca.</small></>}</div>
             </div>}
           </article>;
         })}</div>
         <label className="atlas-observation"><span>Observación del levantamiento <small>Opcional · máximo 1,000 caracteres</small></span><textarea maxLength={1000} value={observation} onChange={(event) => setObservation(event.target.value)} placeholder="Describe averías, materiales pendientes, condiciones especiales o cualquier detalle que deba revisar el equipo administrativo." /><em>{observation.length}/1000</em></label>
-        <div className="atlas-submit-summary"><span className="ok"><Check /> 3 fotos principales</span><span className={employeeOk ? "ok" : ""}><Check /> Datos y dirección</span><span className={verificationReady ? "ok" : ""}><Check /> Verificación {answerCount}/7 · {equipmentEvidenceReady ? "evidencias listas" : "faltan fotos"}</span></div>
+        <div className="atlas-submit-summary"><span className="ok"><Check /> 3 fotos principales</span><span className={employeeOk ? "ok" : ""}><Check /> Datos y dirección</span><span className={verificationReady ? "ok" : ""}><Check /> Verificación {answerCount}/9 · {equipmentEvidenceReady ? "evidencias listas" : "faltan fotos"}</span></div>
         <div className="atlas-actions split"><button className="secondary" onClick={() => setTab("employee")}>Anterior</button><button className="primary" disabled={busy || !locationVerified || !employeeOk || !verificationReady} onClick={() => void submit()}>{busy ? <LoaderCircle className="spin" /> : <Check />} Guardar auditoría completa</button></div>
         {busy && <div className="atlas-saving"><span /><p>{status}</p></div>}
       </div>}

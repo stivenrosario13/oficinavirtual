@@ -1,3 +1,6 @@
+import { apiFetch as fetch } from "@/lib/api-fetch";
+import "../../chat-professional-v196.css";
+import "../../chat-mobile-v193-restored-v208.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -478,7 +481,7 @@ export default function SupportChat({
     if (!open) return;
     setLoading(true);
     Promise.all([
-      loadConversations(),
+      loadConversations().finally(() => setLoading(false)),
       chatRequest<{ contacts: SupportContact[] }>("/api/support/chat/contacts")
         .then((data) =>
           setContacts(Array.isArray(data.contacts) ? data.contacts : []),
@@ -514,10 +517,8 @@ export default function SupportChat({
       void loadConversations();
       if (activeId) void loadMessages(activeId);
     };
-    const timer = window.setInterval(refresh, 30_000);
     window.addEventListener("support-live-refresh", refresh);
     return () => {
-      window.clearInterval(timer);
       window.removeEventListener("support-live-refresh", refresh);
     };
   }, [open, activeId, loadConversations, loadMessages]);
@@ -1405,7 +1406,7 @@ export default function SupportChat({
                         </span>
                       </div>
                     )}
-                    {canServe && !isDirect && !current.isBlocked && (
+                    {canServe && !isDirect && !current.isBlocked && (session.role !== "Department" || current.assignedDepartment === session.supportDepartment) && (
                       <div className="chat-agent-actions">
                         <button
                           onClick={() => void updateStatus("IN_PROGRESS")}

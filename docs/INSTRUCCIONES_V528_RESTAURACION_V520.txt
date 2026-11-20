@@ -1,0 +1,26 @@
+V528 - RESTAURACION INTEGRAL DEL DISEÑO V520
+================================================
+
+CAMBIOS PRINCIPALES
+- Se restauró la base visual estable de V520 y se retiró la capa global V521 que alteraba secciones completas.
+- Notificaciones y mensajes se muestran centrados sobre la ventana mediante un portal, con desplazamiento interno.
+- Se restauraron colores, degradados, relieve y estados interactivos de los botones principales.
+- Las tarjetas de Soporte y regiones tienen profundidad 3D profesional sin cambiar sus funciones.
+- Se conservan la navegación lateral y el buscador del encabezado incorporados en V527.
+- Se verificaron formularios administrativos, reportes, Almacén, Taller y navegación principal.
+
+INSTALACION EN MONSTERASP
+1. Realice una copia de seguridad del sitio y de la base de datos.
+2. Detenga temporalmente la aplicación o coloque app_offline.htm.
+3. Extraiga TODO el contenido del ZIP en la raíz publicada del sitio, reemplazando los archivos existentes.
+4. Si su panel apunta a wwwroot como raíz, use la copia completa incluida dentro de la carpeta wwwroot del ZIP.
+5. No elimine App_Data, uploads, logs, appsettings ni variables privadas del servidor.
+6. Quite app_offline.htm y reinicie el sitio.
+7. Abra el sistema con Ctrl+F5. El pie debe indicar Web V528.
+
+VERIFICACION RAPIDA
+- Abrir las campanas de notificaciones y mensajes: deben aparecer centradas, sin bajar el contenido.
+- Comprobar los tres botones del encabezado de Soporte.
+- Comprobar las tarjetas de regiones, Administración, Almacén, Taller y Reportes.
+- Probar escritorio y móvil, incluyendo desplazamiento dentro del modal.
+

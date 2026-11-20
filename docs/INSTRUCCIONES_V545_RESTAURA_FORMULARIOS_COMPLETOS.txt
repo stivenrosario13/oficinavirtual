@@ -1,0 +1,19 @@
+ACTUALIZACIÓN V545 PARA MONSTERASP
+
+Esta entrega fue validada con una sesión administrativa simulada completa.
+
+RESULTADO VERIFICADO
+- El modal "Nueva solicitud" contiene 17 formularios.
+- Conserva los 14 formularios administrativos originales.
+- Agrega los 3 formularios de prestaciones y cheques.
+- No agrega el bloque de prestaciones a la pantalla principal.
+- El formulario de prestaciones no contiene los campos "Solicitado por Recursos Humanos" ni "Solicitado por Administración".
+- Los 28 archivos CSS permanecen idénticos al diseño original V539/V536.
+
+INSTALACIÓN
+1. No utilices los paquetes V543 ni V544.
+2. Detén temporalmente el sitio o el grupo de aplicaciones.
+3. Extrae este ZIP sobre la carpeta principal publicada, donde están la DLL y la carpeta wwwroot.
+4. Reemplaza los archivos existentes y reinicia el sitio.
+
+No se incluyen web.config, appsettings, .env, Data, App_Data, uploads ni logs.

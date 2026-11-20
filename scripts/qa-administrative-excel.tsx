@@ -1,0 +1,11 @@
+import {createRoot} from 'react-dom/client';
+import AdministrativeRequests from '../src/components/vite/AdministrativeRequests';
+import AdministrativeRequestComposer from '../src/components/vite/AdministrativeRequestComposer';
+import type {PortalSession} from '../src/lib/session';
+import '../src/components/vite/maintenanceCommunications.css';
+import '../src/components/vite/administrativeWorkspace.css';
+import '../src/components/vite/administrativePortal.css';
+import '../src/components/vite/administrativeFormsPolish.css';
+const internet=new URLSearchParams(location.search).has('internet');
+const session={id:'qa',role:internet?'Technology':'Administrator',supportTeam:internet?'TECHNICAL_FAILURE':undefined,displayName:'Usuario QA',email:'qa@example.invalid',permissions:{canUploadDocuments:true}} as PortalSession;
+createRoot(document.getElementById('root')!).render(<div className="administrative-workspace administrative-portal">{internet?<AdministrativeRequestComposer session={session} department="Tecnología" onClose={()=>{}} onSaved={async()=>{document.title='Guardado'}}/>:<AdministrativeRequests session={session}/>}</div>);

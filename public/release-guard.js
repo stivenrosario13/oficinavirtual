@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  var release = "V330";
+  var release = document.querySelector('meta[name="app-release"]')?.getAttribute("content") || "V543-WEB-20261119-1845";
   var storageKey = "real-agencias-active-release";
 
   function reloadWithRelease() {

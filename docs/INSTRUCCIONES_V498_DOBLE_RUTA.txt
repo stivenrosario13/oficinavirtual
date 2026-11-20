@@ -1,0 +1,24 @@
+ACTUALIZACION V498 - ROBOT CON RESPUESTAS NATURALES Y BUSQUEDA DEL SISTEMA
+
+1. Deten el sitio en MonsterASP.
+2. Extrae el ZIP y sube todos los archivos conservando las carpetas.
+3. Sube el contenido a la raiz publica y a wwwroot cuando el hosting use doble ruta.
+4. Sube web.config al final; debe apuntar a .\RegistroAgencias.SqlServer.V498.exe.
+5. Inicia el sitio y confirma "release":"V498" en /api/version.
+6. Cierra sesion, inicia nuevamente y permite el microfono del navegador.
+
+CAMBIOS
+- Comprende respuestas naturales con palabras adicionales y errores comunes de pronunciacion.
+- Ya no exige responder solamente con numeros de opcion.
+- Permite pedir, por ejemplo, "muestrame 10 agencias del Mango" y presenta los resultados en pantalla.
+- Consulta agencias, articulos, departamentos y catalogos de fallas desde la conversacion.
+- Conserva la agencia o articulo elegido para continuar el ticket o la solicitud sin reiniciar.
+- Crea tickets para Tecnologia, Servicios Generales y Recursos Humanos.
+- Deduce el departamento cuando la falla es clara; si existe duda, muestra los tres departamentos.
+- Mantiene validaciones de catalogo, cantidades y confirmacion antes de crear solicitudes.
+
+VERIFICACION
+- Version de interfaz, API, ejecutable y cache: V498.
+- Frontend y TypeScript sin errores.
+- Backend compilado con 0 errores.
+- Pruebas del robot, busqueda natural, tickets y solicitudes aprobadas.

@@ -1,0 +1,24 @@
+ACTUALIZACION V476 - SELECCION DIRECTA DE ARTICULOS POR VOZ Y PANTALLA - MONSTERASP
+
+CORRECCIONES V476
+1. Cuando no encuentra un artículo, Oficina Virtual dice “No encuentro el artículo para esta agencia” sin leer el nombre de la agencia.
+2. Se muestra todo el inventario disponible, ordenado primero por las coincidencias más cercanas.
+3. Se agregó un buscador de artículos por nombre o código dentro del robot.
+4. Al pulsar un artículo se envían directamente su nombre y código reales; no depende de interpretar el número de opción.
+5. Las opciones habladas admiten “opción número 6”, ordinales y números hasta veinte.
+6. “Opción del artículo” selecciona la alternativa cuando solamente existe una opción.
+7. Si hay varias alternativas y la frase es ambigua, el robot conserva la lista y pide número, nombre o código exacto.
+8. Las cantidades posteriores a la selección aceptan números hablados como “dos” y “treinta y cinco”.
+9. El artículo seleccionado queda registrado con el identificador oficial del inventario antes de crear la solicitud.
+10. Se mantienen visibles la pregunta actual, tus respuestas y la agencia confirmada.
+
+INSTALACION
+1. Detén el sitio y el Application Pool en MonsterASP.
+2. Extrae el ZIP conservando su estructura y reemplaza la publicación anterior.
+3. No borres App_Data, uploads ni la base de datos del servidor.
+4. El web.config activo debe apuntar a .\RegistroAgencias.SqlServer.V476.exe.
+5. Inicia el sitio y confirma V476 en /api/version y /version-web.json.
+6. Recarga el navegador con Ctrl+F5.
+
+SEGURIDAD
+Este paquete contiene configuración privada de almacenamiento. No lo compartas públicamente.

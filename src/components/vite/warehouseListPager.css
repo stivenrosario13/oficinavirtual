@@ -1,0 +1,7 @@
+.ticket-center .warehouse-list-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px; margin: 12px 0; color: #fff; background: #0c2940; border: 1px solid #347393; border-radius: 12px; }
+.ticket-center .warehouse-list-pager span { margin-right: auto; color: #fff; }
+.ticket-center .warehouse-list-pager strong { color: #fff; font-size: 14px; }
+.ticket-center .warehouse-list-pager button { padding: 10px 14px; color: #fff; background: #15516b; border: 1px solid #61c9df; border-radius: 9px; }
+.ticket-center .warehouse-list-pager button:disabled { opacity: .45; cursor: default; }
+.ticket-center .warehouse-list-pager button:focus-visible { outline: 3px solid #8ae5ff; outline-offset: 2px; }
+@media(max-width: 600px) { .ticket-center .warehouse-list-pager span { flex-basis: 100%; } }

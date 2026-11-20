@@ -1,0 +1,42 @@
+<Window x:Class="BloomCobrosAgent.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Conectar WhatsApp Business" Height="780" Width="620" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" Background="#F4F6F4">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="30">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <StackPanel>
+                <TextBlock Text="WhatsApp Cloud API" FontSize="26" FontWeight="SemiBold"/>
+                <TextBlock Text="Usa exclusivamente credenciales oficiales de Meta. El token se cifra para tu usuario de Windows." Foreground="#65736C" TextWrapping="Wrap" Margin="0,6,0,20"/>
+
+                <TextBlock Text="Versión de Graph API" FontWeight="SemiBold"/><TextBox x:Name="VersionBox" Margin="0,5,0,14" Padding="10"/>
+                <TextBlock Text="Phone Number ID" FontWeight="SemiBold"/><TextBox x:Name="PhoneIdBox" Margin="0,5,0,14" Padding="10"/>
+                <TextBlock Text="Access Token" FontWeight="SemiBold"/><PasswordBox x:Name="TokenBox" Margin="0,5,0,14" Padding="10"/>
+                <TextBlock Text="Número receptor de prueba" FontWeight="SemiBold"/>
+                <TextBox x:Name="TestPhoneBox" Margin="0,5,0,4" Padding="10"/>
+                <TextBlock Text="Ejemplo República Dominicana: 8095551234 o +18095551234" Foreground="#65736C" FontSize="11" Margin="0,0,0,14"/>
+                <TextBlock Text="Nombre exacto de la plantilla aprobada" FontWeight="SemiBold"/><TextBox x:Name="TemplateBox" Margin="0,5,0,14" Padding="10"/>
+                <TextBlock Text="Idioma de plantilla" FontWeight="SemiBold"/><TextBox x:Name="LanguageBox" Margin="0,5,0,14" Padding="10"/>
+
+                <Grid Margin="0,0,0,14"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,8,0"><TextBlock Text="Pausa entre mensajes (seg.)" FontWeight="SemiBold"/><TextBox x:Name="DelayBox" Margin="0,5,0,0" Padding="10"/></StackPanel>
+                    <StackPanel Grid.Column="1" Margin="8,0,0,0"><TextBlock Text="Máximo por campaña" FontWeight="SemiBold"/><TextBox x:Name="MaximumBox" Margin="0,5,0,0" Padding="10"/></StackPanel>
+                </Grid>
+
+                <CheckBox x:Name="SimulationCheck" Content="Modo simulación (no envía mensajes reales)" Margin="0,4,0,12" FontWeight="SemiBold"/>
+                <CheckBox x:Name="PolicyCheck" Margin="0,0,0,18">
+                    <TextBlock Text="Confirmo que usaré consentimiento válido, una plantilla aprobada y un caso de uso permitido por WhatsApp." TextWrapping="Wrap" Width="500"/>
+                </CheckBox>
+                <TextBlock x:Name="ResultText" Foreground="#65736C" TextWrapping="Wrap" Margin="0,0,0,12"/>
+            </StackPanel>
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                <Button Content="Probar conexión" Click="TestButton_Click" Background="#263E34" Margin="0,0,10,0"/>
+                <Button Content="Enviar prueba" Click="SendTestButton_Click" Background="#3B7D5C" Margin="0,0,10,0"/>
+                <Button Content="Guardar" Click="SaveButton_Click"/>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</Window>

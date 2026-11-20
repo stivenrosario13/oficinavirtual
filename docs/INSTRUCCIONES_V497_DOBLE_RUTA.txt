@@ -1,0 +1,23 @@
+ACTUALIZACION V497 - ROBOT PROFESIONAL PARA TICKETS Y SOLICITUDES A ALMACEN
+
+1. Deten el sitio en MonsterASP.
+2. Extrae el ZIP y sube todos los archivos conservando las carpetas.
+3. Sube el contenido a la raiz publica y a wwwroot cuando el hosting use doble ruta.
+4. Sube web.config al final; debe apuntar a .\RegistroAgencias.SqlServer.V497.exe.
+5. Inicia el sitio y confirma "release":"V497" en /api/version.
+6. Cierra sesion, inicia nuevamente y permite el microfono del navegador.
+
+CAMBIOS
+- Listas profesionales de agencias y articulos, con busqueda visible y contador de resultados.
+- El catalogo limita los resultados en pantalla para conservar rapidez aun con miles de agencias.
+- Busqueda de articulos tolerante a plurales, errores comunes y palabras pronunciadas de forma parecida.
+- Cada articulo muestra codigo, grupo y existencia cuando esos datos estan disponibles.
+- Voz espanola dominicana o latinoamericana preferida, con ritmo mas natural.
+- Se conserva la confirmacion antes de crear solicitudes y la validacion contra catalogos oficiales.
+- El robot sigue creando tickets con departamento, categoria, agencia y detalle validados.
+- Cola en vivo: Ver usuarios abre una vista independiente del departamento y permite volver a las tarjetas.
+
+VERIFICACION
+- Version de interfaz, API, ejecutable y cache: V497.
+- Backend compilado con 0 errores.
+- Pruebas criticas de voz, tickets y solicitudes a Almacen aprobadas.

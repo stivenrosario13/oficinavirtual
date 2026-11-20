@@ -299,9 +299,9 @@ sealed class Database
     {
         await using var connection = await Open(ct);
         const string sql = """
-            SELECT grupo,COUNT(*) AS pending
+            SELECT grupo,COUNT(*) AS available
             FROM dbo.agencies
-            WHERE status='PENDING'
+            WHERE is_active=1 AND status IN ('PENDING','COMPLETED','REVIEW_REQUIRED')
             GROUP BY grupo
             ORDER BY grupo;
             """;
@@ -316,10 +316,13 @@ sealed class Database
     {
         await using var connection = await Open(ct);
         const string sql = """
-            SELECT id,codigo,terminal,expected_latitude,expected_longitude
-            FROM dbo.agencies
-            WHERE status='PENDING' AND grupo=@group
-            ORDER BY terminal;
+            SELECT a.id,a.codigo,a.terminal,a.expected_latitude,a.expected_longitude,
+                   COUNT(p.id) AS audit_count,MAX(p.submitted_at) AS last_audited_at,a.status
+            FROM dbo.agencies a
+            LEFT JOIN dbo.agency_profiles p ON p.agency_id=a.id
+            WHERE a.is_active=1 AND a.status IN ('PENDING','COMPLETED','REVIEW_REQUIRED') AND a.grupo=@group
+            GROUP BY a.id,a.codigo,a.terminal,a.expected_latitude,a.expected_longitude,a.status
+            ORDER BY a.terminal;
             """;
         await using var command = new SqlCommand(sql, connection);
         command.Parameters.AddWithValue("@group", group);
@@ -331,7 +334,10 @@ sealed class Database
                 reader.GetString(1),
                 reader.GetString(2),
                 reader.IsDBNull(3) ? null : reader.GetDouble(3),
-                reader.IsDBNull(4) ? null : reader.GetDouble(4)));
+                reader.IsDBNull(4) ? null : reader.GetDouble(4),
+                reader.GetInt32(5),
+                reader.IsDBNull(6) ? null : DateTime.SpecifyKind(reader.GetDateTime(6), DateTimeKind.Utc),
+                reader.GetString(7)));
         return agencies;
     }
 
@@ -380,7 +386,7 @@ sealed class Database
 
         var audits = new List<CompletedAudit>();
         const string auditsSql = """
-            SELECT TOP (200) a.codigo,a.terminal,a.grupo,p.municipio,p.provincia,
+            SELECT a.codigo,a.terminal,a.grupo,p.municipio,p.provincia,
                    p.tipo_establecimiento,p.latitude,p.longitude,p.accuracy_meters,
                    p.submitted_at,p.id,p.observations,p.employee_name,
                    COALESCE(NULLIF(JSON_VALUE(p.submitted_by_context,'$.login'),''),
@@ -605,7 +611,7 @@ sealed class Database
             }
 
             await using (var reopen = new SqlCommand(
-                "UPDATE dbo.agencies SET status='PENDING',updated_at=SYSUTCDATETIME() WHERE id=@agency;",
+                "UPDATE dbo.agencies SET status=CASE WHEN EXISTS(SELECT 1 FROM dbo.agency_profiles WHERE agency_id=@agency) THEN 'COMPLETED' ELSE 'PENDING' END,updated_at=SYSUTCDATETIME() WHERE id=@agency;",
                 connection,
                 transaction))
             {
@@ -615,7 +621,7 @@ sealed class Database
 
             const string logSql = """
                 INSERT INTO dbo.audit_log(entity_type,entity_id,action,before_data,actor_email)
-                VALUES('agency_profile',@id,'PROFILE_DELETED_AND_AGENCY_REOPENED',@before,@actor);
+                VALUES('agency_profile',@id,'PROFILE_DELETED_AND_AGENCY_STATUS_RECALCULATED',@before,@actor);
                 """;
             await using (var log = new SqlCommand(logSql, connection, transaction))
             {
@@ -675,7 +681,7 @@ sealed class Database
                 }
             }
 
-            if (status != "PENDING") throw new AgencyConflict();
+            if (status is null || !new[] { "PENDING", "COMPLETED", "REVIEW_REQUIRED" }.Contains(status)) throw new AgencyConflict();
 
             var id = Guid.NewGuid();
             var geo = body.Geolocation!;
@@ -758,16 +764,16 @@ sealed class Database
         return Math.Round(radius * 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a)), 1);
     }
 
-    public async Task<bool> PhotoMatchesProfile(Guid id, double lat, double lng, double maximumMeters, CancellationToken ct)
+    public async Task<bool> PhotoMatchesProfile(Guid id, double lat, double lng, double accuracy, CancellationToken ct)
     {
         await using var connection = await Open(ct);
         await using var command = new SqlCommand(
-            "SELECT latitude,longitude FROM dbo.agency_profiles WHERE id=@id;",
+            "SELECT latitude,longitude,accuracy_meters FROM dbo.agency_profiles WHERE id=@id;",
             connection);
         command.Parameters.AddWithValue("@id", id.ToString());
         await using var reader = await command.ExecuteReaderAsync(ct);
         return await reader.ReadAsync(ct) &&
-               Haversine(lat, lng, reader.GetDouble(0), reader.GetDouble(1)) <= maximumMeters;
+               FieldAuditGps.Matches(lat,lng,accuracy,reader.GetDouble(0),reader.GetDouble(1),reader.GetDouble(2));
     }
 
     public async Task AttachPhoto(Guid id, string type, byte[] data, string mime, double lat, double lng,

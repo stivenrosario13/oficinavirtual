@@ -66,7 +66,6 @@ BEGIN
         updated_at datetime2(3) NOT NULL CONSTRAINT DF_profiles_updated DEFAULT (SYSUTCDATETIME()),
         submitted_by_context nvarchar(max) NULL,
         CONSTRAINT PK_agency_profiles PRIMARY KEY (id),
-        CONSTRAINT UQ_profiles_agency UNIQUE (agency_id),
         CONSTRAINT FK_profiles_agency FOREIGN KEY (agency_id) REFERENCES dbo.agencies(id),
         CONSTRAINT CK_profiles_lat CHECK (latitude BETWEEN -90 AND 90),
         CONSTRAINT CK_profiles_lng CHECK (longitude BETWEEN -180 AND 180),
@@ -78,6 +77,9 @@ BEGIN
         CONSTRAINT CK_profiles_context_json CHECK (submitted_by_context IS NULL OR ISJSON(submitted_by_context)=1)
     );
 END;
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.agency_profiles') AND name=N'IX_agency_profiles_agency_submitted')
+    CREATE INDEX IX_agency_profiles_agency_submitted ON dbo.agency_profiles(agency_id,submitted_at DESC,id DESC);
 
 IF OBJECT_ID(N'dbo.audit_log', N'U') IS NULL
 BEGIN

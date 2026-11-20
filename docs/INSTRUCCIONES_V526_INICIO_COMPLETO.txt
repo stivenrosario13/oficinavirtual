@@ -1,0 +1,23 @@
+ACTUALIZACION V526 - INICIO COMPLETO SIN SIDEBAR EN ESCRITORIO
+
+Incluye todo lo disponible en V525 y agrega:
+
+1. Eliminación total del sidebar en escritorio.
+2. Todos los accesos permitidos para cada usuario organizados en el inicio.
+3. Tarjetas más anchas, de pantalla completa y con degradados institucionales.
+4. Encabezado con logo, título, búsqueda, notificaciones y menú de cuenta.
+5. Panel de Actividad reciente con tickets reales actualizados.
+6. Panel Estado por región con conteos reales de tickets y hallazgos.
+7. Consulta agregada y ligera para evitar descargar todos los tickets al entrar.
+8. Navegación móvil conservada mediante menú desplegable y barra inferior.
+
+INSTALACION EN MONSTERASP
+
+- Extraiga el ZIP.
+- Copie primero el contenido de la raíz al sitio.
+- Si MonsterASP usa wwwroot como raíz pública, copie también el contenido de la carpeta wwwroot incluida.
+- No reemplace appsettings, .env, App_Data, uploads ni logs del servidor.
+- Reinicie el sitio o Application Pool.
+- Verifique que el sistema muestre la versión V526.
+
+ARCHIVO PRINCIPAL: RegistroAgencias.SqlServer.V526.dll

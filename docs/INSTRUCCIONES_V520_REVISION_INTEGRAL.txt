@@ -1,0 +1,25 @@
+ACTUALIZACIÓN V520 · REVISIÓN INTEGRAL Y ESTABILIDAD
+====================================================
+
+1. Realice copia de seguridad del sitio y la base de datos.
+2. Detenga temporalmente la aplicación en MonsterASP.
+3. Extraiga el ZIP y cargue todo su contenido en la raíz del sitio.
+4. No elimine App_Data, cargas, logs ni configuraciones privadas.
+5. Inicie la aplicación y confirme /api/version: V520-WEB-20261116-1430.
+6. Cierre sesión, pulse Ctrl+F5 e inicie sesión nuevamente.
+
+CORRECCIONES PRINCIPALES
+- Evita el cierre de Solicitudes PDF cuando una sesión histórica no contiene
+  todavía el mapa completo de permisos.
+- Restaura el acceso directo a Solicitudes PDF desde el centro de Almacén.
+- Administración queda limitada correctamente a solicitudes internas de su
+  propio departamento; no muestra destinos de grupos o agencias.
+- El envío a Almacén valida las respuestas del servidor sin usar datos sin tipo.
+- Se eliminaron condiciones constantes, referencias abandonadas y 46 errores
+  de análisis estático sin cambiar los permisos ni los flujos activos.
+- Dependencias vulnerables actualizadas: auditoría npm con 0 vulnerabilidades.
+- Conserva íntegros todos los cambios de V519 y versiones anteriores.
+
+EJECUTABLE
+- RegistroAgencias.SqlServer.V520.exe
+

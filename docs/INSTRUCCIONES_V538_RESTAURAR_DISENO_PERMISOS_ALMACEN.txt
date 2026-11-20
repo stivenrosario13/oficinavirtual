@@ -1,0 +1,22 @@
+CORRECCIÓN V538 · RESTAURA EL DISEÑO EXACTO V536/V520
+
+Este paquete corrige la actualización V537 que recompiló la interfaz.
+
+IMPORTANTE
+- No elimine ninguna carpeta ni archivo del servidor.
+- Suba este ZIP encima de la instalación actual y acepte reemplazar solamente
+  los archivos incluidos.
+- La carpeta wwwroot incluida es una copia exacta de la publicación V536 que
+  estaba antes del cambio de diseño.
+- La lógica nueva de permisos está únicamente en la DLL del servidor.
+
+El paquete NO contiene ni modifica web.config, App_Data, uploads, logs, Data,
+appsettings, .env, contraseñas ni documentos almacenados.
+
+Resultado:
+- restaura el diseño exacto V536/V520;
+- conserva todos los datos y configuraciones existentes;
+- habilita a diorly.abreu, ana.rodriguez y Administrador principal para crear
+  artículos nuevos desde entradas de inventario;
+- mantiene la validación del permiso en el servidor.
+

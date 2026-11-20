@@ -1,0 +1,19 @@
+V550 - ALMACÉN PARA AGENCIAS Y TRES FORMULARIOS ADMINISTRATIVOS
+
+Instalar este paquete en lugar de V549.
+1. Detenga temporalmente el sitio en MonsterASP.
+2. Extraiga el ZIP sobre la carpeta principal publicada, reemplazando los archivos incluidos.
+3. Conserve los archivos y carpetas existentes. No elimine contenido.
+4. Inicie nuevamente el sitio y cierre y vuelva a abrir la sesión del navegador.
+5. En Solicitudes a Almacén > Nueva solicitud aparece Para una agencia.
+   Puede cambiar a Para varias agencias o Para mi departamento.
+   En varias agencias asigne una agencia a cada artículo: se genera un folio y PDF por agencia.
+6. En Formularios administrativos > Nueva solicitud están incluidos:
+   - Solicitud de pago de prestaciones en cheque.
+   - Entrega de cheques en blanco a Contabilidad.
+   - Entrega de cheques firmados de prestaciones a Caja.
+
+Conserva los estilos y el servidor exactamente como V548.
+Actualiza el formulario de Almacén y las referencias de caché de la interfaz.
+No incluye web.config, appsettings, .env, Data, App_Data, uploads ni logs.
+La validación de navegador usa una API simulada; no crea solicitudes en producción.
