@@ -738,7 +738,7 @@ internal class Program
 			administrativeNavigation = "shared-administration-sections-all-departments-v480",
 			departmentalAdministrativeProfile = "single-profile-exact-administration-permissions-all-departments-v480",
 			warehouseDestinations = "group-agency-own-administration-own-only-supervisors-scoped",
-			release = "V536-WEB-20261116-2120",
+			release = "V554-V542-DARWIN-20261120",
 			managerTicketControl = "department-card-collapsible-users-directory-v495",
 			callCenterTransfers = "supervisors-and-technical-failure-shared-resolution",
 			queryRecovery = "independent-cache-bounded-transient-read-retry",
@@ -766,7 +766,7 @@ internal class Program
 			permissions = "technician-resolution-all-profiles-v438-20261017",
 			liveUpdates = "selected-department-tickets-and-findings-v400",
 			loginStability = "server-side-transient-db-retry-and-persistent-cookie-fallback-v328",
-			userAdministrationStability = "inactive-account-reactivation-and-double-submit-guard-v329",
+			userAdministrationStability = "inactive-user-reactivation-adminusers-v554",
 			deployment = "monster-double-route-v500",
 			performance = "mobile-on-demand-voice-directory-hidden-tab-polling-v500",
 			portal = "files-communications-four-card-home-v401",
@@ -3342,7 +3342,7 @@ internal class Program
 					["usesCustomizedPermissions"] = true
 				}
 			};
-			AdminIdentity existing = await db.Account(id, ct);
+			AdminUserRow? existing = (await db.AdminUsers(ct)).FirstOrDefault(user => user.Id == id);
 			bool flag = SupportProfilePolicy.IsSupport(body.Role ?? "", body.SupportTeam, body.Permissions);
 			bool flag2 = flag;
 			if (flag2)

@@ -1,0 +1,1 @@
+internal record AgencyDirectoryUpdate(string? Codigo, string? Terminal, string? Grupo, string? Direccion, string? Sector, string? Municipio, string? Provincia, double? Latitude, double? Longitude);

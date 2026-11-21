@@ -1,0 +1,3 @@
+using System;
+
+internal record TicketAgencyRow(Guid Id, string Codigo, string Terminal, string Grupo, string? Direccion, string? Sector, string? Municipio, string? Provincia, double? Latitude, double? Longitude, string? Region);

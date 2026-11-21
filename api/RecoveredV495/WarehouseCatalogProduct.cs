@@ -1,0 +1,1 @@
+internal record WarehouseCatalogProduct(string IdProducto, string Descripcion, bool Producto, string Almacen, int Existencia, string IdUnidad, string Division, string Grupo, string? FechaUltimaCompra, bool Seriales);

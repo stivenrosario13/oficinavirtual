@@ -1,0 +1,1 @@
+internal record InstitutionalAction(string? Title = null, string? Description = null, string? Note = null, string? RecipientUserName = null, string? RecipientDepartment = null, bool CanEdit = false, long ShareId = 0L, double SealX = 73.0, double SealY = 71.0, string? SignatureData = null);

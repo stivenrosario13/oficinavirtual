@@ -1,0 +1,1 @@
+internal record AuditUpdate(string? Codigo, string? Terminal, string? Grupo, string? EmployeeName, string? EmployeeCode, string? Direccion, string? Sector, string? Municipio, string? Provincia, double Latitude, double Longitude, double Accuracy, StructuralAnswers? Answers, string? Observations);

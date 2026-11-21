@@ -1,0 +1,529 @@
+{
+  "release": "V558-ORIGINAL-MIME-CORREGIDO-20261120235525",
+  "files": [
+    {
+      "path": "assets/AdminHeaderVoiceAssistant-BJuJbceR.js",
+      "sha256": "FA88CBFFA07D8B9F80E6FFE740168F96B640FDF647A0CA7E78C47B074942C7C2"
+    },
+    {
+      "path": "assets/AdminHeaderVoiceAssistant-Dnhs17lL.css",
+      "sha256": "3B1D78452287C8B8992532EFE1DA7046F32E0C5CB6CB36DFD4A7F20DD2981CB2"
+    },
+    {
+      "path": "assets/administrative-form-data-274xajI3.js",
+      "sha256": "5580C379CFBB6A1D8651BC774E71AAB7AE9507C42F5B51D61FA8DA0A752DE186"
+    },
+    {
+      "path": "assets/administrative-form-data-V544FORMS.js",
+      "sha256": "6ABF9A4ACA52F84EBA8DB747CBC960BD422D496AD685F5CD7A14AF677CC1A8F5"
+    },
+    {
+      "path": "assets/administrative-form-data-V545FORMS.js",
+      "sha256": "6ABF9A4ACA52F84EBA8DB747CBC960BD422D496AD685F5CD7A14AF677CC1A8F5"
+    },
+    {
+      "path": "assets/administrative-form-save-BuiZr0TK.js",
+      "sha256": "F75BAE044B3F5711F6E5F3C8D3F9B7E6D8ADC42F433B7B1ED4E51FC1D48ED874"
+    },
+    {
+      "path": "assets/administrative-form-save-V544FORMS.js",
+      "sha256": "6184248D5A2190A01397CFE4E0F0137F36AE6CCDA24BA2BF65B42E6574345697"
+    },
+    {
+      "path": "assets/administrative-form-save-V545FORMS.js",
+      "sha256": "45B93FB07D34CD9E4C653D5EDB7654700A6B2256DCD59FE889889F8C5C3A58F3"
+    },
+    {
+      "path": "assets/administrative-requests-BOQTZZcu.js",
+      "sha256": "87AD5586E02AEF222563786211B7C2A14D6F11701124A95D8D4A82D99264D43B"
+    },
+    {
+      "path": "assets/administrativeFormsPolish-C_MBM6IP.css",
+      "sha256": "EAF232519946FCCC81CC963909EAFEEC18356BD98EE95FF62BE38AFF3639440D"
+    },
+    {
+      "path": "assets/AdministrativePortal-DWXboFnH.js",
+      "sha256": "808114C8BF4640DF763D67170DE10FC053BF9C9734C76127E700C508EF6AABD7"
+    },
+    {
+      "path": "assets/AdministrativePortal-V544FORMS.js",
+      "sha256": "1CBA0ECD8D4EDF14734020E44016717C270C591B3688B9CE22215DD6A6CF0728"
+    },
+    {
+      "path": "assets/AdministrativePortal-V545FORMS.js",
+      "sha256": "8F7B8C466EBA6124294F94E4E51661FCA0CCB52ED66D50911498518861407FF9"
+    },
+    {
+      "path": "assets/AdministrativeRequestComposer-oSTKN1GV.css",
+      "sha256": "36D64FE4B6C696CB8367BE4DF6578987ED8F79C259EADE656A3F9D2FE877D632"
+    },
+    {
+      "path": "assets/AdministrativeRequestComposer-V544FORMS.js",
+      "sha256": "C705CFCE343160556F5C2C749D2DE67C36DF9D14DA96CAAD6BF80084C2C63F67"
+    },
+    {
+      "path": "assets/AdministrativeRequestComposer-V545FORMS.js",
+      "sha256": "D8213DFDC1D86396B8F90BE715089ABDF58704CD0580D1E03FE7E188EA6E569B"
+    },
+    {
+      "path": "assets/AdministrativeRequestComposer-WdPy9HZt.js",
+      "sha256": "C705CFCE343160556F5C2C749D2DE67C36DF9D14DA96CAAD6BF80084C2C63F67"
+    },
+    {
+      "path": "assets/AdministrativeRequests-BeZ-8w6U.js",
+      "sha256": "1AE352BF11E181B0338FAFF97C33D00B037729447119B7A99099FCA203B496BD"
+    },
+    {
+      "path": "assets/AdministrativeRequests-V544FORMS.js",
+      "sha256": "48F8648C3FBBD50D51CA5C5BA6045CE28F25A5F66DB51A1B376FC524239F2F0C"
+    },
+    {
+      "path": "assets/AdministrativeRequests-V545FORMS.js",
+      "sha256": "8581FB6EC4783B4AD23EB0A0431F57EE890A9E657A3C0EFD2A791F925EBAD7BA"
+    },
+    {
+      "path": "assets/administrativeWorkspace-iTixyw-g.css",
+      "sha256": "21F4E8C4E4C2934DE669F84E82E4D0F6663ECD8186A6B1311574229BE7CB26B2"
+    },
+    {
+      "path": "assets/AdministrativeWorkspace-QOh89lpL.js",
+      "sha256": "3FA718BC60E68F73209A8994043E000F1DBFC911665EC8BF8D912EDC02C997DB"
+    },
+    {
+      "path": "assets/AdminPanel-CE7_n3j7.js",
+      "sha256": "E3534E4D18D96417FB7F0ADFAAB3D379E96D703083CDD340029F6ABFDB594ED7"
+    },
+    {
+      "path": "assets/AdminPanel-X5yDXOz6.css",
+      "sha256": "3D632FF3FCCEF474502D76EBE33FC2F58795869385B0E36414E464E73DFAAAC2"
+    },
+    {
+      "path": "assets/AgencyLocations-BekbJvQS.css",
+      "sha256": "CD760B618689F4ECF6C435720C2697A8632A1C5847459606B2E9B5F1F05E0B11"
+    },
+    {
+      "path": "assets/AgencyLocations-DdnIdPfB.js",
+      "sha256": "1F4BC368BF00CE0443711CB7FE8BD4C8D608233EBBABF6F2E555B5EA670B6BEF"
+    },
+    {
+      "path": "assets/automatic-findings-BJhmyLHS.js",
+      "sha256": "B902BE33844768AD6CB147E658982D3299B1ACC00C9AC8DACABFD1385449B26B"
+    },
+    {
+      "path": "assets/browser-C10ZknA6.js",
+      "sha256": "06E06DB2648DB65B7F71C6EAEBF433DDC0D1A981EB0865E290A511B913656B54"
+    },
+    {
+      "path": "assets/DepartmentOperationalAudit-Bbmnudbh.js",
+      "sha256": "302C64E9FE9FD52FBDE38F4E38ECE71DDC1383DA4AC22AE24ACDEAA8234DE4FE"
+    },
+    {
+      "path": "assets/departmentOperationalAudit-CJbb4Bf6.css",
+      "sha256": "E334BCFE81A1AAC5C68050CD67DC2B99DDF78F3C23BD6A1A666EBAFADAA062C0"
+    },
+    {
+      "path": "assets/departmentTicketCreate-eYOIyQ83.css",
+      "sha256": "170840E56CB23EB400B02F666D6EC7BBDCC9EE511075BEB44B8A043FCA49A50E"
+    },
+    {
+      "path": "assets/departmentWorkspacePolish-B2ftHpRU.css",
+      "sha256": "8773CB1873203A55C80D2E6D44E4C328E7AD1B767B37E7071E17749915094A1A"
+    },
+    {
+      "path": "assets/EmployeeAuditForm-DffdyiiN.js",
+      "sha256": "A8E29C1CC275EA87327646E8946283CA0A89E4204DDB9BCDE04DB0F5965AB89A"
+    },
+    {
+      "path": "assets/exceljs.min-D2rlNpBt.js",
+      "sha256": "E636BB5E9343025D7875CBF478115EB4CA2A792619D7C9AF2D07A80A45F3F99A"
+    },
+    {
+      "path": "assets/ExecutiveReports-CPbZmzJ_.css",
+      "sha256": "E6936F46D5F3E721F7CA3B897CBFCE08235AA1FD8149DE9092409639D330B6DB"
+    },
+    {
+      "path": "assets/ExecutiveReports-DdrLwxJL.js",
+      "sha256": "7BFC953A4F62D62004FFD5E770EF25E9CDE23ED0D4E7C3317DA385D193D7A825"
+    },
+    {
+      "path": "assets/html2canvas.esm-QH1iLAAe.js",
+      "sha256": "061C08E50C0DC57B8D5E6531F0B8237A52A68B233260D49AB2F2C2906AD112C4"
+    },
+    {
+      "path": "assets/icons-BP13l6N_.js",
+      "sha256": "AA9A0F2CF877456E94D5B1CCEDFB647036FBD412899F15386545509311850819"
+    },
+    {
+      "path": "assets/icons-V544FORMS.js",
+      "sha256": "B84865EB990591897ABBC581F572613320E966B05BE3997EAA3F5602E303F648"
+    },
+    {
+      "path": "assets/incident-ticket-report-DYuYqW8Q.js",
+      "sha256": "65B63978EAD1B198DA97BBA3265DB9B7B5474CD3939882A429161C071345D9BC"
+    },
+    {
+      "path": "assets/index-Bdb8z7xx.js",
+      "sha256": "D8F79FAB900A5F8230F483D1A873A68C79D724E719062865E1228ED8BDE1A294"
+    },
+    {
+      "path": "assets/index-CGv45QiW.js",
+      "sha256": "360DF464BCD1120E307EE4DCB1222D18D9525301146DF88DB0FA8711F2E06462"
+    },
+    {
+      "path": "assets/index-Cn5qmVkF.js",
+      "sha256": "DD1A603992DD5F589C4CAD8B356208050381BD2B2F8261B4500637C68E7E7F56"
+    },
+    {
+      "path": "assets/index-ORIGINAL-V558.js",
+      "sha256": "2E8649DC703B3CF26226B6E6C338F35276B03674A57ACF586289EAA5A6654C6A"
+    },
+    {
+      "path": "assets/index-Quqp-uX8.css",
+      "sha256": "1AEBA03247B325823FDDDC038109A3FF40AAD1620CF9CFEFE7A6A729262715F2"
+    },
+    {
+      "path": "assets/index-V544FORMS.js",
+      "sha256": "4518D8D8B57EF1A52A8B6DC9E1F1543713CB16AF128B59EB6F7E31BF1C72060C"
+    },
+    {
+      "path": "assets/index-V545FORMS.js",
+      "sha256": "2E8649DC703B3CF26226B6E6C338F35276B03674A57ACF586289EAA5A6654C6A"
+    },
+    {
+      "path": "assets/index.es-ND2eriK1.js",
+      "sha256": "021416DD7AF896CC5856B7F89C0AB5DD604B44E936EC13ABBC97865146E0A607"
+    },
+    {
+      "path": "assets/InstitutionalBrand-B5cX1HJ_.js",
+      "sha256": "024B4CB4E48386ED7F727B2D637FBB01DE394137CCEE487D1859436CBB7D5BD7"
+    },
+    {
+      "path": "assets/institutionalDocumentAssets-BiJ1X30V.js",
+      "sha256": "C38147CB0CD22BCCED664F0C1BF29B219E6FD97C95FB06AAA472B4AED36E7CC3"
+    },
+    {
+      "path": "assets/InstitutionalDocumentDetail-BIWk7sKO.css",
+      "sha256": "5DB04ED83EA11ACAF5217B2DEF473A0BB377FFD1BDAB9683641A8F9D6D6D1D42"
+    },
+    {
+      "path": "assets/InstitutionalDocumentDetail-CJ2_ocuw.js",
+      "sha256": "5E64278F9FA33CFF040A0B02A36BF42456C6B001590F31C6983D9EFDEFC94C0C"
+    },
+    {
+      "path": "assets/institutionalLetterPdf-CeqUZN90.js",
+      "sha256": "C52F5AD4606D4EC1D8A89DB5FD350A6DD5FCA3DC4D8EAFCEE3884ABA83C1E840"
+    },
+    {
+      "path": "assets/InstitutionalTemplateWorkspace-Do0ZE-P6.js",
+      "sha256": "B36C0EEDB9AD049B51E6A316389D22FBBD31F57A057D0D1FC846F61AEBDCA1F1"
+    },
+    {
+      "path": "assets/InternalTicketRequest-BQB-RE-c.js",
+      "sha256": "856FA06759868FF2217152BBD9E62BADECF4BC1648C0B75982A4ED65C01CC8AF"
+    },
+    {
+      "path": "assets/InventoryEntryPicker-2QdBfg65.js",
+      "sha256": "414D5EDCD6ACCF58940215088CD70DF6CC14D933113AC958444766DB905B9D37"
+    },
+    {
+      "path": "assets/jspdf.es.min-Bg-qHH2J.js",
+      "sha256": "1EDCF4FC6EF82674914CA1E745C7C94C70009054697F8842DEE08661F0A53B0C"
+    },
+    {
+      "path": "assets/jsQR-BRuiD_ME.js",
+      "sha256": "25EE61E06A9244C38D396215EC1F82E45754A59F0AF9D5588D824DBA2A9FD35E"
+    },
+    {
+      "path": "assets/maintenanceApi-CH_wfA5X.js",
+      "sha256": "D8A92DD82A6F5AD80E49578C4AE5AE29CFCBBC2A9EB1EB344EC31CB04C74AC8D"
+    },
+    {
+      "path": "assets/maintenanceCommunications-BIZCQTr4.css",
+      "sha256": "4394ACE61B70B079B1051F874743305807FFB32E2EB6FEEFAF58E5E84A84810C"
+    },
+    {
+      "path": "assets/MaintenanceCommunications-HRnyBceB.js",
+      "sha256": "10084CEFBDD1791A7E096DF1E70F9F6099C054236C5E6370A68A38C1C8319AA9"
+    },
+    {
+      "path": "assets/MaintenanceDocumentEditor-DC1MP8gs.js",
+      "sha256": "B3DA2576C818D313FFF229F4B704459CCB61081F9A65CB91B41CD74429B2F718"
+    },
+    {
+      "path": "assets/maintenanceDocumentPdf-CvgcaKHM.js",
+      "sha256": "8FB3CDEE4DFBE34CD8DE64476D7EE15080F2E4404916D7FD9AA18390BC6F11AB"
+    },
+    {
+      "path": "assets/MaintenanceOverview-C7IKY9ak.js",
+      "sha256": "93ED70E462990017B0BD8109DB5BC17602E849A1D52C6A8A4E632A4A09577CF7"
+    },
+    {
+      "path": "assets/maintenanceWorkflow-B1inp_Z2.css",
+      "sha256": "3012447DB04323D39F7AF99D47D5D98784C09AE6A48BBE0AE1D5029305C10AD9"
+    },
+    {
+      "path": "assets/ManagerDepartmentSupport-CqY5DHxI.js",
+      "sha256": "F483FC22C36F1CB063E5E494BDCCD632344C6850011FFCC12A5DD7C48BF15705"
+    },
+    {
+      "path": "assets/operations-center-DlDV52lD.js",
+      "sha256": "B060BFDCF730A039EAD49810E9BF9E58A1557E1098047C2DC4A5FBFF97F54B5F"
+    },
+    {
+      "path": "assets/OperationsCenter-XrYdGsZj.js",
+      "sha256": "D3D2C0D747AE65D31617C757BE5D5FC4249D45D43314038FFC3A654B6E5E0B06"
+    },
+    {
+      "path": "assets/ProfileSettings-BtKRlQ3a.js",
+      "sha256": "D983AC9A4E2F4FEE89CE9D1C3F9B3DAEC9ABE0839F4C367BB9F48A13AC62A9B9"
+    },
+    {
+      "path": "assets/purify.es-BhqXAQOW.js",
+      "sha256": "BE12E68FEF1D969A33240FBA1E96CC51243EBF3FCB5805E05FB6ACE4CA378834"
+    },
+    {
+      "path": "assets/react-Bt2JFbsy.js",
+      "sha256": "1FB3206F46699028A9CD5CA5633EFC23CA949255F9E83BF76BEDB80F9C5F6EE5"
+    },
+    {
+      "path": "assets/SearchSelect-6Xu_t35g.js",
+      "sha256": "FBB0927E96D1CEDC16B6542EEF5073CDDA3442F0B7598F0CAAB724FE19F7CF96"
+    },
+    {
+      "path": "assets/SearchSelect-CGOyVRdD.css",
+      "sha256": "63A7FB47BAB86254695777751DA55B538A2D32BBDF2754402FF9FC79A9E61418"
+    },
+    {
+      "path": "assets/StorageMigrationPanel-B-YkjqDF.css",
+      "sha256": "5CB67331C7C2117103B2D03D3B7A74A66C679D44F5AFA603E17798889AD1F91D"
+    },
+    {
+      "path": "assets/StorageMigrationPanel-CjCf-7a8.js",
+      "sha256": "B7B0F5B5EB82A0436EF5B7B4482EAD9498043E610B99D65A9EF89FBCCEF47B96"
+    },
+    {
+      "path": "assets/SupportChat-A39xU3ox.js",
+      "sha256": "40E6D5D97120225444E9C5818F7A433AC2F36F1A1F72224AABC51CE6102FB139"
+    },
+    {
+      "path": "assets/TicketCenter-C2pfZTaX.js",
+      "sha256": "E7DD760B6C0A811536F074D25D8BF12DFC2B0EF595D7253DAE1FCCAD8A746D5A"
+    },
+    {
+      "path": "assets/TicketCenter-LcXmJgQg.css",
+      "sha256": "6F91551657FB00EE8EE7ECDEA998A1C6CAB86EEAB243D7C5BD61F367C5929298"
+    },
+    {
+      "path": "assets/UsersPermissionsWorkspace-bTT4Ph0R.js",
+      "sha256": "7D0A9D85215F0E6FF5E1C9A656C8A52F5C0B5C17B67A99443D3092686B3BA900"
+    },
+    {
+      "path": "assets/UsersPermissionsWorkspace-DCtn65-b.css",
+      "sha256": "F235094E3506458644958156CFFBADF67ED6891D4DBE3F464DC5AD2DBD5EDFCF"
+    },
+    {
+      "path": "assets/voice-operation-assistant-DmkzAcS5.js",
+      "sha256": "51CBC3B289B041357CB994CAAD0A0BAFF18A60831C6B5D031D959FE7D4378697"
+    },
+    {
+      "path": "assets/warehouse-live-queue-B02S5Cf3.js",
+      "sha256": "49C904B8FFBCD3FC3D9D7F76AA7299F5C79236E52572F9FDD021A8E1479CAB80"
+    },
+    {
+      "path": "assets/warehouseAssignedSerialPdf-DIb7NAUk.js",
+      "sha256": "1F973FAA0FD0261D5FE2E06FB60513AC82004E447147DBCA87DE3FC46253E0E8"
+    },
+    {
+      "path": "assets/warehouseCustodySealPdf-fuPl4ysw.js",
+      "sha256": "D4839F1958059FB28B0595616B72B8C55154D5FBF2F54A217734DDFDCD04D8C1"
+    },
+    {
+      "path": "assets/WarehouseListPager-ChyhqOdz.js",
+      "sha256": "23E1DC149B4DC58A43394691AE6FE581140B1DBFC64FCA3BB867559D04B93064"
+    },
+    {
+      "path": "assets/WarehouseListPager-D42Lpjxk.css",
+      "sha256": "07A40651DA4A69691B90D68569D117FCDB33824E8DB6BFEA7BE238FAB52E172B"
+    },
+    {
+      "path": "assets/WarehouseLiveQueuePage-CgrvRT1J.css",
+      "sha256": "7B904D0F39733B19B4E4BB4E8F3324324261E8950060671428F7CD250EEB0EE1"
+    },
+    {
+      "path": "assets/WarehouseLiveQueuePage-x1fcvIZt.js",
+      "sha256": "19DB086644FDC3385C4C18BF204BAA553AC1716BCB5A0A903B51D39A972F35C9"
+    },
+    {
+      "path": "assets/WarehouseNotificationDocument-rmaiadNP.js",
+      "sha256": "4B6B8032E91EFC0EA9E47F06D8D0371AFFAD5E64CAE2B198F1AD9202C3EED956"
+    },
+    {
+      "path": "assets/WarehousePdfRequests-DQ8BmChM.css",
+      "sha256": "35D298956AB4913EE33F6DDE70214763B1EC73FABB6CF5F7007CF8BE431E50BB"
+    },
+    {
+      "path": "assets/WarehousePdfRequests-o1iJD8V1.js",
+      "sha256": "02B38470C7F9DF89026A3C725980DD2D27CA350778BE55A4CBAB08A2572764F3"
+    },
+    {
+      "path": "assets/WarehouseRepairedInventory-Bapo7Rfq.js",
+      "sha256": "A9E68A91E9076D9314CB7923D93452E6635091484A5779B2C32000D51A235696"
+    },
+    {
+      "path": "assets/WarehouseRequestComposer-C-WmWEHg.css",
+      "sha256": "0F86B3AA508CCF4FEDFA30551C80865C97DCCD41397ADC87E80742485E8B4843"
+    },
+    {
+      "path": "assets/WarehouseRequestComposer-DjKr8DjI.js",
+      "sha256": "6E27F3785A345B958DACEF3198AA2B24F2ECCBF55183706AE20D5B48E4CAEDF8"
+    },
+    {
+      "path": "assets/WarehouseRequesterWorkspace-BIJbTy_R.css",
+      "sha256": "64B5640E62DD78F6ABCBBA325A9CB3F6CBB2361A5E6FA3381C3010E7E67A8863"
+    },
+    {
+      "path": "assets/WarehouseRequesterWorkspace-rH9mxute.js",
+      "sha256": "F5B2960EDA9D39BD310EFE659215D31FEB41F0762168C18E442CE4417C15B612"
+    },
+    {
+      "path": "assets/warehouseRequestPdf-BZxRTl2W.js",
+      "sha256": "472E0D49CA1C9B4BBC50B8A40895040C52A48CB6D8BCDB8F55357A724FE98F77"
+    },
+    {
+      "path": "assets/WarehouseSupport-0qMOtTZv.css",
+      "sha256": "ED7F8BFE2683C666A100942F1D4ACC1337776FFA6926E6EED2C1C35A4F81F584"
+    },
+    {
+      "path": "assets/WarehouseSupport-D0qGmVTe.js",
+      "sha256": "2DD0F30AC96A425C13C1185477879CEC12EF7879C8EAE31A9833C8B9CA037CC4"
+    },
+    {
+      "path": "assets/WarehouseWithdrawalBoard-pso8znv2.js",
+      "sha256": "03FB2CCF33231037E61A05FC574FCE0AEB8CAF53C19F55759FDD4155FCDFF65B"
+    },
+    {
+      "path": "assets/WorkshopBoard-DOAxCORS.css",
+      "sha256": "850C92928F553538B9088E0C5710B358B704CFF6D6A7D5DD5707C02A6BB9098E"
+    },
+    {
+      "path": "assets/WorkshopBoard-DZeP_IuF.js",
+      "sha256": "A236BEC9CFF9EBF5D0CAEC2961E5D3902654EF62C7C43EAF71C83EDDF37AE7A2"
+    },
+    {
+      "path": "assets/workshopFormPdf-DZ2PgCN8.js",
+      "sha256": "7137EBF455191F9312084E36F6AEFBDAE9E8BFA12EE84C99A09781102FD45F12"
+    },
+    {
+      "path": "assets/WorkshopRequests-6dtYyTV2.js",
+      "sha256": "15E843D197372A78DF631EA91B88D1F77E39C991E7890222AB48DE8A836578B3"
+    },
+    {
+      "path": "assets/WorkshopRequests-D6H4u9Qw.css",
+      "sha256": "443DFC7985683B1222407C1AE8B5967AD4562AEA34950602641A62DFA5638672"
+    },
+    {
+      "path": "assets/WorkshopWarehouseRequests-BgpT1HE_.js",
+      "sha256": "EE37033DC419209BFB8879F09EA94F10934BEB00AADE3CB338F57CF7B479E935"
+    },
+    {
+      "path": "assets/workshopWarehouseRequests-Dqx7Q3qv.css",
+      "sha256": "004A443AA10CAF720D17CE3154AFBB1E5F834DCC49C8E28EA6B441D6B1DDF43E"
+    },
+    {
+      "path": "assets/workshopWorkflow-yRfrzSdA.js",
+      "sha256": "D869A849360343EE2EABA21ED326C96C4295C7F116515865B83CE42F207B401D"
+    },
+    {
+      "path": "assets/WorkshopWorkspace-Baz2pW0P.css",
+      "sha256": "94208AEC8AD51AD090FBC42BB75B6E3B7BE8590634C79C4ADACF1E5B2D8B08D8"
+    },
+    {
+      "path": "assets/WorkshopWorkspace-DEXWKlB6.js",
+      "sha256": "C908F08CDB289D6BF5C6ED80161F40174CCE8F7290D21C96562EDD4FB2E4953F"
+    },
+    {
+      "path": "documents/comunicado-averias.pdf",
+      "sha256": "D7EC9202EC280DA66C7FE2E2478D7BE3CF9279FE5DF547CA97270B5B4F3C27D8"
+    },
+    {
+      "path": "documents/conduce-taller-grupo-samana.pdf",
+      "sha256": "DE42610F63DC7B1DF5D307B9A0780E321F27A06B0626610085FCD2A1CE7CBCA2"
+    },
+    {
+      "path": "documents/manual-normas-politicas-procedimientos-almacen.pdf",
+      "sha256": "D8598386EAC4555243FC2A86DB9DA65684588C83F1A318C6BAA638F10E340975"
+    },
+    {
+      "path": "documents/plantilla-conduce-institucional.pdf",
+      "sha256": "9E2ADE1D8B9AA3DE9A4AE96AEAB5D5A2C6E9177E8C1D1B94F4CD209A186B72BF"
+    },
+    {
+      "path": "favicon.svg",
+      "sha256": "3F44DDF0B2A418B905166CDBC56D84B62FC9F11276B4A13042F882E48741EFA8"
+    },
+    {
+      "path": "index.html",
+      "sha256": "ABA5F876BBDB54E683A65E0ABBB512B2AA3718C77734735112C1A1E19F7C2FD3"
+    },
+    {
+      "path": "loto-real-logo-transparent.png",
+      "sha256": "9318D9934DAFABBA23D81822218B81913A7A35F4D7161E3D1813153025D9BC78"
+    },
+    {
+      "path": "loto-real-logo.svg",
+      "sha256": "62FBDD38469DE11769965105221D966BB94BCEA738CE4CBF1AAA159C4C7B9C7A"
+    },
+    {
+      "path": "manifest.webmanifest",
+      "sha256": "B793E34B47D8CDE37DCF102B59EDCE46C787D24A74200386B56D4AF28CE6B382"
+    },
+    {
+      "path": "release-guard.js",
+      "sha256": "207CAB21EB172C5E35F61427C7423184F5B369868DD5A042C73EDFC2B2F6F889"
+    },
+    {
+      "path": "sw.js",
+      "sha256": "0AC967D67A74B5A41BD0F0D1F4E18A9C92435E369BEB0446130E180B322BC75B"
+    },
+    {
+      "path": "templates/plantilla-inventario-almacen.xlsx",
+      "sha256": "677D14C8FC63134BC01DCF420B254E3209F2C7A134D177DF3D96E2A74B102C6C"
+    },
+    {
+      "path": "v520-findings-pdf.js",
+      "sha256": "5E224A04603025ADE3DE74E3A73AAB36E14F04ED6E2B2FA9D31B8773CEEEF84B"
+    },
+    {
+      "path": "v520-jspdf.umd.min.js",
+      "sha256": "E6551FCDC32F09D6853B2C5126D18D01D9447E0DA618A41A11EBEEE0F6C20D54"
+    },
+    {
+      "path": "v520-targeted-enhancements.css",
+      "sha256": "31CE6C092659937D042E43AA2C83F80B2DC264B7B3671A0C9E0C6C3688A7A7F4"
+    },
+    {
+      "path": "v520-targeted-enhancements.js",
+      "sha256": "218728B5D096A3CAC8DAF569DB53C6B4A1BCA6F9D901412594489172232D73EB"
+    },
+    {
+      "path": "v539-button-polish.css",
+      "sha256": "5588EC964456964F79FEFFD63DCA2FDC14560095FB9B0257F5550F15DF19A6C7"
+    },
+    {
+      "path": "vendor/pdfjs/LICENSE",
+      "sha256": "0D542E0C8804E39AA7F37EB00DA5A762149DC682D7829451287E11B938E94594"
+    },
+    {
+      "path": "vendor/pdfjs/pdf.mjs",
+      "sha256": "2221020EA508479DCC1221F36F2731656339230097C69BA1F78802832C0AD685"
+    },
+    {
+      "path": "vendor/pdfjs/pdf.worker.mjs",
+      "sha256": "51A2FD1EA47F1A9B0814E65E0C336C739C54957795EE774E8F93CB81E8028DD1"
+    },
+    {
+      "path": "version-web.json",
+      "sha256": "24E8874C83541E9C0AC342309E4FF79DF321E878DB9F92871D378505CB429EC5"
+    }
+  ]
+}

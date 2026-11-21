@@ -9,6 +9,7 @@
     "dev:api": "dotnet run --project api/RegistroAgencias.Api.csproj --urls http://127.0.0.1:8080",
     "build": "tsc -b && vite build",
     "publish:monster": "powershell -ExecutionPolicy Bypass -File scripts/publish-monster.ps1",
+    "package:monster:stable": "powershell -ExecutionPolicy Bypass -File scripts/package-monster-stable.ps1",
     "package:v330:hot-swap": "powershell -ExecutionPolicy Bypass -File scripts/package-v330-warehouse-hot-swap.ps1",
     "package:v330:ftp-safe": "powershell -ExecutionPolicy Bypass -File scripts/package-v330-monster-ftp-safe.ps1",
     "package:v330:direct-upload": "powershell -ExecutionPolicy Bypass -File scripts/package-v330-monster-direct-upload.ps1",

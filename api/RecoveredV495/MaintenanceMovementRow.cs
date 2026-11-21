@@ -1,0 +1,3 @@
+using System;
+
+internal record MaintenanceMovementRow(Guid Id, Guid? AgencyId, string Codigo, string Terminal, string Grupo, Guid? TicketId, string Department, string? TechnicianUserId, string TechnicianName, string MovementType, string EquipmentType, string? ComponentType, string FailureCause, string? SerialNumber, int Quantity, string? Notes, string CreatedByName, DateTime CreatedAt, string OperationalArea, string DocumentNumber, string QrToken, string? DeliveredByName, string? ReceivedByName, string? DestinationName, string? SignatureData, DateTime OccurredAt, string? ReceivedByLogin, bool IsRepaired = false);

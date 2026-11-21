@@ -1,0 +1,1 @@
+internal record Submit(string? AgencyId, string? Direccion, string? Sector, string? Municipio, string? Provincia, string? TipoEstablecimiento, string? TipoEstablecimientoOtro, string? EmployeeName, string? EmployeeCode, Geo? Geolocation, StructuralAnswers? Answers, string? Website, string? Observations);

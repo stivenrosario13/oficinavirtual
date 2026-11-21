@@ -27,6 +27,6 @@
     <Compile Include="ExecutiveReport.cs" />
     <Compile Include="HomeDashboardSummary.cs" />
     <Compile Include="WarehouseArticleCreationAccess.cs" />
-    <Compile Include="..\.codex\decompiled-v495\**\*.cs" Exclude="..\.codex\decompiled-v495\Program.cs" />
+    <Compile Include="RecoveredV495\**\*.cs" />
   </ItemGroup>
 </Project>

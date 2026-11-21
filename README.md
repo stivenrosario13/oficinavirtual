@@ -2,6 +2,10 @@
 
 Aplicación React + Vite con backend ASP.NET Core 8 y SQL Server 2025, preparada para MonsterASP.NET.
 
+## Interfaz estable de Monster (V558)
+
+La interfaz original aprobada y la corrección de carga CSS están conservadas en [release-reference/v558](release-reference/v558/README.md). Para empaquetar esa misma interfaz desde un clon, ejecuta `npm run package:monster:stable`. La API utiliza el código recuperado versionado en `api/RecoveredV495`; no requiere carpetas locales de Codex.
+
 ## Desarrollo local
 
 1. Configura `ConnectionStrings__DefaultConnection` con una base SQL Server.

@@ -1,0 +1,1 @@
+internal record AgencyDirectoryImportRow(int RowNumber, string? Codigo, string? Terminal, string? Grupo, string? Region, string? Direccion, string? Sector, string? Municipio, string? Provincia, double? Latitude, double? Longitude);

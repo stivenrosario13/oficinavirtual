@@ -1,0 +1,4 @@
+# Keep the verified historical frontend byte-for-byte identical after checkout.
+release-reference/v558/wwwroot/** -text -whitespace
+# Recovered generated sources retain their original formatting.
+api/RecoveredV495/** -whitespace
